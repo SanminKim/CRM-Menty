@@ -1,0 +1,16 @@
+{% extends "crm/base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<header class="page-head"><h1>{{ title }}</h1></header>
+<form method="post" class="card form narrow">
+  {% csrf_token %}
+  <div class="form-grid">
+    {% for field in form %}{% include "crm/_field.html" %}{% endfor %}
+  </div>
+  <div class="form-actions">
+    <button class="btn primary">Сохранить</button>
+    <a class="btn ghost" href="{{ back }}">Отмена</a>
+    {% if can_delete %}<button class="btn danger right" name="delete" value="1" formnovalidate onclick="return confirm('Удалить запись?')">Удалить</button>{% endif %}
+  </div>
+</form>
+{% endblock %}

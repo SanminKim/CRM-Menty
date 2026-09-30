@@ -1,0 +1,41 @@
+name: Деплой
+
+# Выкатывает main на сервер после успешных тестов.
+# Нужны секреты репозитория (Settings → Secrets and variables → Actions):
+#   DEPLOY_HOST  — IP или домен сервера
+#   DEPLOY_USER  — пользователь на сервере
+#   DEPLOY_SSH_KEY — приватный SSH-ключ этого пользователя
+#   DEPLOY_PATH  — папка с проектом на сервере, например /opt/mentee-crm
+# Пока секреты не заданы, деплой просто пропускается.
+
+on:
+  workflow_run:
+    workflows: ["Тесты"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Проверить, что сервер настроен
+        id: check
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          if [ -z "$HOST" ]; then echo "DEPLOY_HOST не задан — пропускаю деплой"; echo "skip=1" >> "$GITHUB_OUTPUT"; fi
+      - name: Обновить сервер
+        if: steps.check.outputs.skip != '1'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_PATH }}
+            git pull --ff-only
+            docker compose up -d --build
+            docker image prune -f

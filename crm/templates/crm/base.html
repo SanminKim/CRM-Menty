@@ -1,0 +1,45 @@
+{% load static crm %}<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CRM{% endblock %} · Менторство 1С</title>
+  <link rel="stylesheet" href="{% static 'crm/app.css' %}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232f5d50'/><text x='16' y='22' font-size='16' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='700'>М</text></svg>">
+</head>
+<body>
+{% if user.is_authenticated %}
+<div class="layout">
+  <aside class="sidebar">
+    <a class="brand" href="{% url 'home' %}"><span class="brand-mark">М</span><span>Менторство&nbsp;1С</span></a>
+    <nav>
+      {% if user_is_admin or user_is_mentor %}
+        <a href="{% url 'dashboard' %}" class="{% if active == 'dashboard' %}on{% endif %}">Сводка</a>
+        <a href="{% url 'board' %}" class="{% if active == 'board' %}on{% endif %}">Воронка</a>
+        <a href="{% url 'student_list' %}" class="{% if active == 'students' %}on{% endif %}">Студенты</a>
+      {% endif %}
+      {% if user_is_admin %}
+        <a href="{% url 'payments' %}" class="{% if active == 'payments' %}on{% endif %}">Платежи</a>
+        <a href="{% url 'partner_list' %}" class="{% if active == 'partners' %}on{% endif %}">Партнёры</a>
+        <a href="{% url 'admin:index' %}">Настройки</a>
+      {% elif user_partner %}
+        <a href="{% url 'partner_report' user_partner.pk %}" class="on">Мой отчёт</a>
+      {% endif %}
+    </nav>
+    <div class="me">
+      <span>{{ user|user_name }}</span>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link">Выйти</button></form>
+    </div>
+  </aside>
+  <main class="main">
+    {% if messages %}<div class="flash">{% for m in messages %}<div class="flash-{{ m.tags }}">{{ m }}</div>{% endfor %}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% else %}
+  {% block anon %}{% endblock %}
+{% endif %}
+<script src="{% static 'crm/app.js' %}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

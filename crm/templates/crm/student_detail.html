@@ -1,0 +1,164 @@
+{% extends "crm/base.html" %}
+{% load crm %}
+{% block title %}{{ s.full_name }}{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <a class="back" href="{% url 'board' %}">← Воронка</a>
+    <h1>{{ s.full_name }} {% stage_badge s %}</h1>
+    <p class="muted">{{ s.days_in_stage }} {{ s.days_in_stage|plural:"день,дня,дней" }} на этапе · в базе с {{ s.created_at|date:"d.m.Y" }}{% if s.is_stuck %} · <span class="warn-text">нет движения больше {{ STUCK_DAYS }} дней</span>{% endif %}</p>
+  </div>
+  <a class="btn" href="{% url 'student_edit' s.pk %}">Редактировать</a>
+</header>
+
+<form method="post" action="{% url 'student_stage' s.pk %}" class="stepper">
+  {% csrf_token %}
+  {% for v, l in stage_choices %}{% if v != "lost" %}
+    <button name="stage" value="{{ v }}" class="step{% if v == s.stage %} current{% endif %}">{{ l }}</button>
+  {% endif %}{% endfor %}
+  <details class="lost-menu">
+    <summary class="step step-lost{% if s.stage == 'lost' %} current{% endif %}">Отказ / выбыл</summary>
+    <div class="popover">
+      <input name="lost_reason" placeholder="Причина (необязательно)" value="{{ s.lost_reason }}">
+      <button name="stage" value="lost" class="btn danger">Перевести в «Отказ»</button>
+    </div>
+  </details>
+</form>
+
+<div class="detail">
+  <aside class="card facts">
+    <h2>Контакты</h2>
+    <dl>
+      {% if s.phone %}<dt>Телефон</dt><dd><a href="tel:{{ s.phone }}">{{ s.phone }}</a></dd>{% endif %}
+      {% if s.telegram %}<dt>Telegram</dt><dd><a href="https://t.me/{{ s.telegram|cut:'@' }}" target="_blank" rel="noopener">{{ s.telegram }}</a></dd>{% endif %}
+      {% if s.email %}<dt>Email</dt><dd><a href="mailto:{{ s.email }}">{{ s.email }}</a></dd>{% endif %}
+      {% if s.city %}<dt>Город</dt><dd>{{ s.city }}</dd>{% endif %}
+      <dt>Согласие на ПД</dt><dd>{% if s.consent_pd %}есть{% else %}<span class="warn-text">нет</span>{% endif %}</dd>
+    </dl>
+    <h2>Обучение</h2>
+    <dl>
+      <dt>Поток</dt><dd>{{ s.cohort|default:"—" }}</dd>
+      <dt>Ментор</dt><dd>{{ s.mentor|user_name }}</dd>
+      <dt>Стоимость</dt><dd>{{ s.price|money }}</dd>
+      <dt>Оплачено</dt><dd>{{ s.total_paid|money }}</dd>
+      {% if s.debt %}<dt>Остаток</dt><dd class="warn-text">{{ s.debt|money }}</dd>{% endif %}
+      {% if s.lost_reason %}<dt>Причина отказа</dt><dd>{{ s.lost_reason }}</dd>{% endif %}
+    </dl>
+    <h2>Источник</h2>
+    <dl>
+      <dt>Партнёр</dt><dd>{{ s.partner|default:"—" }}{% if s.partner %} <small class="muted">({{ s.partner_share_percent|floatformat:"-2" }}%)</small>{% endif %}</dd>
+      {% if s.promo_code %}<dt>Промокод</dt><dd>{{ s.promo_code }}</dd>{% endif %}
+      {% if s.utm_source %}<dt>UTM</dt><dd>{{ s.utm_source }}{% if s.utm_campaign %} / {{ s.utm_campaign }}{% endif %}</dd>{% endif %}
+    </dl>
+    {% if s.job_company %}
+    <h2>Результат</h2>
+    <dl>
+      <dt>Компания</dt><dd>{{ s.job_company }}</dd>
+      {% if s.job_position %}<dt>Должность</dt><dd>{{ s.job_position }}</dd>{% endif %}
+      <dt>Зарплата</dt><dd>{{ s.job_salary|money }}</dd>
+      {% if s.offer_date %}<dt>Дата оффера</dt><dd>{{ s.offer_date|date:"d.m.Y" }}</dd>{% endif %}
+    </dl>
+    {% endif %}
+    {% if s.comment %}<h2>Комментарий</h2><p class="pre">{{ s.comment }}</p>{% endif %}
+  </aside>
+
+  <div class="detail-main">
+    <section class="card">
+      <h2>Платежи</h2>
+      {% if payments %}
+      <table class="table compact">
+        <thead><tr><th>Срок</th><th class="num">Сумма</th><th>Статус</th><th>Комментарий</th><th></th></tr></thead>
+        <tbody>
+        {% for p in payments %}
+          <tr class="{% if p.is_overdue %}row-danger{% endif %}">
+            <td>{{ p.due_date|date:"d.m.Y" }}</td>
+            <td class="num">{{ p.amount|money }}</td>
+            <td>{% if p.status == "paid" %}<span class="tag ok">оплачен {{ p.paid_date|date:"d.m" }}</span>{% elif p.is_overdue %}<span class="tag danger">просрочен</span>{% else %}<span class="tag">{{ p.get_status_display|lower }}</span>{% endif %}</td>
+            <td class="muted">{{ p.comment }}{% if p.method %} · {{ p.method }}{% endif %}</td>
+            <td class="row-actions">
+              {% if p.status == "planned" %}<form method="post" action="{% url 'payment_paid' p.pk %}">{% csrf_token %}<button class="btn small">Оплачен</button></form>{% endif %}
+              <a class="btn small ghost" href="{% url 'payment_edit' p.pk %}">✎</a>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="empty">Платежей пока нет</p>{% endif %}
+      <div class="inline-forms">
+        <details>
+          <summary class="btn small">+ Платёж</summary>
+          <form method="post" action="{% url 'payment_add' s.pk %}" class="form-row">
+            {% csrf_token %}
+            {% for field in payment_form %}{% include "crm/_field.html" %}{% endfor %}
+            <button class="btn primary">Добавить</button>
+          </form>
+        </details>
+        <details>
+          <summary class="btn small">+ График рассрочки</summary>
+          <form method="post" action="{% url 'installments_add' s.pk %}" class="form-row">
+            {% csrf_token %}
+            {% for field in installment_form %}{% include "crm/_field.html" %}{% endfor %}
+            <button class="btn primary">Создать платежи</button>
+          </form>
+        </details>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Трудоустройство</h2>
+      {% if applications %}
+      <table class="table compact">
+        <thead><tr><th>Компания</th><th>Вакансия</th><th>Статус</th><th class="num">Зарплата</th><th>Дата</th><th></th></tr></thead>
+        <tbody>
+        {% for a in applications %}
+          <tr>
+            <td>{% if a.url %}<a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.company }}</a>{% else %}{{ a.company }}{% endif %}</td>
+            <td>{{ a.position|default:"—" }}</td>
+            <td><span class="tag app-{{ a.status }}">{{ a.get_status_display }}</span>{% if a.interview_at %}<small class="muted"> {{ a.interview_at|date:"d.m H:i" }}</small>{% endif %}</td>
+            <td class="num">{{ a.salary|money }}</td>
+            <td class="muted">{{ a.applied_date|date:"d.m" }}</td>
+            <td class="row-actions"><a class="btn small ghost" href="{% url 'application_edit' a.pk %}">✎</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<p class="empty">Откликов пока нет</p>{% endif %}
+      <details class="inline-forms">
+        <summary class="btn small">+ Отклик / собеседование</summary>
+        <form method="post" action="{% url 'application_add' s.pk %}" class="form-row">
+          {% csrf_token %}
+          {% for field in app_form %}{% include "crm/_field.html" %}{% endfor %}
+          <button class="btn primary">Добавить</button>
+        </form>
+      </details>
+      <p class="hint">Статус «Оффер принят» автоматически переведёт студента на этап «Оффер» и заполнит компанию и зарплату.</p>
+    </section>
+
+    <section class="card">
+      <h2>Заметки</h2>
+      <form method="post" action="{% url 'note_add' s.pk %}" class="note-form">
+        {% csrf_token %}
+        {{ note_form.text }}
+        <button class="btn primary">Добавить</button>
+      </form>
+      <ul class="feed">
+        {% for n in notes %}
+        <li><div class="feed-head"><strong>{{ n.author|user_name }}</strong><span class="muted">{{ n.created_at|date:"d.m.Y H:i" }}</span></div><p class="pre">{{ n.text }}</p></li>
+        {% empty %}<li class="empty">Заметок нет</li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>История этапов</h2>
+      <ul class="timeline">
+        {% for h in history %}
+        <li><span class="muted">{{ h.changed_at|date:"d.m.Y H:i" }}</span>
+          {% if h.from_stage %}{{ h.get_from_stage_display }} → {% endif %}<strong>{{ h.get_to_stage_display }}</strong>
+          <span class="muted">· {% if h.changed_by %}{{ h.changed_by|user_name }}{% else %}автоматически{% endif %}</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+  </div>
+</div>
+{% endblock %}

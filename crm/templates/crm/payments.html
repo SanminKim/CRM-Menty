@@ -1,0 +1,31 @@
+{% extends "crm/base.html" %}
+{% load crm %}
+{% block title %}Платежи{% endblock %}
+{% block content %}
+<header class="page-head"><h1>Платежи</h1></header>
+<nav class="tabs">
+  <a href="?tab=overdue" class="{% if tab == 'overdue' %}on{% endif %}">Просроченные</a>
+  <a href="?tab=upcoming" class="{% if tab == 'upcoming' %}on{% endif %}">Ожидаются</a>
+  <a href="?tab=paid" class="{% if tab == 'paid' %}on{% endif %}">Оплаченные</a>
+</nav>
+<div class="card table-wrap">
+  <table class="table">
+    <thead><tr><th>Студент</th><th>Поток</th><th>{% if tab == 'paid' %}Оплачен{% else %}Срок{% endif %}</th><th class="num">Сумма</th><th>Комментарий</th><th></th></tr></thead>
+    <tbody>
+    {% for p in payments %}
+      <tr class="{% if p.is_overdue %}row-danger{% endif %}">
+        <td><a href="{{ p.student.get_absolute_url }}">{{ p.student.full_name }}</a></td>
+        <td>{{ p.student.cohort|default:"—" }}</td>
+        <td>{% if tab == 'paid' %}{{ p.paid_date|date:"d.m.Y" }}{% else %}{{ p.due_date|date:"d.m.Y" }}{% endif %}</td>
+        <td class="num">{{ p.amount|money }}</td>
+        <td class="muted">{{ p.comment }}</td>
+        <td class="row-actions">{% if p.status == "planned" %}<form method="post" action="{% url 'payment_paid' p.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn small">Оплачен</button></form>{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="empty">Пусто</td></tr>
+    {% endfor %}
+    </tbody>
+    {% if payments %}<tfoot><tr><td colspan="3">Итого</td><td class="num"><strong>{{ total|money }}</strong></td><td colspan="2"></td></tr></tfoot>{% endif %}
+  </table>
+</div>
+{% endblock %}
