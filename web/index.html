@@ -714,6 +714,11 @@ function settingsView() {
       <li><span class="warn-text">Не включайте доступ по публичной ссылке: пока он включён, приглашённые редакторы теряют право на изменения.</span></li>
     </ul>
   </section>
+  <section class="card"><h2>Резервная копия</h2>
+    <p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, команда, партнёры и выплаты. Этот же файл загружается в версию для своего сервера при переезде.</p>
+    <div class="actions"><button class="btn" data-act="backup">Скачать резервную копию</button></div>
+    <p class="hint" style="margin-top:8px">В файле есть контакты студентов. Храните его там, куда нет доступа посторонним.</p>
+  </section>
   <section class="card"><h2>Пример данных</h2>
     <p class="muted" style="margin-bottom:10px">Вымышленные студенты, потоки и партнёры с пометкой «пример», чтобы посмотреть, как всё работает. Ваши настоящие записи не затрагиваются.</p>
     <div class="actions">${hasDemo ? `<button class="btn danger" data-act="demo-clear">Удалить примеры</button>` : `<button class="btn" data-act="demo-load">Загрузить пример</button>`}</div>
@@ -990,6 +995,16 @@ async function exportCsv() {
   catch (e) { if (e?.code !== "declined") toast("Не удалось выгрузить файл"); }
 }
 
+// ---------- Резервная копия ----------
+async function exportBackup() {
+  const dl = await claude.use("downloads");
+  if (!dl) return toast("Выгрузка недоступна в этом окне");
+  const data = {}; for (const c of COLS) data[c] = D()[c];
+  const backup = { format: "crm-menti-backup", version: 1, exportedAt: new Date().toISOString(), data };
+  try { await dl.save({ filename: `crm-menti-копия-${today()}.json`, data: JSON.stringify(backup, null, 1) }); toast("Резервная копия сохранена"); }
+  catch (e) { if (e?.code !== "declined") toast("Не удалось сохранить копию"); }
+}
+
 // ---------- Пример данных ----------
 function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 async function loadDemo() {
@@ -1101,6 +1116,7 @@ const ACT = {
   freset: () => { S.f = { q: "", cohort: "", mentor: "", partner: "", stage: "" }; render(); },
   "toggle-lost": (d, el) => { S.showLost = el.checked; render(); },
   csv: () => exportCsv(),
+  backup: () => exportBackup(),
   "m-close": () => closeModal(),
   "m-bg": (d, el, e) => { if (e.target === el) closeModal(); },
   "m-delete": async (d, el) => { if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Нажмите ещё раз для удаления"; return; } const r = await MODAL?.onDelete?.(); if (r !== false) closeModal(); },

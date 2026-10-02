@@ -23,5 +23,6 @@ urlpatterns = [
     path("partners/", views.partner_list, name="partner_list"),
     path("partners/<int:pk>/", views.partner_report, name="partner_report"),
     path("partners/<int:pk>/payouts/", views.payout_add, name="payout_add"),
+    path("backup/import/", views.backup_import, name="backup_import"),
     path("api/leads/", views.api_lead, name="api_lead"),
 ]

@@ -59,6 +59,10 @@ class Partner(models.Model):
         help_text="Если указать — партнёр сможет входить и видеть отчёт по своему трафику",
     )
     contacts = models.TextField("Контакты / реквизиты", blank=True)
+    external_id = models.CharField(
+        "ID в веб-версии", max_length=64, blank=True, db_index=True, editable=False,
+        help_text="Заполняется при импорте резервной копии, чтобы не создавать дубли",
+    )
     is_active = models.BooleanField("Активен", default=True)
 
     class Meta:
@@ -106,6 +110,10 @@ class Cohort(models.Model):
         "Базовая цена", max_digits=12, decimal_places=2, null=True, blank=True
     )
     is_active = models.BooleanField("Идёт набор / обучение", default=True)
+    external_id = models.CharField(
+        "ID в веб-версии", max_length=64, blank=True, db_index=True, editable=False,
+        help_text="Заполняется при импорте резервной копии, чтобы не создавать дубли",
+    )
 
     class Meta:
         verbose_name = "Поток"
@@ -167,6 +175,10 @@ class Student(models.Model):
 
     comment = models.TextField("Комментарий", blank=True)
     created_at = models.DateTimeField("Создан", default=timezone.now)
+    external_id = models.CharField(
+        "ID в веб-версии", max_length=64, blank=True, db_index=True, editable=False,
+        help_text="Заполняется при импорте резервной копии, чтобы не создавать дубли",
+    )
     updated_at = models.DateTimeField("Обновлён", auto_now=True)
 
     class Meta:
@@ -303,6 +315,10 @@ class PartnerPayout(models.Model):
     partner = models.ForeignKey(Partner, on_delete=models.CASCADE, related_name="payouts")
     amount = models.DecimalField("Сумма", max_digits=12, decimal_places=2)
     paid_date = models.DateField("Дата выплаты", default=timezone.localdate)
+    external_id = models.CharField(
+        "ID в веб-версии", max_length=64, blank=True, db_index=True, editable=False,
+        help_text="Заполняется при импорте резервной копии, чтобы не создавать дубли",
+    )
     comment = models.CharField("Комментарий", max_length=255, blank=True)
 
     class Meta:

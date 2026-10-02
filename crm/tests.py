@@ -6,7 +6,8 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from crm.models import JobApplication, Partner, PartnerPayout, Payment, Stage, Student
+from crm.backup import BackupError, import_backup
+from crm.models import Cohort, JobApplication, Partner, PartnerPayout, Payment, Stage, Student
 from crm.services import dashboard_metrics, funnel
 
 
@@ -177,3 +178,114 @@ class LeadWebhookTests(BaseCase):
         r = self.client.post(self.url + "?token=secret", {"test": "test"})
         self.assertEqual(r.status_code, 200)
         self.assertEqual(Student.objects.count(), 0)
+
+
+def sample_backup():
+    return {
+        "format": "crm-menti-backup", "version": 1, "exportedAt": "2026-10-02T20:00:00.000Z",
+        "data": {
+            "cohorts": [{"id": "c1", "name": "Поток 2", "start": "2026-09-01", "end": "2026-12-01",
+                         "price": 100000, "active": True}],
+            "team": [{"id": "t1", "name": "Ирина Котова", "userId": "u_abc"}],
+            "partners": [{"id": "p1", "name": "Блог", "share": 40, "promo": "BLOG", "utm": "youtube", "active": True}],
+            "payouts": [{"id": "po1", "partnerId": "p1", "amount": 5000, "date": "2026-09-20", "comment": "Сентябрь"}],
+            "reports": [{"id": "p1", "name": "Блог"}],
+            "students": [
+                {
+                    "id": "s1", "name": "Иванов Пётр", "phone": "+7 900 000-00-01", "telegram": "@ivanov",
+                    "email": "", "city": "Казань", "consent": True, "stage": "offer",
+                    "stageAt": "2026-09-25T10:00:00.000Z", "createdAt": "2026-08-01T09:00:00.000Z",
+                    "cohortId": "c1", "mentorId": "t1", "price": 100000,
+                    "partnerId": "p1", "partnerShare": 30, "promo": "BLOG", "utmSource": "youtube",
+                    "jobCompany": "Рарус", "jobPosition": "Аналитик 1С", "jobSalary": 95000, "offerDate": "2026-09-25",
+                    "history": [
+                        {"from": None, "to": "new", "at": "2026-08-01T09:00:00.000Z", "by": None},
+                        {"from": "new", "to": "studying", "at": "2026-08-10T09:00:00.000Z", "by": "u_abc"},
+                        {"from": "studying", "to": "offer", "at": "2026-09-25T10:00:00.000Z", "by": "u_abc"},
+                    ],
+                    "payments": [
+                        {"id": "x1", "amount": 50000, "due": "2026-08-05", "paid": "2026-08-05", "comment": "1/2"},
+                        {"id": "x2", "amount": 50000, "due": "2026-09-05", "paid": None, "comment": "2/2"},
+                    ],
+                    "apps": [{"id": "a1", "company": "Рарус", "position": "Аналитик 1С", "status": "accepted",
+                              "salary": 95000, "date": "2026-09-20", "interview": "2026-09-22T15:00", "url": "", "notes": ""}],
+                    "notes": [{"id": "n1", "text": "Созвонились", "at": "2026-08-02T12:00:00.000Z", "by": "u_abc"}],
+                },
+                {"id": "s2", "name": "Пример Примеров", "stage": "new", "createdAt": "2026-09-01T09:00:00.000Z",
+                 "demo": True, "history": [], "payments": [], "apps": [], "notes": []},
+            ],
+        },
+    }
+
+
+class BackupImportTests(BaseCase):
+    def test_import_creates_everything(self):
+        stats = import_backup(sample_backup())
+        self.assertEqual(stats["students"]["created"], 1)  # запись с пометкой «пример» пропущена
+        s = Student.objects.get(external_id="s1")
+        self.assertEqual((s.full_name, s.stage, s.cohort.name), ("Иванов Пётр", Stage.OFFER, "Поток 2"))
+        self.assertEqual(s.mentor.get_full_name(), "Ирина Котова")
+        self.assertTrue(s.mentor.groups.filter(name="Менторы").exists())
+        self.assertFalse(s.mentor.has_usable_password())
+        self.assertEqual(s.partner_share_percent, Decimal("30"))  # доля из копии, а не текущая у партнёра
+        self.assertEqual(s.created_at.date().isoformat(), "2026-08-01")
+        self.assertEqual(s.history.count(), 3)
+        self.assertEqual(s.history.first().changed_by, s.mentor)
+        self.assertEqual(s.total_paid, Decimal("50000"))
+        self.assertEqual(s.payments.filter(status=Payment.Status.PLANNED).count(), 1)
+        app = s.applications.get()
+        self.assertEqual((app.status, app.salary), ("accepted", Decimal("95000")))
+        self.assertEqual(s.notes.get().author, s.mentor)
+        partner = Partner.objects.get(external_id="p1")
+        self.assertEqual(partner.accrued(), Decimal("15000.00"))
+        self.assertEqual(partner.balance(), Decimal("10000.00"))
+
+    def test_reimport_is_idempotent(self):
+        import_backup(sample_backup())
+        stats = import_backup(sample_backup())
+        self.assertEqual(stats["students"], {"created": 0, "updated": 0, "skipped": 1})
+        self.assertEqual((Student.objects.count(), Cohort.objects.count(), PartnerPayout.objects.count()), (1, 1, 1))
+        self.assertEqual(Payment.objects.count(), 2)
+
+    def test_overwrite_replaces_student(self):
+        import_backup(sample_backup())
+        data = sample_backup()
+        data["data"]["students"][0]["stage"] = "probation_passed"
+        data["data"]["students"][0]["payments"][1]["paid"] = "2026-09-06"
+        stats = import_backup(data, overwrite=True)
+        self.assertEqual(stats["students"]["updated"], 1)
+        s = Student.objects.get(external_id="s1")
+        self.assertEqual(s.stage, Stage.PROBATION_PASSED)
+        self.assertEqual((s.payments.count(), s.total_paid), (2, Decimal("100000")))
+        self.assertEqual(s.history.count(), 3)
+
+    def test_real_student_keeps_demo_cohort_and_partner(self):
+        data = sample_backup()
+        for key in ("cohorts", "team", "partners"):
+            data["data"][key][0]["demo"] = True
+        import_backup(data)
+        s = Student.objects.get(external_id="s1")
+        self.assertEqual((s.cohort.name, s.partner.name, s.mentor.first_name), ("Поток 2", "Блог", "Ирина"))
+
+    def test_with_demo(self):
+        stats = import_backup(sample_backup(), with_demo=True)
+        self.assertEqual(stats["students"]["created"], 2)
+
+    def test_rejects_foreign_file(self):
+        for bad in (b"not json", b'{"format": "other"}', b'{"format": "crm-menti-backup", "version": 99, "data": {}}'):
+            with self.assertRaises(BackupError):
+                import_backup(bad)
+        self.assertEqual(Student.objects.count(), 0)
+
+    def test_upload_page_admin_only(self):
+        import json
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        url = reverse("backup_import")
+        self.client.login(username="mentor", password="pass12345")
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.login(username="admin", password="pass12345")
+        f = SimpleUploadedFile("backup.json", json.dumps(sample_backup()).encode(), content_type="application/json")
+        r = self.client.post(url, {"file": f})
+        self.assertContains(r, "Студенты: добавлено 1")
+        r = self.client.post(url, {"file": SimpleUploadedFile("x.json", b"oops")})
+        self.assertContains(r, "Файл не является JSON")

@@ -17,6 +17,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import services
+from .backup import BackupError, import_backup, summary_lines
 from .forms import (
     InstallmentForm, JobApplicationForm, NoteForm, PartnerPayoutForm, PaymentForm, StudentForm,
     staff_users,
@@ -402,6 +403,29 @@ def payout_add(request, pk):
         payout.save()
         messages.success(request, "Выплата записана")
     return redirect("partner_report", pk=pk)
+
+
+# ---------- Импорт резервной копии из веб-версии ----------
+
+@admin_required
+def backup_import(request):
+    ctx = {"active": "settings"}
+    if request.method == "POST":
+        upload = request.FILES.get("file")
+        if not upload:
+            ctx["error"] = "Выберите файл копии"
+        elif upload.size > 50 * 1024 * 1024:
+            ctx["error"] = "Файл больше 50 МБ — это не похоже на копию CRM"
+        else:
+            try:
+                stats = import_backup(
+                    upload.read(), overwrite=bool(request.POST.get("overwrite")),
+                    with_demo=bool(request.POST.get("with_demo")),
+                )
+                ctx["result"], ctx["warnings"] = summary_lines(stats), stats["warnings"]
+            except BackupError as exc:
+                ctx["error"] = str(exc)
+    return render(request, "crm/backup_import.html", ctx)
 
 
 # ---------- Приём заявок с лендинга ----------
