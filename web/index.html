@@ -174,6 +174,7 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .rows .who span { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rows .when { color: var(--muted); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .rows .when.late { color: var(--danger); font-weight: 600; }
+.rows .acts { display: flex; gap: 6px; margin-left: auto; }
 .rows .amt { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
 .chk { all: unset; box-sizing: border-box; flex: none; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--muted); cursor: pointer; display: grid; place-items: center; }
 .chk:hover { border-color: var(--ok); background: var(--ok-soft); }
@@ -608,7 +609,7 @@ function todayView() {
       ${panel("Платежи", ag.pays.length ? money(sum(ag.pays, p => p.amount)) : "", ag.pays.length ? `<ul class="rows">${ag.pays.map(p => `<li class="click" data-act="open" data-id="${esc(p.s.id)}">
           <span class="who"><strong>${esc(p.s.name)}</strong><span>${esc(p.comment || "Платёж")}</span></span>
           <span class="amt">${money(p.amount)}</span><span class="when${p.due < t ? " late" : ""}">${dueLabel(p.due)}</span>
-          <button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button><button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button></li>`).join("")}</ul>`
+          <span class="acts"><button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button><button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button></span></li>`).join("")}</ul>`
         : `<p class="empty">Просрочек и платежей на ближайшие три дня нет</p>`)}
       ${ag.interviews.length ? panel("Собеседования на неделе", ag.interviews.length, `<ul class="rows">${ag.interviews.map(a => `<li class="click" data-act="open" data-id="${esc(a.s.id)}">
           <span class="who"><strong>${esc(a.s.name)}</strong><span>${esc(a.company)}${a.position ? " · " + esc(a.position) : ""}</span></span>
