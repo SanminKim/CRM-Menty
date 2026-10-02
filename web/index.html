@@ -165,11 +165,11 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 
 /* Списки дел */
 .rows { list-style: none; margin: 0; padding: 0; }
-.rows li { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-top: 1px solid var(--border); min-width: 0; }
+.rows li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 8px 16px; border-top: 1px solid var(--border); min-width: 0; }
 .rows li.click { cursor: pointer; }
 .rows li.click:hover { background: var(--surface-2); }
 .rows li:last-child { border-radius: 0 0 var(--radius) var(--radius); }
-.rows .who { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.rows .who { min-width: 0; flex: 1 1 150px; display: flex; flex-direction: column; }
 .rows .who strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rows .who span { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rows .when { color: var(--muted); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -404,7 +404,7 @@ const S = {
   data: { students: [], cohorts: [], partners: [], payouts: [], team: [], reports: [] }, loaded: {},
   view: "today", openId: null, partnerId: null, reportId: null, pipe: "sales",
   f: { q: "", cohort: "", mentor: "", partner: "", stage: "" }, showLost: false, payTab: "overdue",
-  moreNoStep: false, histOpen: false, pending: 0, names: {}, drag: null, busy: false,
+  config: {}, moreNoStep: false, histOpen: false, pending: 0, names: {}, drag: null, busy: false,
 };
 {
   const v = lsGet("crm-menti-view"); if (VIEWS.includes(v)) S.view = v;
@@ -572,6 +572,13 @@ function headHTML(title, extra = "", actions = "", sub = "") {
 }
 const addBtn = `<button class="btn primary" data-act="quick">+ Заявка</button>`;
 const demoBanner = () => D().students.some(s => s.demo) ? `<div class="banner"><p>В базе лежат примерные данные, чтобы было видно, как всё работает. Перед началом работы удалите их.</p><button class="btn small" data-act="demo-clear">Удалить примеры</button></div>` : "";
+const BACKUP_DAYS = 7;
+function backupBanner() {
+  if (S.readOnly || !S.loaded.config || !D().students.some(s => !s.demo)) return "";
+  const at = S.config.lastBackupAt, age = at ? daysSince(at) : null;
+  if (age !== null && age < BACKUP_DAYS) return "";
+  return `<div class="banner"><p>${age === null ? "Резервной копии ещё нет." : `Последняя резервная копия сделана ${days(age)} назад.`} Копия на вашем компьютере не зависит от доступа к Claude.</p><button class="btn small" data-act="backup">Скачать копию</button></div>`;
+}
 const panel = (title, count, body, extra = "") => `<section class="panel"><header><h2>${title}</h2>${count !== "" ? `<span class="cnt">${count}</span>` : ""}<span class="right"></span>${extra}</header>${body}</section>`;
 
 // ----- Сегодня -----
@@ -591,7 +598,7 @@ function todayView() {
   const noStep = S.moreNoStep ? ag.noStep : ag.noStep.slice(0, 6);
   const dueBody = ag.due.length ? `<ul class="rows">${ag.due.map(stepRow).join("")}</ul>`
     : `<div class="allclear"><strong>На сегодня шагов нет</strong>${ag.noStep.length ? "Назначьте следующий шаг студентам из списка «Без следующего шага»." : "Все студенты под контролем."}</div>`;
-  return headHTML("Сегодня", "", mentorSelect() + addBtn, sub) + demoBanner() + `
+  return headHTML("Сегодня", "", mentorSelect() + addBtn, sub) + demoBanner() + backupBanner() + `
   <div class="today">
     <div class="stack">
       ${panel("Сделать", ag.due.length || "", dueBody)}
@@ -601,7 +608,7 @@ function todayView() {
       ${panel("Платежи", ag.pays.length ? money(sum(ag.pays, p => p.amount)) : "", ag.pays.length ? `<ul class="rows">${ag.pays.map(p => `<li class="click" data-act="open" data-id="${esc(p.s.id)}">
           <span class="who"><strong>${esc(p.s.name)}</strong><span>${esc(p.comment || "Платёж")}</span></span>
           <span class="amt">${money(p.amount)}</span><span class="when${p.due < t ? " late" : ""}">${dueLabel(p.due)}</span>
-          <button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button></li>`).join("")}</ul>`
+          <button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button><button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button></li>`).join("")}</ul>`
         : `<p class="empty">Просрочек и платежей на ближайшие три дня нет</p>`)}
       ${ag.interviews.length ? panel("Собеседования на неделе", ag.interviews.length, `<ul class="rows">${ag.interviews.map(a => `<li class="click" data-act="open" data-id="${esc(a.s.id)}">
           <span class="who"><strong>${esc(a.s.name)}</strong><span>${esc(a.company)}${a.position ? " · " + esc(a.position) : ""}</span></span>
@@ -706,7 +713,7 @@ function paySection(s) {
     <div class="box">${pays.length ? `<div class="table-wrap"><table class="compact"><tbody>
       ${pays.map(x => { const od = !x.paid && x.due < t; return `<tr><td>${fShort(x.due)}${x.comment ? `<div class="sub">${esc(x.comment)}</div>` : ""}</td><td class="num">${money(x.amount)}</td>
         <td>${x.paid ? `<span class="tag ok">оплачен ${fDay(x.paid)}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
-        <td class="row-actions">${x.paid ? "" : `<button class="btn small" data-act="pay-done" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Оплачен</button> `}<button class="btn small ghost" data-act="pay-edit" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Изменить</button></td></tr>`; }).join("")}
+        <td class="row-actions">${x.paid ? "" : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(s.id)}" data-pid="${esc(x.id)}" title="Скопировать текст напоминания">Напомнить</button> <button class="btn small" data-act="pay-done" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Оплачен</button> `}<button class="btn small ghost" data-act="pay-edit" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Изменить</button></td></tr>`; }).join("")}
     </tbody></table></div>` : `<p class="empty">Платежей пока нет</p>`}</div></section>`;
 }
 function appSection(s) {
@@ -784,7 +791,7 @@ function paymentsView() {
     <thead><tr><th>Студент</th><th>Поток</th><th>${S.payTab === "paid" ? "Оплачен" : "Срок"}</th><th class="num">Сумма</th><th>Комментарий</th><th></th></tr></thead>
     <tbody>${list.map(p => `<tr class="click" data-act="open" data-id="${esc(p.s.id)}"><td><strong>${esc(p.s.name)}</strong></td>
       <td>${esc(cohortName(p.s.cohortId) || "—")}</td><td${!p.paid && p.due < t ? ' class="danger-text"' : ""}>${fDate(S.payTab === "paid" ? p.paid : p.due)}</td><td class="num">${money(p.amount)}</td><td class="muted">${esc(p.comment)}</td>
-      <td class="row-actions">${p.paid ? "" : `<button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button>`}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">${emptyText}</td></tr>`}</tbody>
+      <td class="row-actions">${p.paid ? "" : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button> <button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button>`}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">${emptyText}</td></tr>`}</tbody>
     ${list.length ? `<tfoot><tr><td colspan="3">Итого</td><td class="num">${money(sum(list, p => p.amount))}</td><td colspan="2"></td></tr></tfoot>` : ""}
   </table></div>`;
 }
@@ -940,6 +947,16 @@ async function stepDone(id) {
   if (!ok) return;
   toast("Шаг выполнен", () => save(() => patchStudent(id, cur => ({ next: hasStep(cur) ? cur.next : step, notes: (cur.notes || []).filter(n => n.id !== note.id) })), "Шаг возвращён"));
   if (isActive(s)) stepForm(s, true);
+}
+// Готовый текст напоминания об оплате: копируется в буфер, остаётся вставить в Telegram
+function remindText(s, p) {
+  const parts = String(s.name || "").split(/\s+/).filter(Boolean), first = parts[1] || parts[0] || "";
+  const late = p.due < today();
+  return `${first ? first + ", д" : "Д"}обрый день! Напоминаю про платёж за обучение: ${money(p.amount).replace(/[\u00a0\u202f]/g, " ")}, срок ${late ? "был " : ""}${fDate(p.due)}. ${late ? "Подскажите, пожалуйста, когда получится оплатить?" : "Если уже оплатили, дайте знать, я отмечу."}`;
+}
+async function copyText(text, okMsg) {
+  try { await navigator.clipboard.writeText(text); toast(okMsg); }
+  catch (e) { openModal({ title: "Скопируйте текст", submit: "Готово", cancel: "Закрыть", values: { text }, fields: [{ k: "text", label: "Текст", type: "textarea", wide: true }], onSubmit: () => true }); }
 }
 async function payDone(id, pid) {
   const s = stu(id); if (!s) return;
@@ -1234,7 +1251,11 @@ async function exportBackup() {
   if (!dl) return toast("Выгрузка недоступна в этом окне");
   const data = {}; for (const c of COLS) data[c] = D()[c];
   const backup = { format: "crm-menti-backup", version: 2, exportedAt: new Date().toISOString(), data };
-  try { await dl.save({ filename: `crm-menti-копия-${today()}.json`, data: JSON.stringify(backup, null, 1) }); toast("Резервная копия сохранена"); }
+  try {
+    await dl.save({ filename: `crm-menti-копия-${today()}.json`, data: JSON.stringify(backup, null, 1) }); toast("Резервная копия сохранена");
+    // Дату копии помним в базе, чтобы напомнить о следующей
+    if (!S.readOnly) enqueue("config/main", () => S.db.doc("config/main").set(clean({ ...S.config, lastBackupAt: new Date().toISOString() }))).catch(e => console.warn(e));
+  }
   catch (e) { if (e?.code !== "declined") toast("Не удалось сохранить копию"); }
 }
 
@@ -1352,7 +1373,8 @@ const ACT = {
   "step-done": d => stepDone(d.id),
   "more-nostep": () => { S.moreNoStep = !S.moreNoStep; render(); },
   qdate: d => { const el = document.getElementById(d.target); if (el) el.value = daysAhead(+d.days); },
-  copy: async d => { try { await navigator.clipboard.writeText(d.text); toast("Скопировано"); } catch (e) { toast(d.text); } },
+  copy: d => copyText(d.text, "Скопировано"),
+  "pay-remind": d => { const s = stu(d.id), p = (s?.payments || []).find(x => x.id === d.pid); if (p) copyText(remindText(s, p), "Напоминание скопировано. Вставьте его в переписку"); },
   "pay-new": d => paymentForm(stu(d.id)),
   "pay-plan": d => planForm(stu(d.id)),
   "pay-edit": d => { const s = stu(d.id); paymentForm(s, (s.payments || []).find(p => p.id === d.pid)); },
@@ -1455,6 +1477,7 @@ async function boot() {
   } catch (e) { console.warn(e); }
   S.mode = staff ? "staff" : "partner";
   if (staff && S.canWrite === false && !S.isOwner) S.readOnly = true;
+  if (staff) db.doc("config/main").onSnapshot(snap => { S.config = snap.exists ? { ...snap.data() } : {}; S.loaded.config = true; scheduleRender(); }, err => { console.warn("config", err); });
   const cols = S.mode === "partner" ? ["reports"] : COLS;
   for (const c of cols) {
     db.collection(c).onSnapshot(snap => {
