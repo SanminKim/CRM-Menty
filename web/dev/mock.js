@@ -9,11 +9,14 @@
   const snapDoc = (path) => ({ id: path.split('/').pop(), exists: path in store && visible(path), data: () => store[path] ? JSON.parse(JSON.stringify(store[path])) : undefined, metadata:{fromCache:false,hasPendingWrites:false} });
   const notify = () => setTimeout(() => subs.forEach(s => s()), 5);
   const canWrite = role !== 'partner';
+  // Как в настоящей базе: вложенные объекты сливаются по ключам, массивы и null заменяют поле целиком
+  const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+  const merge = (to, from) => { for (const k in from) { if (isObj(from[k]) && isObj(to[k])) merge(to[k], from[k]); else to[k] = from[k]; } return to; };
   const docRef = path => ({
     id: path.split('/').pop(), path,
     get: async () => snapDoc(path),
     set: async d => { if(!canWrite) throw {code:'invalid_argument'}; store[path] = JSON.parse(JSON.stringify(d)); persist(); notify(); },
-    update: async d => { if(!canWrite) throw {code:'invalid_argument'}; if(!(path in store)) throw {code:'invalid_argument'}; Object.assign(store[path], JSON.parse(JSON.stringify(d))); persist(); notify(); },
+    update: async d => { if(!canWrite) throw {code:'invalid_argument'}; if(!(path in store)) throw {code:'invalid_argument'}; merge(store[path], JSON.parse(JSON.stringify(d))); persist(); notify(); },
     delete: async () => { delete store[path]; persist(); notify(); },
     onSnapshot: (next) => { const f = () => next(snapDoc(path)); subs.push(f); setTimeout(f, 10); return () => {}; },
   });

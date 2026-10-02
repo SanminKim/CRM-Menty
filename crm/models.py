@@ -110,6 +110,10 @@ class Cohort(models.Model):
         "Базовая цена", max_digits=12, decimal_places=2, null=True, blank=True
     )
     is_active = models.BooleanField("Идёт набор / обучение", default=True)
+    modules = models.JSONField(
+        "Программа", default=list, blank=True,
+        help_text='Список модулей вида [{"id": "m1", "title": "Введение"}]. Переносится из веб-версии.',
+    )
     external_id = models.CharField(
         "ID в веб-версии", max_length=64, blank=True, db_index=True, editable=False,
         help_text="Заполняется при импорте резервной копии, чтобы не создавать дубли",
@@ -173,6 +177,10 @@ class Student(models.Model):
     )
     offer_date = models.DateField("Дата оффера", null=True, blank=True)
 
+    progress = models.JSONField(
+        "Пройденные модули", default=dict, blank=True,
+        help_text="Идентификатор модуля потока → дата, когда он отмечен пройденным",
+    )
     next_step = models.CharField("Следующий шаг", max_length=255, blank=True)
     next_step_date = models.DateField("Дата следующего шага", null=True, blank=True)
 
@@ -243,6 +251,15 @@ class Student(models.Model):
     def total_paid(self):
         return self.payments.filter(status=Payment.Status.PAID).aggregate(
             s=Sum("amount"))["s"] or Decimal("0")
+
+    @property
+    def progress_summary(self):
+        """(пройдено, всего) по программе потока или None, если программы нет."""
+        modules = self.cohort.modules if self.cohort_id else []
+        if not modules:
+            return None
+        done = sum(1 for m in modules if self.progress.get(m.get("id")))
+        return done, len(modules)
 
     @property
     def debt(self):

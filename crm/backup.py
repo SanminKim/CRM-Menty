@@ -19,7 +19,8 @@ from .models import (
 from .permissions import MENTOR_GROUP
 
 BACKUP_FORMAT = "crm-menti-backup"
-SUPPORTED_VERSIONS = (1, 2)  # 2: у студента появился следующий шаг (next)
+# 2: у студента появился следующий шаг (next); 3: программа потока (modules) и прогресс студента (progress)
+SUPPORTED_VERSIONS = (1, 2, 3)
 
 
 class BackupError(ValueError):
@@ -60,6 +61,25 @@ def _dt(value):
 def _text(value, limit=None):
     text = "" if value is None else str(value).strip()
     return text[:limit] if limit else text
+
+
+def _modules(value):
+    """Программа потока: только записи с непустыми id и названием."""
+    result = []
+    for item in value if isinstance(value, list) else []:
+        if isinstance(item, dict) and _text(item.get("id")) and _text(item.get("title")):
+            result.append({"id": _text(item["id"], 64), "title": _text(item["title"], 200)})
+    return result
+
+
+def _progress(value):
+    """Отметки модулей: оставляем только поставленные, дату приводим к ISO."""
+    result = {}
+    for key, done in (value if isinstance(value, dict) else {}).items():
+        if done:
+            day = _date(done)
+            result[_text(key, 64)] = day.isoformat() if day else timezone.localdate().isoformat()
+    return result
 
 
 def parse_backup(raw):
@@ -109,13 +129,20 @@ def import_backup(raw, overwrite=False, with_demo=False):
     cohorts = {}
     for row in _rows(data, "cohorts", with_demo, used["cohortId"]):
         obj = Cohort.objects.filter(external_id=row["id"]).first()
-        if obj:
+        modules = _modules(row.get("modules"))
+        if obj and modules and (overwrite or not obj.modules):
+            # Поток перенесён раньше, из копии без программы: догружаем программу
+            obj.modules = modules
+            obj.save(update_fields=["modules"])
+            stats["cohorts"]["updated"] += 1
+        elif obj:
             stats["cohorts"]["skipped"] += 1
         else:
             obj = Cohort.objects.create(
                 external_id=row["id"], name=_text(row.get("name"), 100) or "Без названия",
                 start_date=_date(row.get("start")), end_date=_date(row.get("end")),
                 price=_dec(row.get("price")), is_active=row.get("active") is not False,
+                modules=modules,
             )
             stats["cohorts"]["created"] += 1
         cohorts[row["id"]] = obj
@@ -187,6 +214,7 @@ def import_backup(raw, overwrite=False, with_demo=False):
             job_salary=_dec(row.get("jobSalary")), offer_date=_date(row.get("offerDate")),
             comment=_text(row.get("comment")), created_at=created_at,
             next_step=_text(step.get("text"), 255) if step_date else "", next_step_date=step_date,
+            progress=_progress(row.get("progress")),
         )
         if existing:
             for name, value in fields.items():

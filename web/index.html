@@ -1,54 +1,66 @@
 <title>CRM Менти</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap">
 <style>
-/* Раскладка: узкое меню слева, рабочая область, карточка студента выезжает панелью справа. */
+/* Раскладка: тёмное узкое меню слева, светлая рабочая область, карточка студента выезжает панелью справа. */
 :root {
-  --bg: #f5f6f3;
+  --bg: #f5f6f8;
   --surface: #ffffff;
-  --surface-2: #eef0eb;
-  --border: #e0e3db;
-  --text: #1a1e1a;
-  --muted: #687064;
-  --brand: #2f5d50;
+  --surface-2: #eceef2;
+  --border: #dfe2e8;
+  --text: #13161b;
+  --muted: #626a78;
+  --brand: #2952e3;
   --brand-ink: #ffffff;
-  --brand-soft: #e2ece8;
-  --danger: #b2412e;
-  --danger-soft: #f8e5e0;
-  --warn: #8f6200;
-  --warn-soft: #faf0d4;
-  --ok: #2c7a4c;
-  --ok-soft: #dff0e5;
-  --g-sales: #3a6bb2;  --g-sales-soft: #e4ebf6;
-  --g-study: #85549f;  --g-study-soft: #eee6f5;
-  --g-job: #2c7a4c;    --g-job-soft: #dff0e5;
-  --g-closed: #848a80; --g-closed-soft: #e9ebe6;
-  --overlay: rgba(20, 26, 22, .38);
-  --pop: 0 12px 36px rgba(20, 30, 22, .16);
-  --font: "Onest", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  --radius: 10px;
+  --brand-soft: #e5ebfd;
+  --mark: #ffd21f;      /* жёлтая метка — отсылка к 1С */
+  --mark-ink: #1b1a17;
+  --side: #14171d;
+  --side-2: #262b35;
+  --side-text: #aab2c0;
+  --side-ink: #ffffff;
+  --side-muted: #8891a1;
+  --hot: #e5484d;
+  --danger: #c0362c;
+  --danger-soft: #fbe6e3;
+  --warn: #8a5a00;
+  --warn-soft: #fbefd0;
+  --ok: #1f7a4a;
+  --ok-soft: #dcf1e5;
+  --g-sales: #0b7a85;  --g-sales-soft: #dcf0f1;
+  --g-study: #7446b8;  --g-study-soft: #ece4f7;
+  --g-job: #1f7a4a;    --g-job-soft: #dcf1e5;
+  --g-closed: #7c8492; --g-closed-soft: #e8eaee;
+  --c1: #2952e3;       /* график: получено */
+  --c2: #c8741c;       /* график: ожидается */
+  --overlay: rgba(15, 18, 24, .42);
+  --pop: 0 12px 36px rgba(15, 20, 30, .18);
+  --font: "Golos Text", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --radius: 8px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #131613; --surface: #1b1f1b; --surface-2: #242924; --border: #313831;
-    --text: #e6e9e3; --muted: #99a094; --brand: #74b6a1; --brand-ink: #0f231c; --brand-soft: #20342d;
-    --danger: #ec8c79; --danger-soft: #3a2420; --warn: #e1b655; --warn-soft: #38301f;
-    --ok: #78c896; --ok-soft: #1e3427;
-    --g-sales: #86abe4; --g-sales-soft: #1f2a3a; --g-study: #c29ee4; --g-study-soft: #2c2437;
-    --g-job: #78c896; --g-job-soft: #1e3427; --g-closed: #99a094; --g-closed-soft: #282c28;
-    --overlay: rgba(0, 0, 0, .58); --pop: 0 12px 36px rgba(0, 0, 0, .5);
+    --bg: #0f1115; --surface: #181b21; --surface-2: #22262e; --border: #2d323c;
+    --text: #e7e9ee; --muted: #959dab; --brand: #7d9bff; --brand-ink: #0d1330; --brand-soft: #1d2748;
+    --side: #0a0c0f; --side-2: #1b1f27; --side-text: #9aa2b0; --side-ink: #ffffff; --side-muted: #6f7786; --hot: #e5484d;
+    --danger: #f0857b; --danger-soft: #3a2120; --warn: #e3b556; --warn-soft: #372d1a; --ok: #6fcb97; --ok-soft: #183224;
+    --g-sales: #4fc0cb; --g-sales-soft: #12333a; --g-study: #b998ee; --g-study-soft: #2a2140;
+    --g-job: #6fcb97; --g-job-soft: #183224; --g-closed: #959dab; --g-closed-soft: #262a32;
+    --c1: #5b82f5; --c2: #c97a2c;
+    --overlay: rgba(0, 0, 0, .6); --pop: 0 12px 36px rgba(0, 0, 0, .55);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #131613; --surface: #1b1f1b; --surface-2: #242924; --border: #313831;
-  --text: #e6e9e3; --muted: #99a094; --brand: #74b6a1; --brand-ink: #0f231c; --brand-soft: #20342d;
-  --danger: #ec8c79; --danger-soft: #3a2420; --warn: #e1b655; --warn-soft: #38301f;
-  --ok: #78c896; --ok-soft: #1e3427;
-  --g-sales: #86abe4; --g-sales-soft: #1f2a3a; --g-study: #c29ee4; --g-study-soft: #2c2437;
-  --g-job: #78c896; --g-job-soft: #1e3427; --g-closed: #99a094; --g-closed-soft: #282c28;
-  --overlay: rgba(0, 0, 0, .58); --pop: 0 12px 36px rgba(0, 0, 0, .5);
+  --bg: #0f1115; --surface: #181b21; --surface-2: #22262e; --border: #2d323c;
+  --text: #e7e9ee; --muted: #959dab; --brand: #7d9bff; --brand-ink: #0d1330; --brand-soft: #1d2748;
+  --side: #0a0c0f; --side-2: #1b1f27; --side-text: #9aa2b0; --side-ink: #ffffff; --side-muted: #6f7786; --hot: #e5484d;
+  --danger: #f0857b; --danger-soft: #3a2120; --warn: #e3b556; --warn-soft: #372d1a; --ok: #6fcb97; --ok-soft: #183224;
+  --g-sales: #4fc0cb; --g-sales-soft: #12333a; --g-study: #b998ee; --g-study-soft: #2a2140;
+  --g-job: #6fcb97; --g-job-soft: #183224; --g-closed: #959dab; --g-closed-soft: #262a32;
+  --c1: #5b82f5; --c2: #c97a2c;
+  --overlay: rgba(0, 0, 0, .6); --pop: 0 12px 36px rgba(0, 0, 0, .55);
   color-scheme: dark;
 }
 
@@ -57,7 +69,7 @@ html, body { min-height: 100%; }
 html.locked { overflow: hidden; }
 body { background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); }
 a { color: var(--brand); }
-h1 { font-size: 24px; line-height: 1.2; margin: 0; font-weight: 650; letter-spacing: -.015em; text-wrap: balance; }
+h1 { font-size: 24px; line-height: 1.2; margin: 0; font-weight: 700; letter-spacing: -.02em; text-wrap: balance; }
 h1 small { color: var(--muted); font-weight: 400; font-size: 15px; letter-spacing: 0; }
 h2 { font-size: 15px; margin: 0; font-weight: 600; }
 p { margin: 0; }
@@ -72,24 +84,27 @@ p { margin: 0; }
 :focus-visible, .tabs button:focus-visible, .link:focus-visible, .x:focus-visible, .nav button:focus-visible, .seg button:focus-visible, .chk:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 /* Каркас */
-.layout { display: grid; grid-template-columns: 204px minmax(0, 1fr); min-height: 100vh; background: linear-gradient(to right, var(--surface) 203px, var(--border) 203px, var(--border) 204px, var(--bg) 204px); }
-.side { padding: 16px 10px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; align-self: start; min-width: 0; }
-.brand { display: flex; align-items: center; gap: 9px; font-weight: 650; padding: 0 8px; font-size: 15px; }
-.brand-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.layout { display: grid; grid-template-columns: 204px minmax(0, 1fr); min-height: 100vh; background: linear-gradient(to right, var(--side) 204px, var(--bg) 204px); }
+.side { color: var(--side-text); padding: 16px 10px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; align-self: start; min-width: 0; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 700; padding: 0 8px; font-size: 15px; color: var(--side-ink); }
+.brand-mark { width: 26px; height: 26px; border-radius: 6px; background: var(--mark); color: var(--mark-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
 .gsearch { position: relative; }
-.gsearch input { background: var(--surface-2); border-color: transparent; padding: 6px 10px; }
-.gsearch input:focus { background: var(--surface); }
+.gsearch input { background: var(--side-2); border-color: transparent; padding: 6px 10px; color: var(--side-ink); }
+.gsearch input::placeholder { color: var(--side-muted); }
+.gsearch input:focus { outline: 2px solid var(--brand); border-color: transparent; }
+#gq-res { color: var(--text); }
 #gq-res { position: absolute; z-index: 12; left: 0; top: calc(100% + 4px); width: max(100%, 280px); max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--pop); padding: 4px; }
 #gq-res button { all: unset; box-sizing: border-box; display: flex; gap: 8px; align-items: center; width: 100%; padding: 7px 8px; border-radius: 7px; cursor: pointer; }
 #gq-res button:hover, #gq-res button.on { background: var(--surface-2); }
 #gq-res .sub { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
 .nav { display: flex; flex-direction: column; gap: 1px; }
-.nav button { all: unset; box-sizing: border-box; cursor: pointer; padding: 6px 10px; border-radius: 7px; color: var(--muted); display: flex; align-items: center; gap: 8px; font-weight: 500; }
-.nav button:hover { background: var(--surface-2); color: var(--text); }
-.nav button.on { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
-.nav .n { margin-left: auto; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--surface-2); color: var(--muted); border-radius: 99px; padding: 0 7px; line-height: 18px; }
-.nav .n.hot { background: var(--danger-soft); color: var(--danger); }
-.side-foot { margin-top: auto; padding: 0 8px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.nav button { all: unset; box-sizing: border-box; cursor: pointer; padding: 6px 10px; border-radius: 7px; color: var(--side-text); display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.nav button:hover { background: var(--side-2); color: var(--side-ink); }
+.nav button.on { background: var(--side-2); color: var(--side-ink); font-weight: 600; }
+.nav .n { margin-left: auto; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--side-2); color: var(--side-text); border-radius: 99px; padding: 0 7px; line-height: 18px; }
+.nav button.on .n { background: rgba(255, 255, 255, .12); }
+.nav .n.hot, .nav button.on .n.hot { background: var(--hot); color: #fff; }
+.side-foot { margin-top: auto; padding: 0 8px; font-size: 12px; color: var(--side-muted); display: flex; align-items: center; gap: 6px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
 .dot.busy { background: var(--warn); }
 .main { padding: 24px 28px 56px; min-width: 0; }
@@ -108,7 +123,7 @@ p { margin: 0; }
 .panel > header .cnt { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .panel .pad { padding: 0 16px 14px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; min-width: 0; }
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 6px 12px; border-radius: 8px; font: inherit; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 6px 12px; border-radius: 7px; font: inherit; font-weight: 500; cursor: pointer; white-space: nowrap; }
 .btn:hover { background: var(--surface-2); }
 .btn.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
 .btn.primary:hover { filter: brightness(1.08); }
@@ -117,7 +132,7 @@ p { margin: 0; }
 .btn.danger { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
 .btn.small { padding: 2px 9px; font-size: 12.5px; }
 .btn:disabled { opacity: .5; cursor: default; }
-.badge, .tag { display: inline-block; padding: 0 8px; border-radius: 99px; font-size: 12px; line-height: 20px; font-weight: 500; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.badge, .tag { display: inline-block; padding: 0 7px; border-radius: 5px; font-size: 12px; line-height: 20px; font-weight: 500; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
 .b-sales { background: var(--g-sales-soft); color: var(--g-sales); }
 .b-study { background: var(--g-study-soft); color: var(--g-study); }
 .b-job { background: var(--g-job-soft); color: var(--g-job); }
@@ -216,7 +231,7 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .col-body { padding: 4px 8px 10px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 56px; }
 .col-body .empty { padding: 8px 4px; font-size: 12.5px; }
 .col.drop { outline: 2px dashed var(--brand); outline-offset: -2px; }
-.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; display: flex; flex-direction: column; gap: 3px; cursor: grab; min-width: 0; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 9px 10px; display: flex; flex-direction: column; gap: 3px; cursor: grab; min-width: 0; }
 .tile:hover { border-color: var(--brand); }
 .tile.alert { box-shadow: inset 3px 0 0 var(--danger); }
 .tile.dragging { opacity: .45; }
@@ -266,6 +281,55 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .timeline { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
 details > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 
+/* Прогресс и потоки */
+.prog { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.prog-bar { width: 44px; height: 5px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.prog-bar > span { display: block; height: 100%; background: var(--g-study); border-radius: 99px; }
+.prog.wide .prog-bar { flex: 1; min-width: 60px; }
+.prog.wide { display: flex; }
+.mods { list-style: none; margin: 0; padding: 4px 0; }
+.mods label { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; cursor: pointer; }
+.mods input { position: relative; top: 2px; flex: none; }
+.mods .t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mods .done .t { color: var(--muted); }
+.cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); gap: 14px; }
+.ccard { all: unset; box-sizing: border-box; cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ccard:hover { border-color: var(--brand); }
+.ccard h2 { font-size: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ccard dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 0; align-items: center; }
+.ccard dt { color: var(--muted); }
+.ccard dd { margin: 0; font-variant-numeric: tabular-nums; }
+.mxh { text-align: center; padding-inline: 2px; min-width: 24px; }
+td.mxc { padding: 4px 2px; text-align: center; }
+.mx { all: unset; box-sizing: border-box; cursor: pointer; width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border); display: inline-grid; place-items: center; vertical-align: middle; }
+.mx:hover { border-color: var(--g-study); }
+.mx.on { background: var(--g-study); border-color: var(--g-study); }
+.mx.on::after { content: ""; width: 8px; height: 4px; border-left: 2px solid var(--surface); border-bottom: 2px solid var(--surface); transform: rotate(-45deg) translateY(-1px); }
+.selc { width: 34px; padding-right: 0; }
+.bulk { position: sticky; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 5; margin: 12px auto 0; width: fit-content; max-width: 100%; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 8px 8px 8px 14px; border-radius: 10px; background: var(--side); color: var(--side-ink); box-shadow: var(--pop); }
+.bulk .btn { background: var(--side-2); border-color: transparent; color: var(--side-ink); }
+.bulk .btn:hover { filter: brightness(1.25); }
+.bulk .btn.ghost { background: transparent; color: var(--side-text); }
+.bulk b { margin-right: 6px; font-weight: 600; }
+
+/* График */
+.chart-wrap { overflow-x: auto; }
+.chart { width: 100%; min-width: 560px; max-width: 860px; height: auto; display: block; }
+.chart text { fill: var(--muted); font: 11px var(--font); font-variant-numeric: tabular-nums; }
+.chart .now { fill: var(--text); font-weight: 600; }
+.chart .grid { stroke: var(--border); stroke-width: 1; }
+.chart .s1 { fill: var(--c1); }
+.chart .s2 { fill: var(--c2); }
+.chart .hit { fill: transparent; }
+.chart g:hover .hit { fill: var(--surface-2); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+#tip { position: fixed; z-index: 40; pointer-events: none; background: var(--text); color: var(--bg); font-size: 12.5px; padding: 6px 10px; border-radius: 7px; max-width: 260px; white-space: pre-line; }
+#tip[hidden] { display: none; }
+.imp { max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); margin-top: 10px; }
+.imp table { font-size: 12.5px; }
+.imp-sum { margin-top: 10px; }
+
 /* Окна */
 #modal[hidden] { display: none; }
 .overlay { position: fixed; inset: 0; background: var(--overlay); display: grid; place-items: start center; padding: max(24px, env(safe-area-inset-top, 0px)) 16px 24px; overflow-y: auto; z-index: 20; }
@@ -298,8 +362,8 @@ details > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .loading { color: var(--muted); padding: 40px 0; }
 
 @media (max-width: 860px) {
-  .layout { grid-template-columns: minmax(0, 1fr); background: var(--bg); }
-  .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 10px 16px; gap: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; background: var(--bg); }
+  .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 10px 16px; gap: 8px 12px; background: var(--side); }
   .brand { padding: 0; }
   .gsearch { flex: 1 1 140px; }
   .nav { flex-direction: row; flex-basis: 100%; overflow-x: auto; gap: 2px; margin: 0 -6px; }
@@ -337,6 +401,7 @@ details > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 <div id="drawer" hidden></div>
 <div id="modal" hidden></div>
 <div id="toast" hidden></div>
+<div id="tip" hidden></div>
 
 <script>
 "use strict";
@@ -356,7 +421,7 @@ const EMPLOYED = ["offer", "probation_passed"];
 const APP_ST = [["applied", "Отклик"], ["hr", "Скрининг HR"], ["test", "Тестовое"], ["interview", "Собеседование"], ["offer", "Оффер"], ["accepted", "Оффер принят"], ["rejected", "Отказ"]];
 const APPL = Object.fromEntries(APP_ST);
 const COLS = ["students", "cohorts", "partners", "payouts", "team", "reports"];
-const VIEWS = ["today", "board", "students", "payments", "analytics", "partners", "settings"];
+const VIEWS = ["today", "board", "students", "cohorts", "payments", "analytics", "partners", "settings"];
 const STEP_HINTS = ["Связаться", "Созвон", "Написать про оплату", "Проверить домашку", "Ревью резюме", "Узнать итог собеседования", "Спросить, как дела"];
 const MON = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
@@ -403,7 +468,7 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
 const S = {
   status: "loading", mode: "staff", db: null, user: null, myId: null, isOwner: false, canWrite: null, readOnly: false,
   data: { students: [], cohorts: [], partners: [], payouts: [], team: [], reports: [] }, loaded: {},
-  view: "today", openId: null, partnerId: null, reportId: null, pipe: "sales",
+  view: "today", openId: null, partnerId: null, cohortId: null, reportId: null, pipe: "sales", anTab: "funnel", sel: new Set(), visible: [],
   f: { q: "", cohort: "", mentor: "", partner: "", stage: "" }, showLost: false, payTab: "overdue",
   config: {}, moreNoStep: false, histOpen: false, pending: 0, names: {}, drag: null, busy: false,
 };
@@ -414,7 +479,8 @@ const S = {
 
 const D = () => S.data;
 const stu = id => D().students.find(s => s.id === id);
-const cohortName = id => D().cohorts.find(c => c.id === id)?.name || "";
+const cohortById = id => D().cohorts.find(c => c.id === id);
+const cohortName = id => cohortById(id)?.name || "";
 const partnerById = id => D().partners.find(p => p.id === id);
 const teamName = id => D().team.find(m => m.id === id)?.name || "";
 const myTeam = () => S.myId ? D().team.find(m => m.userId === S.myId) : null;
@@ -432,6 +498,14 @@ const isActive = s => s.stage !== "lost" && s.stage !== "probation_passed";
 const hasStep = s => !!(s.next && s.next.text && s.next.date);
 const stepLate = s => hasStep(s) && s.next.date < today();
 const isStuck = s => !["new", "lost", "probation_passed"].includes(s.stage) && daysSince(s.stageAt) >= STUCK_DAYS;
+// Прогресс по программе потока: сколько модулей отмечено у студента
+const modulesOf = s => cohortById(s.cohortId)?.modules || [];
+function progressOf(s) {
+  const mods = modulesOf(s); if (!mods.length) return null;
+  const done = mods.filter(m => s.progress && s.progress[m.id]).length;
+  return { done, total: mods.length, pct: pct(done, mods.length) };
+}
+const progHTML = (p, wide = false) => p ? `<span class="prog${wide ? " wide" : ""}" title="Пройдено модулей: ${esc(p.done)} из ${esc(p.total)}"><span class="prog-bar"><span style="width:${+p.pct || 0}%"></span></span><span>${esc(p.done)}/${esc(p.total)}</span></span>` : "";
 function reached(s) { let m = 0; for (const h of [...(s.history || []), { to: s.stage }]) { const i = SIDX[h.to]; if (h.to !== "lost" && i > m) m = i; } return m; }
 function funnel(list) {
   const r = list.map(reached);
@@ -474,6 +548,34 @@ function agenda(list) {
     noStep: sortBy(act.filter(s => !hasStep(s)), s => s.stageAt || ""),
     pays: sortBy(pays.filter(p => p.due <= in3), p => p.due),
     interviews: sortBy(apps.filter(a => a.interview.slice(0, 10) >= t && a.interview.slice(0, 10) <= in7), a => a.interview),
+  };
+}
+const shareOf = s => { const p = partnerById(s.partnerId); return p ? Math.round(paidSum(s) * (s.partnerShare ?? p.share ?? 0)) / 100 : 0; };
+// Деньги: получено и ожидается по месяцам, сравнение источников и потоков
+function finance(list) {
+  const t = today(), now = new Date(), months = [];
+  for (let i = -5; i <= 6; i++) { const d = new Date(now.getFullYear(), now.getMonth() + i, 1); months.push({ key: `${d.getFullYear()}-${pad(d.getMonth() + 1)}`, label: MON[d.getMonth()].slice(0, 3), year: d.getFullYear(), got: 0, exp: 0, cur: i === 0 }); }
+  const byKey = Object.fromEntries(months.map(m => [m.key, m]));
+  const pays = list.flatMap(s => (s.payments || []).map(p => ({ ...p, s })));
+  const paid = pays.filter(p => p.paid), open = pays.filter(p => !p.paid && p.s.stage !== "lost");
+  for (const p of paid) { const m = byKey[p.paid.slice(0, 7)]; if (m) m.got += +p.amount || 0; }
+  for (const p of open) if (p.due >= t) { const m = byKey[p.due.slice(0, 7)]; if (m) m.exp += +p.amount || 0; }
+  const payers = list.filter(s => paidSum(s) > 0).length, total = sum(paid, p => p.amount);
+  const group = (rows, name) => {
+    const pay = rows.filter(s => paidSum(s) > 0).length, rev = sum(rows, paidSum), cost = sum(rows, shareOf);
+    return { name, leads: rows.length, payers: pay, conv: pct(pay, rows.length), revenue: rev, cost, net: rev - cost,
+      expected: sum(rows.filter(s => s.stage !== "lost").flatMap(s => (s.payments || []).filter(p => !p.paid && p.due >= t)), p => p.amount),
+      employed: rows.filter(s => EMPLOYED.includes(s.stage)).length };
+  };
+  const sources = [...D().partners.map(p => group(list.filter(s => s.partnerId === p.id), p.name)), group(list.filter(s => !partnerById(s.partnerId)), "Без партнёра")].filter(r => r.leads);
+  const cohorts = [...sortBy(D().cohorts, c => c.start || "").reverse().map(c => group(list.filter(s => s.cohortId === c.id), c.name)), group(list.filter(s => !s.cohortId), "Без потока")].filter(r => r.leads);
+  return {
+    months, total, month: byKey[t.slice(0, 7)].got, payers, avg: payers ? total / payers : null,
+    expected: sum(open.filter(p => p.due >= t), p => p.amount), overdue: sum(open.filter(p => p.due < t), p => p.amount),
+    cost: sum(list, shareOf), sources, cohorts,
+    // Что не поместилось в окно графика: старые оплаты и дальние платежи
+    before: sum(paid.filter(p => p.paid.slice(0, 7) < months[0].key), p => p.amount),
+    after: sum(open.filter(p => p.due.slice(0, 7) > months[months.length - 1].key), p => p.amount),
   };
 }
 function partnerStats(p) {
@@ -526,7 +628,7 @@ function scheduleRender() { if (rq) return; rq = true; requestAnimationFrame(() 
 function render() {
   const active = document.activeElement, aid = active?.id, sel = active && "selectionStart" in active ? [active.selectionStart, active.selectionEnd] : null;
   const kept = {}; document.querySelectorAll("[data-keep]").forEach(el => kept[el.id] = el.value);
-  const boardX = $("#board")?.scrollLeft, drawerY = $("#d-body")?.scrollTop;
+  const boardX = $("#board")?.scrollLeft, drawerY = $("#d-body")?.scrollTop, tblX = $("#tbl")?.scrollLeft;
   const ready = S.status === "ready" && S.mode === "staff";
   $("#gsearch").hidden = !ready;
   $("#nav").innerHTML = navHTML();
@@ -539,6 +641,7 @@ function render() {
   for (const [id, v] of Object.entries(kept)) { const el = document.getElementById(id); if (el) el.value = v; }
   if (boardX && $("#board")) $("#board").scrollLeft = boardX;
   if (drawerY && $("#d-body")) $("#d-body").scrollTop = drawerY;
+  if (tblX && $("#tbl")) $("#tbl").scrollLeft = tblX;
   if (aid && aid !== "mform" && aid !== "gq" && !aid.startsWith("m-")) { const el = document.getElementById(aid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) { } } }
   renderSync();
   resolveNames();
@@ -553,8 +656,8 @@ function navHTML() {
   if (S.status !== "ready") return "";
   if (S.mode === "partner") return `<button class="on">Отчёт</button>`;
   const ag = agenda(D().students), late = ag.pays.filter(p => p.due < today()).length;
-  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["board", "Воронка"], ["students", "Студенты"], ["payments", "Платежи", late, true], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"]];
-  const cur = S.view === "partner" ? "partners" : S.view;
+  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи", late, true], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"]];
+  const cur = S.view === "partner" ? "partners" : S.view === "cohort" ? "cohorts" : S.view;
   return items.map(([v, l, n, hot]) => `<button data-act="nav" data-v="${v}" class="${cur === v ? "on" : ""}"${cur === v ? ' aria-current="page"' : ""}>${l}${n ? `<span class="n${hot ? " hot" : ""}">${n}</span>` : ""}</button>`).join("");
 }
 function mainHTML() {
@@ -565,7 +668,7 @@ function mainHTML() {
   const need = ["students", "cohorts", "partners", "team"];
   if (!need.every(c => S.loaded[c])) return `<p class="loading">Загружаю базу…</p>`;
   const ro = S.readOnly ? `<div class="banner"><p>У вас доступ только для просмотра. Чтобы вносить изменения, попросите владельца выдать права редактора.</p></div>` : "";
-  const v = { today: todayView, board: boardView, students: listView, payments: paymentsView, analytics: analyticsView, partners: partnersView, partner: partnerView, settings: settingsView }[S.view] || todayView;
+  const v = { today: todayView, board: boardView, students: listView, cohorts: cohortsView, cohort: cohortView, payments: paymentsView, analytics: analyticsView, partners: partnersView, partner: partnerView, settings: settingsView }[S.view] || todayView;
   return ro + v();
 }
 function headHTML(title, extra = "", actions = "", sub = "") {
@@ -639,9 +742,60 @@ function welcomeView() {
 function funnelHTML(rows) {
   return `<div class="funnel">${rows.map(r => `<div class="funnel-row"><span class="funnel-label">${esc(r.label)}</span><span class="funnel-bar"><span style="width:${Math.max(0, Math.min(100, +r.pct || 0))}%"></span></span><span class="funnel-num">${esc(r.count)} <small>${esc(r.pct)}%</small></span></div>`).join("")}</div>`;
 }
+function barPath(x, y, w, h, r) {
+  r = Math.min(r, h, w / 2);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+}
+const fmtK = v => v >= 1e6 ? `${(v / 1e6).toFixed(v % 1e6 ? 1 : 0).replace(".", ",")}\u00a0млн` : v >= 1000 ? `${String(+(v / 1000).toFixed(2)).replace(".", ",")}\u00a0тыс.` : String(Math.round(v));
+function niceMax(v) { if (v <= 0) return 1000; const p = Math.pow(10, Math.floor(Math.log10(v))), n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; }
+// Столбцы по месяцам: получено и ожидается сложены в один столбец, между ними зазор
+function moneyChart(months) {
+  const W = 720, H = 230, L = 52, R = 8, T = 10, B = 26, pw = W - L - R, ph = H - T - B;
+  const top = niceMax(Math.max(...months.map(m => m.got + m.exp))), y = v => T + ph - v / top * ph;
+  const step = pw / months.length, bw = Math.min(30, step * .56);
+  const grid = [0, .25, .5, .75, 1].map(k => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(top * k)}" y2="${y(top * k)}"></line><text x="${L - 8}" y="${y(top * k) + 4}" text-anchor="end">${k ? fmtK(top * k) : "0"}</text>`).join("");
+  const bars = months.map((m, i) => {
+    const x = L + step * i + (step - bw) / 2, hg = m.got / top * ph, he = m.exp / top * ph, gap = hg > 0 && he > 0 ? 2 : 0;
+    const tip = `${m.label} ${m.year}${m.got ? `\nПолучено: ${money(m.got)}` : ""}${m.exp ? `\nОжидается: ${money(m.exp)}` : ""}${!m.got && !m.exp ? "\nНет платежей" : ""}`;
+    return `<g data-tip="${esc(tip)}"><rect class="hit" x="${L + step * i}" y="${T}" width="${step}" height="${ph}"></rect>
+      ${hg > 0 ? `<path class="s1" d="${barPath(x, y(m.got), bw, hg, he > 0 ? 0 : 4)}"></path>` : ""}
+      ${he > 0 ? `<path class="s2" d="${barPath(x, y(m.got + m.exp), bw, Math.max(he - gap, 1), 4)}"></path>` : ""}
+      <text class="${m.cur ? "now" : ""}" x="${x + bw / 2}" y="${H - 8}" text-anchor="middle">${m.label}</text></g>`;
+  }).join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Получено и ожидается по месяцам">${grid}${bars}</svg>`;
+}
+function financeView(list) {
+  const f = finance(list), rows = f.months.filter(m => m.got || m.exp);
+  const cmp = (title, first, items, extra) => panel(title, "", items.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>${first}</th><th class="num">Заявок</th><th class="num">Оплатили</th><th class="num">Конверсия</th><th class="num">Выручка</th>${extra.map(e => `<th class="num">${e[0]}</th>`).join("")}</tr></thead>
+      <tbody>${items.map(r => `<tr><td><strong>${esc(r.name)}</strong></td><td class="num">${r.leads}</td><td class="num">${r.payers}</td><td class="num">${r.conv}%</td><td class="num">${money(r.revenue)}</td>${extra.map(e => `<td class="num">${e[1](r)}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table></div>` : `<p class="empty">Пока нет данных</p>`);
+  return `<section class="kpis">
+    <div class="kpi"><span class="kpi-label">Получено всего</span><span class="kpi-value">${money(f.total)}</span><span class="kpi-sub">в этом месяце: ${money(f.month)}</span></div>
+    <div class="kpi"><span class="kpi-label">Ожидается по графику</span><span class="kpi-value">${money(f.expected)}</span><span class="kpi-sub">непросроченные платежи</span></div>
+    <div class="kpi"><span class="kpi-label">Просрочено</span><span class="kpi-value${f.overdue ? " danger-text" : ""}">${money(f.overdue)}</span></div>
+    <div class="kpi"><span class="kpi-label">Средняя оплата на студента</span><span class="kpi-value">${money(f.avg)}</span><span class="kpi-sub">оплативших: ${f.payers}</span></div>
+    <div class="kpi"><span class="kpi-label">Доля партнёров</span><span class="kpi-value">${money(f.cost)}</span><span class="kpi-sub">остаётся школе: ${money(f.total - f.cost)}</span></div>
+  </section>
+  ${panel("Деньги по месяцам", "", `<div class="pad">
+    <div class="legend" style="margin-bottom:8px"><span><i style="background:var(--c1)"></i>Получено</span><span><i style="background:var(--c2)"></i>Ожидается по графику платежей</span></div>
+    <div class="chart-wrap">${moneyChart(f.months)}</div>
+    ${f.before || f.after ? `<p class="hint">График показывает 5 прошлых и 6 будущих месяцев. За его пределами: ${[f.before ? `получено раньше ${money(f.before)}` : "", f.after ? `ожидается позже ${money(f.after)}` : ""].filter(Boolean).join(", ")}.</p>` : ""}
+    <details style="margin-top:8px"><summary>Показать таблицей</summary><div class="table-wrap"><table class="compact"><thead><tr><th>Месяц</th><th class="num">Получено</th><th class="num">Ожидается</th></tr></thead>
+      <tbody>${rows.map(m => `<tr><td>${m.label} ${m.year}</td><td class="num">${m.got ? money(m.got) : "—"}</td><td class="num">${m.exp ? money(m.exp) : "—"}</td></tr>`).join("") || `<tr><td colspan="3" class="empty">Платежей пока нет</td></tr>`}</tbody></table></div></details>
+  </div>`)}
+  <div class="stack" style="margin-top:16px">
+    ${cmp("Источники", "Источник", f.sources, [["Доля партнёра", r => money(r.cost)], ["Остаётся школе", r => `<strong>${money(r.net)}</strong>`]])}
+    ${cmp("Потоки", "Поток", f.cohorts, [["Ещё ожидается", r => money(r.expected)], ["Трудоустроены", r => r.employed]])}
+  </div>`;
+}
 function analyticsView() {
-  const keys = ["cohort", "mentor", "partner"], m = metrics(filtered(keys));
-  return headHTML("Аналитика") + filtersHTML(keys) + `
+  const keys = ["cohort", "mentor", "partner"], list = filtered(keys);
+  const tab = (k, l) => `<button data-act="antab" data-v="${k}" class="${S.anTab === k ? "on" : ""}">${l}</button>`;
+  const head = headHTML("Аналитика") + `<nav class="tabs">${tab("funnel", "Воронка и этапы")}${tab("money", "Финансы")}</nav>` + filtersHTML(keys);
+  if (S.anTab === "money") return head + financeView(list);
+  const m = metrics(list);
+  return head + `
   <section class="kpis">
     <div class="kpi"><span class="kpi-label">Всего заявок</span><span class="kpi-value">${m.total}</span></div>
     <div class="kpi"><span class="kpi-label">Оплатили</span><span class="kpi-value">${m.paidStudents}</span><span class="kpi-sub">${m.conv}% от заявок</span></div>
@@ -669,7 +823,7 @@ function boardView() {
     return `<section class="col g-${g}" data-stage="${st}"><header><span>${label}</span><span class="count">${items.length}</span>${st !== "lost" ? `<button class="col-add" data-act="quick" data-st="${st}" aria-label="Добавить в «${label}»" title="Добавить">+</button>` : ""}</header>
       <div class="col-body">${items.map(tileHTML).join("") || `<p class="empty">Пусто</p>`}</div></section>`;
   }).join("");
-  return headHTML("Воронка", "", addBtn) + `
+  return headHTML("Воронка", "", `<button class="btn" data-act="import">Импорт списка</button>` + addBtn) + `
   <div class="board-bar">
     <div class="seg" role="tablist">${PIPES.map(([k, l]) => `<button data-act="pipe" data-v="${k}" class="${S.pipe === k ? "on" : ""}" role="tab" aria-selected="${S.pipe === k}">${l}<span class="n">${inPipe(k)}</span></button>`).join("")}</div>
     ${filtersHTML(keys, { lost: true })}
@@ -684,26 +838,87 @@ function tileHTML(s) {
     : isActive(s) ? `<span class="tile-step none">Нет следующего шага</span>` : "";
   return `<div class="tile${od || late ? " alert" : ""}" draggable="${S.readOnly ? "false" : "true"}" data-act="open" data-id="${esc(s.id)}" tabindex="0" role="button" aria-label="${esc(s.name)}">
     <strong>${esc(s.name)}</strong>${meta ? `<span class="tile-meta">${esc(meta)}</span>` : ""}${step}
-    <span class="tile-foot"><span>${daysSince(s.stageAt)} дн. на этапе</span>${od ? `<span class="tag danger">просрочен платёж</span>` : ""}${s.demo ? `<span class="tag">пример</span>` : ""}${mentor ? `<span class="avatar" title="${esc(mentor)}">${esc(initials(mentor))}</span>` : ""}</span>
+    <span class="tile-foot"><span>${daysSince(s.stageAt)} дн. на этапе</span>${SGROUP[s.stage] === "study" ? progHTML(progressOf(s)) : ""}${od ? `<span class="tag danger">просрочен платёж</span>` : ""}${s.demo ? `<span class="tag">пример</span>` : ""}${mentor ? `<span class="avatar" title="${esc(mentor)}">${esc(initials(mentor))}</span>` : ""}</span>
     <select class="tile-move" data-move="${esc(s.id)}" data-stop aria-label="Сменить этап">${STAGES.map(x => opt(x[0], x[1], s.stage)).join("")}</select>
   </div>`;
 }
 
-// ----- Список -----
-function listView() {
-  const keys = ["q", "cohort", "mentor", "partner", "stage"], list = sortBy(filtered(keys), s => s.createdAt || "").reverse();
-  return headHTML(`Студенты <small>${list.length}</small>`, "", `<button class="btn" data-act="csv">Выгрузить в CSV</button>${addBtn}`) + filtersHTML(keys) + `
-  <div class="panel table-wrap"><table>
-    <thead><tr><th>Студент</th><th>Этап</th><th>Следующий шаг</th><th>Поток</th><th>Ментор</th><th>Источник</th><th class="num">Оплачено</th></tr></thead>
+// ----- Список и поток: общая таблица с выбором нескольких студентов -----
+function bulkBar(ids) {
+  const n = ids.filter(id => S.sel.has(id)).length; if (!n) return "";
+  return `<div class="bulk" role="toolbar" aria-label="Действия с выбранными"><b>Выбрано: ${n}</b>
+    <button class="btn small" data-act="bulk" data-kind="step">Назначить шаг</button><button class="btn small" data-act="bulk" data-kind="stage">Сменить этап</button>
+    <button class="btn small" data-act="bulk" data-kind="mentor">Ментор</button><button class="btn small" data-act="bulk" data-kind="cohort">Поток</button>
+    <button class="btn small ghost" data-act="sel-clear">Снять выбор</button></div>`;
+}
+function studentsTable(list, mods, emptyText) {
+  const ids = list.map(s => s.id), all = ids.length > 0 && ids.every(id => S.sel.has(id));
+  S.visible = ids;
+  const stepCell = s => hasStep(s) ? `${esc(s.next.text)} <span class="sub${stepLate(s) ? " danger-text" : ""}">· ${dueLabel(s.next.date)}</span>` : isActive(s) ? `<span class="warn-text">не назначен</span>` : `<span class="muted">—</span>`;
+  const paidCell = s => s.price ? `${money(paidSum(s))} <span class="sub">из ${money(s.price)}</span>` : money(paidSum(s) || null);
+  const cols = 6 + (mods ? mods.length : 2);
+  return `<div class="panel table-wrap" id="tbl"><table>
+    <thead><tr><th class="selc"><input type="checkbox" data-sel-all data-ids="${esc(ids.join(","))}"${all ? " checked" : ""} aria-label="Выбрать всех"></th><th>Студент</th><th>Этап</th>
+      ${mods ? mods.map((m, i) => `<th class="mxh" title="${esc(m.title)}">${i + 1}</th>`).join("") : `<th>Следующий шаг</th><th>Поток</th>`}
+      ${mods ? `<th>Следующий шаг</th>` : `<th>Источник</th>`}<th>Ментор</th><th class="num">Оплачено</th></tr></thead>
     <tbody>${list.map(s => `<tr class="click" data-act="open" data-id="${esc(s.id)}">
+      <td class="selc" data-stop><input type="checkbox" id="sel-${esc(s.id)}" data-sel="${esc(s.id)}"${S.sel.has(s.id) ? " checked" : ""} aria-label="Выбрать: ${esc(s.name)}"></td>
       <td><strong>${esc(s.name)}</strong><div class="sub">${esc(s.telegram || s.phone || s.email || "")}</div></td>
       <td>${badge(s.stage)}</td>
-      <td>${hasStep(s) ? `${esc(s.next.text)} <span class="sub${stepLate(s) ? " danger-text" : ""}">· ${dueLabel(s.next.date)}</span>` : isActive(s) ? `<span class="warn-text">не назначен</span>` : `<span class="muted">—</span>`}</td>
-      <td>${esc(cohortName(s.cohortId) || "—")}</td><td>${esc(teamName(s.mentorId) || "—")}</td>
-      <td>${esc(partnerById(s.partnerId)?.name || s.utmSource || "—")}</td>
-      <td class="num">${s.price ? `${money(paidSum(s))} <span class="sub">из ${money(s.price)}</span>` : money(paidSum(s) || null)}</td>
-    </tr>`).join("") || `<tr><td colspan="7" class="empty">Никого не нашли. Измените фильтры или добавьте заявку.</td></tr>`}</tbody>
-  </table></div>`;
+      ${mods ? mods.map(m => `<td class="mxc"><button class="mx${s.progress && s.progress[m.id] ? " on" : ""}" id="mx-${esc(s.id)}-${esc(m.id)}" data-act="mod-toggle" data-id="${esc(s.id)}" data-mid="${esc(m.id)}" title="${esc(m.title)}" aria-label="${esc(m.title)}: ${esc(s.name)}" aria-pressed="${!!(s.progress && s.progress[m.id])}"></button></td>`).join("")
+        : `<td>${stepCell(s)}</td><td>${esc(cohortName(s.cohortId) || "—")}${progressOf(s) && (progressOf(s).done || SGROUP[s.stage] === "study") ? `<div>${progHTML(progressOf(s))}</div>` : ""}</td>`}
+      ${mods ? `<td>${stepCell(s)}</td>` : `<td>${esc(partnerById(s.partnerId)?.name || s.utmSource || "—")}</td>`}
+      <td>${esc(teamName(s.mentorId) || "—")}</td><td class="num">${paidCell(s)}</td>
+    </tr>`).join("") || `<tr><td colspan="${cols}" class="empty">${emptyText}</td></tr>`}</tbody>
+  </table></div>${bulkBar(ids)}`;
+}
+function listView() {
+  const keys = ["q", "cohort", "mentor", "partner", "stage"], list = sortBy(filtered(keys), s => s.createdAt || "").reverse();
+  return headHTML(`Студенты <small>${list.length}</small>`, "", `<button class="btn" data-act="csv">Выгрузить в CSV</button><button class="btn" data-act="import">Импорт списка</button>${addBtn}`) + filtersHTML(keys) +
+    studentsTable(list, null, "Никого не нашли. Измените фильтры или добавьте заявку.");
+}
+
+// ----- Потоки -----
+function cohortStats(c) {
+  const list = D().students.filter(s => s.cohortId === c.id), act = list.filter(s => s.stage !== "lost");
+  const studying = act.filter(s => SGROUP[s.stage] !== "sales"), progs = studying.map(progressOf).filter(Boolean);
+  const open = act.flatMap(s => (s.payments || []).filter(p => !p.paid));
+  return {
+    list, act, studying, leads: act.length - studying.length, mods: c.modules || [], avg: progs.length ? Math.round(sum(progs, p => p.pct) / progs.length) : null,
+    paid: sum(act, paidSum), price: sum(act, s => s.price), overdue: sum(open.filter(p => p.due < today()), p => p.amount),
+    noStep: act.filter(s => isActive(s) && !hasStep(s)).length, employed: act.filter(s => EMPLOYED.includes(s.stage)).length,
+  };
+}
+const cohortDates = c => `${c.start ? fDate(c.start) : "дата не задана"}${c.end ? " – " + fDate(c.end) : ""}`;
+function cohortsView() {
+  const cohorts = sortBy(D().cohorts, c => c.start || "").reverse(), none = D().students.filter(s => !s.cohortId).length;
+  return headHTML("Потоки", "", `<button class="btn primary" data-act="cohort-new">+ Поток</button>`) +
+    (cohorts.length ? `<div class="cgrid">${cohorts.map(c => { const st = cohortStats(c); return `<button class="ccard" data-act="cohort-open" data-id="${esc(c.id)}">
+      <h2>${esc(c.name)}${c.active === false ? `<span class="tag">завершён</span>` : ""}</h2>
+      <span class="sub">${cohortDates(c)}${c.price ? " · " + money(c.price) : ""}</span>
+      <dl><dt>Студентов</dt><dd>${st.studying.length}${st.leads ? ` <span class="sub">заявок: ${st.leads}</span>` : ""}${st.employed ? ` <span class="sub">с оффером: ${st.employed}</span>` : ""}</dd>
+        <dt>Прогресс</dt><dd>${st.avg !== null ? `<span class="prog wide"><span class="prog-bar"><span style="width:${st.avg}%"></span></span><span>${st.avg}%</span></span>` : `<span class="sub">${st.mods.length ? "нет отметок" : "программа не задана"}</span>`}</dd>
+        <dt>Оплачено</dt><dd>${money(st.paid)}${st.price ? ` <span class="sub">из ${money(st.price)}</span>` : ""}</dd>
+        ${st.overdue ? `<dt>Просрочено</dt><dd class="danger-text">${money(st.overdue)}</dd>` : ""}</dl></button>`; }).join("")}</div>`
+      : `<div class="card welcome"><h2>Потоков пока нет</h2><p class="muted">Поток объединяет группу студентов: общие даты, цена и программа из модулей. По модулям отмечается прогресс каждого студента.</p><div class="actions"><button class="btn primary" data-act="cohort-new">+ Поток</button></div></div>`) +
+    (none ? `<p class="hint" style="margin-top:14px">Без потока: ${none}. <button class="link" data-act="list-nocohort">Показать в списке</button></p>` : "");
+}
+function cohortView() {
+  const c = cohortById(S.cohortId);
+  if (!c) return headHTML("Поток не найден", `<button class="back" data-act="nav" data-v="cohorts">← Потоки</button>`);
+  const st = cohortStats(c), list = sortBy(S.showLost ? st.list : st.act, s => SIDX[s.stage] * 1e3 - (progressOf(s)?.pct || 0));
+  return headHTML(esc(c.name) + (c.active === false ? ` <span class="tag">завершён</span>` : ""), `<button class="back" data-act="nav" data-v="cohorts">← Потоки</button>`,
+    `<button class="btn" data-act="cohort-edit" data-id="${esc(c.id)}">Изменить поток</button>`, `${cohortDates(c)}${c.price ? " · " + money(c.price) : ""} · ${st.mods.length ? `${st.mods.length} ${plural(st.mods.length, "модуль", "модуля", "модулей")}` : "программа не задана"}`) + `
+  <section class="kpis">
+    <div class="kpi"><span class="kpi-label">Студентов</span><span class="kpi-value">${st.studying.length}</span><span class="kpi-sub">заявок: ${st.leads} · выбыло: ${st.list.length - st.act.length}</span></div>
+    <div class="kpi"><span class="kpi-label">Средний прогресс</span><span class="kpi-value">${st.avg !== null ? st.avg + "%" : "—"}</span></div>
+    <div class="kpi"><span class="kpi-label">Оплачено</span><span class="kpi-value">${money(st.paid)}</span><span class="kpi-sub">${st.price ? "из " + money(st.price) : "цены не заданы"}</span></div>
+    <div class="kpi"><span class="kpi-label">Просрочено</span><span class="kpi-value${st.overdue ? " danger-text" : ""}">${money(st.overdue)}</span></div>
+    <div class="kpi"><span class="kpi-label">Без следующего шага</span><span class="kpi-value">${st.noStep}</span></div>
+  </section>
+  <div class="filters"><label class="check"><input type="checkbox" id="f-lost" data-act="toggle-lost"${S.showLost ? " checked" : ""}> Показать выбывших</label>
+    ${st.mods.length ? `<span class="hint">Квадраты — модули программы. Нажмите, чтобы отметить модуль пройденным.</span>` : `<span class="hint">Добавьте модули в настройках потока, чтобы отмечать прогресс.</span>`}</div>
+  ${studentsTable(list, st.mods, "В потоке пока нет студентов. Поток выбирается в карточке студента.")}`;
 }
 
 // ----- Панель студента -----
@@ -725,6 +940,11 @@ function appSection(s) {
         <td><span class="tag a-${esc(a.status)}">${esc(APPL[a.status] || a.status)}</span>${a.interview ? `<div class="sub">${fLocalDT(a.interview)}</div>` : ""}</td>
         <td class="row-actions"><button class="btn small ghost" data-act="app-edit" data-id="${esc(s.id)}" data-aid="${esc(a.id)}">Изменить</button></td></tr>`).join("")}
     </tbody></table></div>` : `<p class="empty">Откликов пока нет. Статус «Оффер принят» сам переведёт студента на этап «Оффер».</p>`}</div></section>`;
+}
+function progSection(s) {
+  const mods = modulesOf(s), p = progressOf(s); if (!p) return "";
+  return `<section class="sec"><header><h3>Программа</h3><span class="sub">${p.done} из ${p.total}</span><span class="right"></span>${progHTML(p)}</header>
+    <div class="box"><ul class="mods">${mods.map((m, i) => { const done = s.progress && s.progress[m.id]; return `<li class="${done ? "done" : ""}"><label><input type="checkbox" id="mod-${esc(s.id)}-${esc(m.id)}" data-mod="${esc(m.id)}" data-sid="${esc(s.id)}"${done ? " checked" : ""}><span class="t">${i + 1}. ${esc(m.title)}</span>${done ? `<span class="sub">${fShort(String(done))}</span>` : ""}</label></li>`; }).join("")}</ul></div></section>`;
 }
 function noteSection(s) {
   const notes = sortBy(s.notes || [], n => n.at).reverse();
@@ -749,7 +969,7 @@ function drawerHTML(s) {
         <button class="btn small ghost" data-act="step-edit" data-id="${esc(s.id)}">Изменить</button></div>`
     : isActive(s) ? `<div class="stepbox none"><div class="body"><strong>Следующий шаг не назначен</strong></div><button class="btn small" data-act="step-edit" data-id="${esc(s.id)}">Назначить</button></div>` : "";
   // Порядок разделов зависит от этапа: на продажах важнее заметки, на обучении — платежи, на поиске работы — отклики
-  const order = { sales: [noteSection, paySection], study: [paySection, noteSection, appSection], job: [appSection, noteSection, paySection], closed: [noteSection, paySection, appSection] }[SGROUP[s.stage]];
+  const order = { sales: [noteSection, paySection], study: [progSection, paySection, noteSection, appSection], job: [appSection, noteSection, paySection, progSection], closed: [noteSection, paySection, appSection, progSection] }[SGROUP[s.stage]];
   const result = s.jobCompany ? `${esc(s.jobCompany)}${s.jobPosition ? ", " + esc(s.jobPosition) : ""}${s.jobSalary ? " · " + money(s.jobSalary) : ""}${s.offerDate ? " · " + fDate(s.offerDate) : ""}` : "";
   return `<div class="scrim" data-act="d-close"></div>
   <aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(s.name)}">
@@ -858,10 +1078,8 @@ function reportView() {
 
 // ----- Настройки -----
 function settingsView() {
-  const cohorts = sortBy(D().cohorts, c => c.start || "").reverse();
   const hasDemo = COLS.some(c => D()[c].some(x => x.demo));
   return headHTML("Настройки") + `<div class="grid-2">
-  ${panel("Потоки", "", cohorts.length ? `<ul class="rows">${cohorts.map(c => `<li><span class="who"><strong>${esc(c.name)}${c.active === false ? ` <span class="tag">завершён</span>` : ""}</strong><span>${c.start ? fDate(c.start) : "дата не задана"}${c.end ? " – " + fDate(c.end) : ""}${c.price ? " · " + money(c.price) : ""}</span></span><button class="btn small ghost" data-act="cohort-edit" data-id="${esc(c.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Потоков нет. Добавьте первый, чтобы привязывать к нему студентов.</p>`, `<button class="btn small" data-act="cohort-new">+ Поток</button>`)}
   ${panel("Команда", "", (D().team.length ? `<ul class="rows">${D().team.map(m => `<li><span class="who"><strong>${esc(m.name)}</strong></span>${m.userId && m.userId === S.myId ? `<span class="tag ok">это вы</span>` : ""}${S.myId && m.userId !== S.myId ? `<button class="btn small ghost" data-act="team-me" data-id="${esc(m.id)}">Это я</button>` : ""}<button class="btn small ghost" data-act="team-edit" data-id="${esc(m.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Добавьте себя и менторов</p>`) + `<p class="hint pad">Нажмите «Это я» у своего имени: в фильтрах появится «Мои студенты», а ваши заметки будут подписаны.</p>`, `<button class="btn small" data-act="team-new">+ Ментор</button>`)}
   ${panel("Партнёры", "", D().partners.length ? `<ul class="rows">${D().partners.map(p => `<li><span class="who"><strong>${esc(p.name)}</strong><span>${esc(p.share ?? 0)}%${p.promo ? " · " + esc(p.promo) : ""}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Партнёров нет</p>`, `<button class="btn small" data-act="partner-new">+ Партнёр</button>`)}
   ${panel("Доступ", "", `<ul class="rows">
@@ -903,7 +1121,9 @@ function patchStudent(id, fn) {
     const cur = stu(id); if (!cur) throw { code: "gone" };
     const patch = fn(cur); if (!patch) return;
     await ref("students", id).update(clean(patch));
-    Object.assign(cur, patch); // следующая правка в очереди увидит это изменение, не дожидаясь ответа базы
+    // Следующая правка в очереди увидит это изменение, не дожидаясь ответа базы. Вложенные объекты база сливает по ключам.
+    const local = { ...patch }; if (patch.progress) local.progress = { ...(cur.progress || {}), ...patch.progress };
+    Object.assign(cur, local);
   });
 }
 const delDoc = (col, id) => enqueue(col + "/" + id, () => ref(col, id).delete());
@@ -959,6 +1179,9 @@ async function copyText(text, okMsg) {
   try { await navigator.clipboard.writeText(text); toast(okMsg); }
   catch (e) { openModal({ title: "Скопируйте текст", submit: "Готово", cancel: "Закрыть", values: { text }, fields: [{ k: "text", label: "Текст", type: "textarea", wide: true }], onSubmit: () => true }); }
 }
+function toggleModule(id, mid) {
+  return save(() => patchStudent(id, cur => ({ progress: { [mid]: cur.progress && cur.progress[mid] ? null : today() } })));
+}
 async function payDone(id, pid) {
   const s = stu(id); if (!s) return;
   const mark = paid => cur => ({ payments: (cur.payments || []).map(p => p.id === pid ? { ...p, paid } : p) });
@@ -977,7 +1200,7 @@ function fieldsHTML(spec, vals) {
     const id = "m-" + f.k, v = vals[f.k] ?? f.def ?? "", req = f.req ? " required" : "";
     let ctl;
     if (f.type === "select") ctl = `<select id="${id}" name="${f.k}">${f.options.map(([ov, ol]) => opt(ov, ol, String(v ?? ""))).join("")}</select>`;
-    else if (f.type === "textarea") ctl = `<textarea id="${id}" name="${f.k}" rows="3">${esc(v)}</textarea>`;
+    else if (f.type === "textarea") ctl = `<textarea id="${id}" name="${f.k}" rows="${f.rows || 3}"${f.ph ? ` placeholder="${esc(f.ph)}"` : ""}>${esc(v)}</textarea>`;
     else if (f.type === "checkbox") { out += `<label class="field checkbox"><input type="checkbox" id="${id}" name="${f.k}"${v ? " checked" : ""}><span>${esc(f.label)}</span></label>`; continue; }
     else ctl = `<input id="${id}" name="${f.k}" type="${f.type || "text"}" value="${esc(v)}"${f.type === "number" ? ' step="any" min="0" inputmode="decimal"' : ""}${req}${f.ph ? ` placeholder="${esc(f.ph)}"` : ""}${f.list ? ` list="${id}-list" autocomplete="off"` : ""}>${f.list ? `<datalist id="${id}-list">${f.list.map(x => `<option value="${esc(x)}">`).join("")}</datalist>` : ""}`;
     const quick = f.quick ? `<div class="chips">${[["Сегодня", 0], ["Завтра", 1], ["Через 3 дня", 3], ["Через неделю", 7]].map(([l, n]) => `<button type="button" class="chip" data-act="qdate" data-target="${id}" data-days="${n}">${l}</button>`).join("")}</div>` : "";
@@ -985,11 +1208,11 @@ function fieldsHTML(spec, vals) {
   }
   return out + close();
 }
-function openModal({ title, fields, values = {}, submit = "Сохранить", cancel = "Отмена", onSubmit, onDelete, del = "Удалить", link = null, wide = false }) {
-  MODAL = { fields, onSubmit, onDelete, link };
+function openModal({ title, fields, values = {}, submit = "Сохранить", cancel = "Отмена", onSubmit, onDelete, del = "Удалить", link = null, wide = false, extra = "", onInput = null }) {
+  MODAL = { fields, onSubmit, onDelete, link, onInput };
   $("#modal").innerHTML = `<div class="overlay" data-act="m-bg"><form class="modal${wide ? " wide" : ""}" id="mform" novalidate>
     <header><h2>${esc(title)}</h2><button type="button" class="x" data-act="m-close" aria-label="Закрыть">×</button></header>
-    <div class="mbody">${fieldsHTML(fields, values)}</div><p class="merr" id="m-err" hidden></p>
+    <div class="mbody">${fieldsHTML(fields, values)}${extra}</div><p class="merr" id="m-err" hidden></p>
     <footer>${onDelete ? `<button type="button" class="btn danger" data-act="m-delete">${esc(del)}</button>` : ""}${link ? `<button type="button" class="btn ghost" data-act="m-link">${esc(link.label)}</button>` : ""}<span class="sp"></span>
       <button type="button" class="btn ghost" data-act="m-close">${esc(cancel)}</button><button type="submit" class="btn primary" id="m-submit">${esc(submit)}</button></footer>
   </form></div>`;
@@ -1044,6 +1267,103 @@ function findDuplicate(c) {
   return D().students.find(s => (c.phone && digits(c.phone).length >= 6 && digits(s.phone) === digits(c.phone)) || (c.email && low(s.email) === low(c.email)) || (c.telegram && low(s.telegram) === low(c.telegram)));
 }
 const shareFor = partnerId => partnerId ? (partnerById(partnerId)?.share ?? 0) : 0;
+function leadDoc(name, c, partnerId, stage = "new") {
+  const at = new Date().toISOString();
+  return {
+    name, phone: c.phone || "", telegram: c.telegram || "", email: c.email || "", city: "", consent: false,
+    stage, stageAt: at, createdAt: at, history: [{ from: null, to: stage, at, by: S.myId }],
+    cohortId: nextCohortId() || null, mentorId: myTeam()?.id || null, price: null, lostReason: "",
+    partnerId, partnerShare: shareFor(partnerId), promo: partnerId ? (partnerById(partnerId)?.promo || "") : "", utmSource: "", utmCampaign: "",
+    jobCompany: "", jobPosition: "", jobSalary: null, offerDate: null, comment: "",
+    next: stage === "new" ? { text: "Связаться", date: today() } : null, payments: [], apps: [], notes: [],
+  };
+}
+// Массовый ввод: строки из таблицы или CSV. В каждой строке ищем имя, контакты и источник.
+function splitRow(line) {
+  const delim = line.includes("\t") ? "\t" : line.includes(";") ? ";" : ",";
+  const cells = []; let cur = "", q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { if (q && line[i + 1] === '"') { cur += '"'; i++; } else q = !q; }
+    else if (ch === delim && !q) { cells.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  cells.push(cur);
+  return cells.map(x => x.trim()).filter(Boolean);
+}
+function parseLeads(text, defPartner) {
+  const lines = String(text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean).slice(0, 300);
+  const low = x => String(x || "").trim().toLowerCase(), seen = new Set(), out = [];
+  const partners = D().partners.filter(p => p.active !== false);
+  const key = c => { const k = [c.phone && "p" + c.phone.replace(/\D/g, "").slice(-10), c.email && "e" + low(c.email), c.telegram && "t" + low(c.telegram).replace(/^@/, "")].filter(Boolean); return k.length ? k : ["n" + low(c.name)]; };
+  lines.forEach((line, n) => {
+    const cells = splitRow(line);
+    if (n === 0 && cells.some(x => /^(имя|фио|name|телефон|phone|e-?mail|почта|telegram|телеграм|контакт|источник)$/i.test(x))) return;
+    const r = { name: "", phone: "", telegram: "", email: "", partnerId: defPartner || null }, words = [];
+    for (const cell of cells) {
+      if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cell)) r.email = r.email || cell;
+      else if (/^\+?[\d\s()\-]{6,}$/.test(cell)) r.phone = r.phone || cell;
+      else if (/^@[A-Za-z0-9_]{3,}$/.test(cell) || /^https?:\/\/t\.me\//i.test(cell)) r.telegram = r.telegram || parseContact(cell).telegram;
+      else words.push(cell);
+    }
+    // Источник: промокод или utm распознаём всегда, название партнёра — только если в строке есть ещё и имя
+    const pi = words.findIndex(w => partners.some(p => [p.promo, p.utm].some(v => v && low(v) === low(w)) || (words.length > 1 && low(p.name) === low(w))));
+    if (pi >= 0) { const w = words.splice(pi, 1)[0]; r.partnerId = partners.find(p => [p.promo, p.utm, p.name].some(v => v && low(v) === low(w))).id; }
+    r.name = words[0] || r.telegram || r.phone || r.email;
+    if (!r.name) return;
+    const keys = key(r), contact = r.phone || r.email || r.telegram;
+    const dup = contact ? findDuplicate(r) : D().students.find(s => low(s.name) === low(r.name));
+    r.status = dup ? "dup" : keys.some(k => seen.has(k)) ? "repeat" : "new";
+    r.note = dup ? `уже есть: ${dup.name}` : r.status === "repeat" ? "повтор в списке" : "новая";
+    keys.forEach(k => seen.add(k)); out.push(r);
+  });
+  return out;
+}
+function importPreview() {
+  const rows = parseLeads($("#m-rows")?.value, $("#m-partnerId")?.value), fresh = rows.filter(r => r.status === "new").length;
+  const btn = $("#m-submit"); if (btn) { btn.textContent = fresh ? `Добавить: ${fresh}` : "Добавить"; btn.disabled = !fresh; }
+  const box = $("#m-preview"); if (!box) return;
+  box.innerHTML = rows.length ? `<p class="imp-sum">Распознано строк: ${rows.length}. Новых: <strong>${fresh}</strong>${rows.length - fresh ? `, пропустим как дубли: ${rows.length - fresh}` : ""}.</p>
+    <div class="imp"><table class="compact"><thead><tr><th style="padding-left:10px">Имя</th><th>Контакт</th><th>Источник</th><th>Статус</th></tr></thead><tbody>
+    ${rows.slice(0, 100).map(r => `<tr><td style="padding-left:10px">${esc(r.name)}</td><td>${esc([r.telegram, r.phone, r.email].filter(Boolean).join(", ") || "—")}</td><td>${esc(partnerById(r.partnerId)?.name || "—")}</td><td>${r.status === "new" ? `<span class="tag ok">новая</span>` : `<span class="tag warn">${esc(r.note)}</span>`}</td></tr>`).join("")}
+    </tbody></table></div>${rows.length > 100 ? `<p class="hint">Показаны первые 100 строк.</p>` : ""}` : "";
+}
+function importForm() {
+  openModal({
+    title: "Импорт списка заявок", wide: true, submit: "Добавить", values: { partnerId: "" },
+    fields: [{ k: "rows", label: "Строки из таблицы или CSV: по одному человеку в строке", type: "textarea", rows: 7, wide: true, ph: "Иванов Пётр; @ivanov; +7 900 123-45-67\nМария Соколова; maria@example.com; BLOG1C" },
+      { k: "partnerId", label: "Источник для строк, где он не указан", type: "select", options: partnerOpts("Без партнёра"), wide: true }],
+    extra: `<p class="hint">Порядок столбцов любой. Телефон, почта и Telegram (@имя) определяются сами. Источник распознаётся по названию, промокоду или utm партнёра. До 300 строк за раз.</p><div id="m-preview"></div>`,
+    onInput: importPreview,
+    onSubmit: async v => {
+      const rows = parseLeads(v.rows, v.partnerId).filter(r => r.status === "new");
+      if (!rows.length) return "Новых заявок в списке нет";
+      const ok = await save(async () => { for (const r of rows) await setDoc("students", newId("students"), leadDoc(r.name, r, r.partnerId)); });
+      if (ok) toast(`Добавлено заявок: ${rows.length}. Каждой назначен шаг «Связаться»`);
+      return ok;
+    },
+  });
+  importPreview();
+}
+// Действия сразу над несколькими выбранными студентами
+function bulkForm(kind) {
+  const ids = (S.visible || []).filter(id => S.sel.has(id) && stu(id)); if (!ids.length) return; // только то, что сейчас на экране
+  const n = `${ids.length} ${plural(ids.length, "студент", "студента", "студентов")}`;
+  const run = (fn, msg) => save(async () => { for (const id of ids) await patchStudent(id, fn); }, `${msg}: ${n}`).then(ok => { if (ok) { S.sel.clear(); render(); } return ok; });
+  const cfg = {
+    step: { title: `Шаг для выбранных: ${n}`, values: { date: today() }, submit: "Назначить",
+      fields: [{ k: "text", label: "Что сделать", req: true, wide: true, list: STEP_HINTS }, { k: "date", label: "Когда", type: "date", req: true, wide: true, quick: true }],
+      onSubmit: v => run(() => ({ next: { text: v.text, date: v.date } }), "Шаг назначен") },
+    stage: { title: `Этап для выбранных: ${n}`, values: { stage: "studying" }, submit: "Перевести",
+      fields: [{ k: "stage", label: "Новый этап", type: "select", wide: true, options: STAGES.filter(x => x[0] !== "lost").map(x => [x[0], x[1]]), help: "Отказ оформляется по одному, с причиной" }],
+      onSubmit: v => run(cur => cur.stage === v.stage ? null : stageChange(cur, v.stage), `Этап «${SLABEL[v.stage]}»`) },
+    mentor: { title: `Ментор для выбранных: ${n}`, fields: [{ k: "mentorId", label: "Ментор", type: "select", wide: true, options: teamOpts() }],
+      onSubmit: v => run(() => ({ mentorId: v.mentorId || null }), "Ментор назначен") },
+    cohort: { title: `Поток для выбранных: ${n}`, fields: [{ k: "cohortId", label: "Поток", type: "select", wide: true, options: cohortOpts() }],
+      onSubmit: v => run(() => ({ cohortId: v.cohortId || null }), "Поток изменён") },
+  }[kind];
+  if (cfg) openModal(cfg);
+}
 function quickForm(stage = "new") {
   openModal({
     title: stage === "new" ? "Новая заявка" : `Новый студент: ${SLABEL[stage]}`, submit: "Добавить", values: { partnerId: "" },
@@ -1054,16 +1374,7 @@ function quickForm(stage = "new") {
     onSubmit: v => {
       const c = parseContact(v.contact), dup = findDuplicate(c);
       if (dup) return `Уже есть в базе: ${dup.name} (${SLABEL[dup.stage]}). Если это другой человек, добавьте его через «Все поля».`;
-      const id = newId("students"), at = new Date().toISOString(), partnerId = v.partnerId || null;
-      const doc = {
-        name: v.name, phone: c.phone || "", telegram: c.telegram || "", email: c.email || "", city: "", consent: false,
-        stage, stageAt: at, createdAt: at, history: [{ from: null, to: stage, at, by: S.myId }],
-        cohortId: nextCohortId() || null, mentorId: myTeam()?.id || null, price: null, lostReason: "",
-        partnerId, partnerShare: shareFor(partnerId), promo: partnerId ? (partnerById(partnerId)?.promo || "") : "", utmSource: "", utmCampaign: "",
-        jobCompany: "", jobPosition: "", jobSalary: null, offerDate: null, comment: "",
-        next: stage === "new" ? { text: "Связаться", date: today() } : null, payments: [], apps: [], notes: [],
-      };
-      return save(() => setDoc("students", id, doc), stage === "new" ? "Заявка добавлена, шаг «Связаться» на сегодня" : "Студент добавлен");
+      return save(() => setDoc("students", newId("students"), leadDoc(v.name, c, v.partnerId || null, stage)), stage === "new" ? "Заявка добавлена, шаг «Связаться» на сегодня" : "Студент добавлен");
     },
   });
 }
@@ -1183,12 +1494,28 @@ function lostForm(s) {
 }
 function cohortForm(c) {
   openModal({
-    title: c ? "Поток" : "Новый поток", values: c ? { ...c } : { active: true },
+    title: c ? "Поток" : "Новый поток", wide: true, values: c ? { ...c, modules: (c.modules || []).map(m => m.title).join("\n") } : { active: true },
     fields: [{ k: "name", label: "Название", req: true, ph: "Поток 4" }, { k: "price", label: "Базовая цена, ₽", type: "number" },
-      { k: "start", label: "Старт", type: "date" }, { k: "end", label: "Окончание обучения", type: "date" }, { k: "active", label: "Идёт набор или обучение", type: "checkbox" }],
+      { k: "start", label: "Старт", type: "date" }, { k: "end", label: "Окончание обучения", type: "date" }, { k: "active", label: "Идёт набор или обучение", type: "checkbox" },
+      { k: "modules", label: "Программа: модули, по одному в строке", type: "textarea", rows: 7, wide: true, ph: "Введение в 1С\nОписание бизнес-процессов\nНаписание ТЗ", help: "По модулям отмечается прогресс студентов. Чтобы отметки сохранились, переименовывайте по одному модулю за сохранение." }],
     onDelete: c ? () => D().students.some(s => s.cohortId === c.id) ? (showErr("В потоке есть студенты. Сначала перенесите их в другой поток."), false) : save(() => delDoc("cohorts", c.id), "Поток удалён") : null,
-    onSubmit: v => { const id = c?.id || newId("cohorts"); return save(() => setDoc("cohorts", id, { ...(c || {}), ...v, id: undefined }), "Сохранено"); },
+    onSubmit: v => {
+      const id = c?.id || newId("cohorts"), isNew = !c;
+      return save(() => setDoc("cohorts", id, { ...(c || {}), ...v, modules: mergeModules(c?.modules || [], v.modules), id: undefined }), "Сохранено").then(ok => { if (ok && isNew) { S.cohortId = id; S.view = "cohort"; render(); } return ok; });
+    },
   });
+}
+// Модули из текста формы. Совпавшие по названию сохраняют id, а значит и отметки студентов.
+// Если исчезло ровно одно старое название и на его месте появилось ровно одно новое, это переименование.
+function mergeModules(old, text) {
+  const titles = String(text || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean).slice(0, 40);
+  const pool = new Map(); for (const m of old) { if (!pool.has(m.title)) pool.set(m.title, []); pool.get(m.title).push(m.id); }
+  const out = titles.map(t => ({ id: pool.get(t)?.shift() || null, title: t }));
+  const gone = [...pool.values()].flat(), fresh = out.filter(m => !m.id);
+  // Переименование — только если новое название стоит на месте исчезнувшего; иначе это удаление и добавление
+  if (gone.length === 1 && fresh.length === 1 && old.findIndex(m => m.id === gone[0]) === out.indexOf(fresh[0])) fresh[0].id = gone[0];
+  fresh.forEach(m => { if (!m.id) m.id = "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); });
+  return out;
 }
 function teamForm(m) {
   openModal({
@@ -1251,7 +1578,7 @@ async function exportBackup() {
   const dl = await claude.use("downloads");
   if (!dl) return toast("Выгрузка недоступна в этом окне");
   const data = {}; for (const c of COLS) data[c] = D()[c];
-  const backup = { format: "crm-menti-backup", version: 2, exportedAt: new Date().toISOString(), data };
+  const backup = { format: "crm-menti-backup", version: 3, exportedAt: new Date().toISOString(), data };
   try {
     await dl.save({ filename: `crm-menti-копия-${today()}.json`, data: JSON.stringify(backup, null, 1) }); toast("Резервная копия сохранена");
     // Дату копии помним в базе, чтобы напомнить о следующей
@@ -1268,9 +1595,10 @@ async function loadDemo() {
   const now = Date.now(), dAgo = n => daysAhead(-n), tAgo = n => new Date(now - n * 864e5).toISOString();
   const W = [];
   const c1 = newId("cohorts"), c2 = newId("cohorts"), c3 = newId("cohorts");
-  W.push(["cohorts", c1, { name: "Поток 1", start: dAgo(150), end: dAgo(60), price: 90000, active: false, demo: true }]);
-  W.push(["cohorts", c2, { name: "Поток 2", start: dAgo(45), end: dAgo(-45), price: 100000, active: true, demo: true }]);
-  W.push(["cohorts", c3, { name: "Поток 3", start: dAgo(-30), end: dAgo(-120), price: 110000, active: true, demo: true }]);
+  const MODS = ["Введение в 1С и роль аналитика", "Сбор требований", "Описание бизнес-процессов", "Конфигурации 1С: обзор", "Написание ТЗ", "Постановка задач разработчику", "Тестирование и приёмка", "Итоговый проект"].map((title, i) => ({ id: "m" + (i + 1), title }));
+  W.push(["cohorts", c1, { name: "Поток 1", start: dAgo(150), end: dAgo(60), price: 90000, active: false, modules: MODS, demo: true }]);
+  W.push(["cohorts", c2, { name: "Поток 2", start: dAgo(45), end: dAgo(-45), price: 100000, active: true, modules: MODS, demo: true }]);
+  W.push(["cohorts", c3, { name: "Поток 3", start: dAgo(-30), end: dAgo(-120), price: 110000, active: true, modules: MODS, demo: true }]);
   const m1 = newId("team"), m2 = newId("team");
   W.push(["team", m1, { name: "Ирина Котова", demo: true }]); W.push(["team", m2, { name: "Алексей Дёмин", demo: true }]);
   const p1 = newId("partners"), p2 = newId("partners");
@@ -1308,13 +1636,15 @@ async function loadDemo() {
     const notes = r() < .5 ? [{ id: newId("x"), text: pick(["Созвонились, мотивация высокая, хочет перейти из бухгалтерии.", "Сдал ДЗ по модулю 3, есть замечания по описанию бизнес-процесса.", "Пропустил два занятия, написать в понедельник.", "Резюме отправлено на ревью."]), at: tAgo(Math.max(tday - 1, 0)), by: null }] : [];
     const active = !lost && stage !== "probation_passed";
     const next = active && r() < .75 ? { text: pick(STEP[STAGES[si][2]]), date: daysAhead(int(-2, 6)) } : null;
+    const doneN = top >= 6 ? 8 : top === 5 ? 7 : top === 4 ? int(1, 6) : 0, progress = {};
+    for (let k = 0; k < doneN; k++) progress["m" + (k + 1)] = dAgo(Math.max(1, ago - 10 - k * 9));
     const p = src === p1 ? { id: p1, share: 40, promo: "BLOG1C", utm: "youtube" } : src === p2 ? { id: p2, share: 25, promo: "VKAT", utm: "telegram" } : null;
     W.push(["students", newId("students"), {
       name: `${last} ${first}`, phone: `+7 9${int(10, 99)} ${int(100, 999)}-${int(10, 99)}-${int(10, 99)}`, telegram: `@student${100 + i}`, email: "", city: pick(["Москва", "Казань", "Новосибирск", "Алматы", "Екатеринбург", "Минск"]), consent: true,
       stage, stageAt: hist[hist.length - 1].at, createdAt: hist[0].at, history: hist, lostReason: lost ? pick(["Дорого", "Не тянет по времени", "Передумал", "Не выходит на связь"]) : "",
       cohortId: cohort, mentorId: r() < .6 ? m1 : m2, price, partnerId: p?.id || null, partnerShare: p?.share || 0, promo: p?.promo || "", utmSource: p?.utm || "organic", utmCampaign: "",
       jobCompany: company, jobPosition: empl ? "Аналитик 1С" : "", jobSalary: salary, offerDate: empl ? dAgo(Math.max(tday, 1)) : null, comment: "",
-      next, payments, apps, notes, demo: true,
+      next, progress, payments, apps, notes, demo: true,
     }]);
   }
   S.pending++; renderSync();
@@ -1331,7 +1661,8 @@ async function clearDemo() {
   catch (e) { console.warn(e); toast("Не удалось удалить всё. Попробуйте ещё раз"); }
   S.pending--; S.busy = false; renderSync();
   S.openId = null; if (S.view === "partner") S.view = "partners";
-  render();
+  if (S.view === "cohort") S.view = "cohorts";
+  S.sel.clear(); render();
 }
 
 // ---------- Уведомления ----------
@@ -1357,7 +1688,7 @@ function renderSearch() {
 function closeSearch() { $("#gq").value = ""; $("#gq-res").hidden = true; }
 
 // ---------- События ----------
-function go(view) { S.view = view; S.openId = null; if (VIEWS.includes(view)) lsSet("crm-menti-view", view); render(); window.scrollTo(0, 0); }
+function go(view) { S.view = view; S.openId = null; S.sel.clear(); if (VIEWS.includes(view)) lsSet("crm-menti-view", view); render(); window.scrollTo(0, 0); }
 function openStudent(id) {
   const was = S.openId; S.openId = id; S.histOpen = false; closeSearch(); render();
   const el = $(".drawer"); if (el && !was) el.classList.add("enter");
@@ -1369,6 +1700,13 @@ const ACT = {
   "d-close": () => { S.openId = null; render(); },
   pipe: d => { S.pipe = d.v; lsSet("crm-menti-pipe", d.v); render(); },
   quick: d => quickForm(d.st || "new"),
+  import: () => importForm(),
+  antab: d => { S.anTab = d.v; render(); },
+  "cohort-open": d => { S.cohortId = d.id; S.sel.clear(); S.view = "cohort"; render(); window.scrollTo(0, 0); },
+  "list-nocohort": () => { S.f = { q: "", cohort: "none", mentor: "", partner: "", stage: "" }; go("students"); },
+  "mod-toggle": d => toggleModule(d.id, d.mid),
+  bulk: d => bulkForm(d.kind),
+  "sel-clear": () => { S.sel.clear(); render(); },
   "student-edit": d => studentForm(stu(d.id)),
   "step-edit": d => stepForm(stu(d.id)),
   "step-done": d => stepDone(d.id),
@@ -1422,6 +1760,10 @@ document.addEventListener("change", e => {
   const el = e.target;
   if (el.dataset.filter) { S.f[el.dataset.filter] = el.value; render(); }
   if (el.dataset.act === "toggle-lost") { S.showLost = el.checked; render(); }
+  if (el.dataset.mod) toggleModule(el.dataset.sid, el.dataset.mod).then(ok => { if (!ok) scheduleRender(); });
+  if (el.dataset.sel) { el.checked ? S.sel.add(el.dataset.sel) : S.sel.delete(el.dataset.sel); render(); }
+  if ("selAll" in el.dataset) { for (const id of el.dataset.ids.split(",").filter(Boolean)) el.checked ? S.sel.add(id) : S.sel.delete(id); render(); }
+  if (MODAL?.onInput && el.closest("#mform")) MODAL.onInput();
   if (el.dataset.move) {
     const s = stu(el.dataset.move), to = el.value; if (!s || to === s.stage) return;
     if (to === "lost") { el.value = s.stage; lostForm(s); } else moveStage(s.id, to).then(ok => { if (!ok) scheduleRender(); });
@@ -1431,6 +1773,15 @@ let qT;
 document.addEventListener("input", e => {
   if (e.target.id === "f-q") { S.f.q = e.target.value; clearTimeout(qT); qT = setTimeout(render, 180); }
   if (e.target.id === "gq") renderSearch();
+  if (MODAL?.onInput && e.target.closest("#mform")) MODAL.onInput();
+});
+// Подсказка над столбцом графика
+document.addEventListener("mousemove", e => {
+  const g = e.target.closest?.("[data-tip]"), tip = $("#tip");
+  if (!g) { tip.hidden = true; return; }
+  tip.textContent = g.dataset.tip; tip.hidden = false;
+  const w = tip.offsetWidth, x = Math.min(e.clientX + 14, window.innerWidth - w - 8);
+  tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, e.clientY - tip.offsetHeight - 12) + "px";
 });
 document.addEventListener("focusin", e => { if (e.target.id === "gq") renderSearch(); });
 document.addEventListener("toggle", e => { if (e.target.id === "d-hist") S.histOpen = e.target.open; }, true);

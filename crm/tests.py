@@ -282,6 +282,31 @@ class BackupImportTests(BaseCase):
         s = Student.objects.get(external_id="s1")
         self.assertEqual((s.next_step, s.next_step_date), ("", None))
 
+    def test_program_and_progress_from_version_3(self):
+        data = sample_backup()
+        data["version"] = 3
+        data["data"]["cohorts"][0]["modules"] = [{"id": "m1", "title": "Введение"}, {"id": "m2", "title": "ТЗ"}, {"bad": 1}]
+        data["data"]["students"][0]["progress"] = {"m1": "2026-09-10", "m2": None}
+        import_backup(data)
+        s = Student.objects.get(external_id="s1")
+        self.assertEqual(s.cohort.modules, [{"id": "m1", "title": "Введение"}, {"id": "m2", "title": "ТЗ"}])
+        self.assertEqual(s.progress, {"m1": "2026-09-10"})
+        self.assertEqual(s.progress_summary, (1, 2))
+
+    def test_program_added_to_cohort_imported_earlier(self):
+        import_backup(sample_backup())
+        data = sample_backup()
+        data["version"] = 3
+        data["data"]["cohorts"][0]["modules"] = [{"id": "m1", "title": "Введение"}]
+        stats = import_backup(data)
+        self.assertEqual(stats["cohorts"]["updated"], 1)
+        self.assertEqual(Cohort.objects.get(external_id="c1").modules, [{"id": "m1", "title": "Введение"}])
+
+    def test_old_backup_has_no_program(self):
+        import_backup(sample_backup())
+        s = Student.objects.get(external_id="s1")
+        self.assertEqual((s.cohort.modules, s.progress, s.progress_summary), ([], {}, None))
+
     def test_with_demo(self):
         stats = import_backup(sample_backup(), with_demo=True)
         self.assertEqual(stats["students"]["created"], 2)
