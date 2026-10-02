@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import (
-    Cohort, JobApplication, Note, Partner, PartnerPayout, Payment, StageHistory, Student,
+    Cohort, JobApplication, Meeting, Note, Partner, PartnerPayout, Payment, StageHistory, Student,
 )
 
 admin.site.site_header = "CRM менторства — администрирование"
@@ -91,3 +91,12 @@ class JobApplicationAdmin(admin.ModelAdmin):
 class StageHistoryAdmin(admin.ModelAdmin):
     list_display = ("student", "from_stage", "to_stage", "changed_by", "changed_at")
     list_filter = ("to_stage",)
+
+
+@admin.register(Meeting)
+class MeetingAdmin(admin.ModelAdmin):
+    list_display = ("date", "time", "title", "kind", "status", "student", "cohort", "mentor")
+    list_filter = ("status", "kind", "mentor")
+    search_fields = ("title", "student__full_name")
+    date_hierarchy = "date"
+    autocomplete_fields = ("student",)

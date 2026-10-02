@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from crm.backup import BackupError, import_backup
-from crm.models import Cohort, JobApplication, Partner, PartnerPayout, Payment, Stage, Student
+from crm.models import Cohort, JobApplication, Meeting, Partner, PartnerPayout, Payment, Stage, Student
 from crm.services import dashboard_metrics, funnel
 
 
@@ -306,6 +306,37 @@ class BackupImportTests(BaseCase):
         import_backup(sample_backup())
         s = Student.objects.get(external_id="s1")
         self.assertEqual((s.cohort.modules, s.progress, s.progress_summary), ([], {}, None))
+
+    def test_meetings_trash_and_money_log_from_version_4(self):
+        raw = sample_backup()
+        raw["version"] = 4
+        data = raw["data"]
+        data["students"][0]["log"] = [{"id": "l1", "at": "2026-08-05T10:00:00.000Z", "by": "u_abc",
+                                       "text": "Платёж отмечен оплаченным: 50 000 ₽"}]
+        data["students"].append({"id": "s3", "name": "Удалённый Олег", "stage": "new",
+                                 "createdAt": "2026-09-01T09:00:00.000Z", "deletedAt": "2026-09-02T09:00:00.000Z"})
+        data["meetings"] = [
+            {"id": "mt1", "title": "Разбор домашки", "kind": "call", "status": "done", "date": "2026-09-10",
+             "time": "15:30", "duration": 45, "studentId": "s1", "cohortId": None, "mentorId": "t1",
+             "link": "https://example.com/room", "notes": ""},
+            {"id": "mt2", "title": "Занятие потока", "kind": "lesson", "status": "planned", "date": "2026-10-10",
+             "time": "", "duration": None, "studentId": None, "cohortId": "c1", "mentorId": None},
+            {"id": "mt3", "title": "Созвон", "kind": "что-то", "date": "2026-10-11", "studentId": "s3"},
+            {"id": "mt4", "title": "Без даты", "date": ""},
+        ]
+        stats = import_backup(raw)
+        self.assertFalse(Student.objects.filter(external_id="s3").exists())
+        self.assertTrue(any("корзине" in w for w in stats["warnings"]))
+        self.assertEqual(stats["meetings"], {"created": 2, "updated": 0, "skipped": 2})
+        m = Meeting.objects.get(external_id="mt1")
+        self.assertEqual((m.student.full_name, m.status, m.time.isoformat(), m.duration_min),
+                         ("Иванов Пётр", "done", "15:30:00", 45))
+        self.assertEqual(m.mentor.get_full_name(), "Ирина Котова")
+        group = Meeting.objects.get(external_id="mt2")
+        self.assertEqual((group.cohort.name, group.time, group.student), ("Поток 2", None, None))
+        s = Student.objects.get(external_id="s1")
+        self.assertTrue(s.notes.filter(text__startswith="Деньги: Платёж отмечен").exists())
+        self.assertEqual(import_backup(raw)["meetings"]["created"], 0)  # повторный импорт не дублирует
 
     def test_with_demo(self):
         stats = import_backup(sample_backup(), with_demo=True)

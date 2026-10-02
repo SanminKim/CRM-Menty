@@ -361,7 +361,46 @@ td.mxc { padding: 4px 2px; text-align: center; }
 .welcome ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
 .loading { color: var(--muted); padding: 40px 0; }
 
+/* Календарь встреч */
+.cal-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.cal-bar h2 { margin: 0 4px; font-size: 17px; min-width: 150px; text-align: center; }
+.cal-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 16px; align-items: start; }
+.cal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.cal-head, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.cal-head span { padding: 6px 8px; font-size: 12px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+.cal-cell { all: unset; box-sizing: border-box; cursor: pointer; min-height: 98px; padding: 4px 5px 6px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cal-cell:nth-child(7n) { border-right: 0; }
+.cal-cell.out { background: var(--bg); }
+.cal-cell.out .dn { color: var(--muted); font-weight: 400; }
+.cal-cell:hover { background: var(--surface-2); }
+.cal-cell.sel { box-shadow: inset 0 0 0 2px var(--brand); }
+.cal-cell:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.cal-cell .dn { font-size: 12.5px; font-weight: 600; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; font-variant-numeric: tabular-nums; }
+.cal-cell.now .dn { background: var(--brand); color: var(--brand-ink); }
+.ev { display: block; font-size: 11.5px; line-height: 17px; padding: 0 5px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--brand-soft); color: var(--text); border-left: 3px solid var(--brand); }
+.ev.k-lesson { background: var(--g-study-soft); border-left-color: var(--g-study); }
+.ev.k-consult { background: var(--g-sales-soft); border-left-color: var(--g-sales); }
+.ev.k-interview { background: var(--warn-soft); border-left-color: var(--warn); }
+.ev.k-other { background: var(--surface-2); border-left-color: var(--g-closed); }
+.ev.st-done { opacity: .6; }
+.ev.st-missed, .ev.st-cancelled { opacity: .6; text-decoration: line-through; }
+.ev-more { font-size: 11.5px; color: var(--muted); padding-left: 5px; }
+.rows .evt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; min-width: 44px; }
+.rows a.btn { text-decoration: none; }
+.th-sort { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
+.th-sort:hover, .th-sort.on { color: var(--text); }
+.th-sort:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
+details + details { margin-top: 6px; }
+
 @media (max-width: 860px) {
+  .cal-wrap { grid-template-columns: minmax(0, 1fr); }
+  .cal-cell { min-height: 58px; align-items: center; }
+  .cal-cell .ev { font-size: 0; line-height: 0; height: 5px; width: 70%; padding: 0; border: 0; border-radius: 3px; background: var(--brand); }
+  .cal-cell .ev.k-lesson { background: var(--g-study); }
+  .cal-cell .ev.k-consult { background: var(--g-sales); }
+  .cal-cell .ev.k-interview { background: var(--warn); }
+  .cal-cell .ev.k-other { background: var(--g-closed); }
+  .cal-cell .ev-more { padding: 0; font-size: 10.5px; }
   .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; background: var(--bg); }
   .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 10px 16px; gap: 8px 12px; background: var(--side); }
   .brand { padding: 0; }
@@ -420,9 +459,16 @@ const PIPES = [["sales", "Продажи"], ["study", "Обучение"], ["job
 const EMPLOYED = ["offer", "probation_passed"];
 const APP_ST = [["applied", "Отклик"], ["hr", "Скрининг HR"], ["test", "Тестовое"], ["interview", "Собеседование"], ["offer", "Оффер"], ["accepted", "Оффер принят"], ["rejected", "Отказ"]];
 const APPL = Object.fromEntries(APP_ST);
-const COLS = ["students", "cohorts", "partners", "payouts", "team", "reports"];
-const VIEWS = ["today", "board", "students", "cohorts", "payments", "analytics", "partners", "settings"];
+const COLS = ["students", "cohorts", "partners", "payouts", "team", "reports", "meetings"];
+const VIEWS = ["today", "calendar", "board", "students", "cohorts", "payments", "analytics", "partners", "settings"];
 const STEP_HINTS = ["Связаться", "Созвон", "Написать про оплату", "Проверить домашку", "Ревью резюме", "Узнать итог собеседования", "Спросить, как дела"];
+const MEET_KINDS = [["call", "Созвон"], ["lesson", "Занятие"], ["consult", "Консультация"], ["other", "Другое"]];
+const MEET_ST = [["planned", "Запланирована"], ["done", "Состоялась"], ["missed", "Не состоялась"], ["cancelled", "Отменена"]];
+const MEETL = Object.fromEntries(MEET_ST);
+const MEET_HINTS = ["Созвон-знакомство", "Занятие потока", "Разбор домашки", "Карьерная консультация", "Пробное собеседование"];
+const MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+const WD = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const LOG_MAX = 200;
 const MON = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
 // ---------- Утилиты ----------
@@ -467,10 +513,10 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
 // ---------- Состояние ----------
 const S = {
   status: "loading", mode: "staff", db: null, user: null, myId: null, isOwner: false, canWrite: null, readOnly: false,
-  data: { students: [], cohorts: [], partners: [], payouts: [], team: [], reports: [] }, loaded: {},
+  data: { students: [], cohorts: [], partners: [], payouts: [], team: [], reports: [], meetings: [] }, loaded: {}, trash: [],
   view: "today", openId: null, partnerId: null, cohortId: null, reportId: null, pipe: "sales", anTab: "funnel", sel: new Set(), visible: [],
   f: { q: "", cohort: "", mentor: "", partner: "", stage: "" }, showLost: false, payTab: "overdue",
-  config: {}, moreNoStep: false, histOpen: false, pending: 0, names: {}, drag: null, busy: false,
+  config: {}, moreNoStep: false, histOpen: false, logOpen: false, sort: null, cal: { ym: today().slice(0, 7), day: today() }, pending: 0, names: {}, drag: null, busy: false,
 };
 {
   const v = lsGet("crm-menti-view"); if (VIEWS.includes(v)) S.view = v;
@@ -535,21 +581,41 @@ function metrics(list) {
     funnel: funnel(list),
   };
 }
-// Что требует внимания: шаги, платежи, собеседования, студенты без шага
+// Что требует внимания: шаги, платежи, студенты без шага
 function agenda(list) {
   const t = today(), in3 = daysAhead(3), in7 = daysAhead(7);
   const act = list.filter(isActive);
   const stepped = sortBy(act.filter(hasStep), s => s.next.date);
   const pays = list.filter(s => s.stage !== "lost").flatMap(s => (s.payments || []).filter(p => !p.paid).map(p => ({ ...p, s })));
-  const apps = act.flatMap(s => (s.apps || []).filter(a => a.interview && !["rejected", "accepted"].includes(a.status)).map(a => ({ ...a, s })));
   return {
     due: stepped.filter(s => s.next.date <= t),
     week: stepped.filter(s => s.next.date > t && s.next.date <= in7),
     noStep: sortBy(act.filter(s => !hasStep(s)), s => s.stageAt || ""),
     pays: sortBy(pays.filter(p => p.due <= in3), p => p.due),
-    interviews: sortBy(apps.filter(a => a.interview.slice(0, 10) >= t && a.interview.slice(0, 10) <= in7), a => a.interview),
   };
 }
+// События календаря за период: встречи и собеседования из откликов (их правят в карточке студента)
+function events(from, to) {
+  const f = S.f.mentor, me = myTeam(), okMentor = id => !f || (f === "me" ? !!me && id === me.id : id === f);
+  const out = [];
+  for (const m of D().meetings) {
+    if (!m.date || m.date < from || m.date > to) continue;
+    const s = m.studentId ? stu(m.studentId) : null, mid = m.mentorId || s?.mentorId;
+    if (m.studentId && !s) continue; // студент в корзине: его встречи вернутся вместе с ним
+    if (mid && !okMentor(mid)) continue;
+    out.push({ type: "m", date: m.date, time: m.time || "", title: m.title || "Встреча", kind: m.kind || "other", status: m.status || "planned", m, s });
+  }
+  for (const s of D().students) {
+    if (!isActive(s) || !okMentor(s.mentorId || "")) continue;
+    for (const a of s.apps || []) {
+      if (!a.interview || ["rejected", "accepted"].includes(a.status)) continue;
+      const d = a.interview.slice(0, 10); if (d < from || d > to) continue;
+      out.push({ type: "i", date: d, time: a.interview.slice(11, 16), title: `Собеседование: ${a.company}`, kind: "interview", status: "planned", a, s });
+    }
+  }
+  return sortBy(out, e => e.date + (e.time || "99"));
+}
+const unmarked = () => events("0000-00-00", daysAhead(-1)).filter(e => e.type === "m" && e.status === "planned");
 const shareOf = s => { const p = partnerById(s.partnerId); return p ? Math.round(paidSum(s) * (s.partnerShare ?? p.share ?? 0)) / 100 : 0; };
 // Деньги: получено и ожидается по месяцам, сравнение источников и потоков
 function finance(list) {
@@ -656,7 +722,8 @@ function navHTML() {
   if (S.status !== "ready") return "";
   if (S.mode === "partner") return `<button class="on">Отчёт</button>`;
   const ag = agenda(D().students), late = ag.pays.filter(p => p.due < today()).length;
-  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи", late, true], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"]];
+  const meetsToday = events(today(), today()).filter(e => e.status === "planned").length;
+  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи", late, true], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"]];
   const cur = S.view === "partner" ? "partners" : S.view === "cohort" ? "cohorts" : S.view;
   return items.map(([v, l, n, hot]) => `<button data-act="nav" data-v="${v}" class="${cur === v ? "on" : ""}"${cur === v ? ' aria-current="page"' : ""}>${l}${n ? `<span class="n${hot ? " hot" : ""}">${n}</span>` : ""}</button>`).join("");
 }
@@ -665,10 +732,10 @@ function mainHTML() {
   if (S.status === "nodb") return `<div class="card welcome"><h1>База недоступна</h1><p>Данные CRM хранятся в Claude. Откройте страницу по её ссылке, войдя в свой аккаунт Claude, чтобы видеть и сохранять записи.</p></div>`;
   if (S.status === "revoked") return `<div class="card welcome"><h1>Доступ закрыт</h1><p class="muted">Доступ к этой странице изменился. Обновите страницу.</p></div>`;
   if (S.mode === "partner") return reportView();
-  const need = ["students", "cohorts", "partners", "team"];
+  const need = ["students", "cohorts", "partners", "team", "meetings"];
   if (!need.every(c => S.loaded[c])) return `<p class="loading">Загружаю базу…</p>`;
   const ro = S.readOnly ? `<div class="banner"><p>У вас доступ только для просмотра. Чтобы вносить изменения, попросите владельца выдать права редактора.</p></div>` : "";
-  const v = { today: todayView, board: boardView, students: listView, cohorts: cohortsView, cohort: cohortView, payments: paymentsView, analytics: analyticsView, partners: partnersView, partner: partnerView, settings: settingsView }[S.view] || todayView;
+  const v = { today: todayView, calendar: calendarView, board: boardView, students: listView, cohorts: cohortsView, cohort: cohortView, payments: paymentsView, analytics: analyticsView, partners: partnersView, partner: partnerView, settings: settingsView }[S.view] || todayView;
   return ro + v();
 }
 function headHTML(title, extra = "", actions = "", sub = "") {
@@ -700,6 +767,7 @@ function todayView() {
   const dateLine = new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
   const sub = `${dateLine} · в продажах ${g("sales")} · учатся ${g("study")} · ищут работу ${g("job")}`;
   const noStep = S.moreNoStep ? ag.noStep : ag.noStep.slice(0, 6);
+  const meets = [...unmarked(), ...events(t, daysAhead(7)).filter(e => e.status === "planned")];
   const dueBody = ag.due.length ? `<ul class="rows">${ag.due.map(stepRow).join("")}</ul>`
     : `<div class="allclear"><strong>На сегодня шагов нет</strong>${ag.noStep.length ? "Назначьте следующий шаг студентам из списка «Без следующего шага»." : "Все студенты под контролем."}</div>`;
   return headHTML("Сегодня", "", mentorSelect() + addBtn, sub) + demoBanner() + backupBanner() + `
@@ -714,9 +782,7 @@ function todayView() {
           <span class="amt">${money(p.amount)}</span><span class="when${p.due < t ? " late" : ""}">${dueLabel(p.due)}</span>
           <span class="acts"><button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button><button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button></span></li>`).join("")}</ul>`
         : `<p class="empty">Просрочек и платежей на ближайшие три дня нет</p>`)}
-      ${ag.interviews.length ? panel("Собеседования на неделе", ag.interviews.length, `<ul class="rows">${ag.interviews.map(a => `<li class="click" data-act="open" data-id="${esc(a.s.id)}">
-          <span class="who"><strong>${esc(a.s.name)}</strong><span>${esc(a.company)}${a.position ? " · " + esc(a.position) : ""}</span></span>
-          <span class="when">${fLocalDT(a.interview)}</span></li>`).join("")}</ul>`) : ""}
+      ${meets.length ? panel("Встречи на неделе", meets.length, `<ul class="rows">${meets.map(e => evRow(e, true)).join("")}</ul>`, `<button class="btn small ghost" data-act="nav" data-v="calendar">Календарь</button>`) : ""}
       ${ag.noStep.length ? panel("Без следующего шага", ag.noStep.length, `<ul class="rows">${noStep.map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
           <span class="who"><strong>${esc(s.name)}</strong><span>${days(daysSince(s.stageAt))} на этапе</span></span>
           ${badge(s.stage)}<button class="btn small" data-act="step-edit" data-id="${esc(s.id)}">Назначить</button></li>`).join("")}
@@ -813,6 +879,43 @@ function analyticsView() {
   </div>`;
 }
 
+// ----- Календарь -----
+function evRow(e, withDate = false) {
+  const t = today(), when = `${withDate ? (e.date === t ? "Сегодня" : fShort(e.date)) + (e.time ? ", " : "") : ""}${e.time || (withDate ? "" : "весь день")}`;
+  if (e.type === "i") return `<li class="click" data-act="open" data-id="${esc(e.s.id)}"><span class="evt">${esc(when)}</span>
+    <span class="who"><strong>${esc(e.title)}</strong><span>${esc(e.s.name)}${e.a.position ? " · " + esc(e.a.position) : ""}</span></span><span class="tag warn">собеседование</span></li>`;
+  const m = e.m, late = e.status === "planned" && e.date < t;
+  const sub = [e.s ? e.s.name : m.cohortId ? `${cohortName(m.cohortId) || "Поток"} · вся группа` : "", teamName(m.mentorId), m.duration ? `${m.duration} мин` : ""].filter(Boolean).join(" · ");
+  return `<li class="click" data-act="meet-edit" data-id="${esc(m.id)}"><span class="evt${late ? " danger-text" : ""}">${esc(when)}</span>
+    <span class="who"><strong>${esc(e.title)}</strong><span>${esc(sub)}</span></span>
+    ${e.status !== "planned" ? `<span class="tag${e.status === "done" ? " ok" : ""}">${esc((MEETL[e.status] || e.status).toLowerCase())}</span>` : late ? `<span class="tag danger">не отмечена</span>` : ""}
+    <span class="acts">${/^https?:\/\//i.test(m.link || "") ? `<a class="btn small ghost" href="${esc(m.link)}" target="_blank" rel="noopener" data-stop>Ссылка</a>` : ""}${e.status === "planned" && e.date <= t && !S.readOnly ? `<button class="btn small" data-act="meet-mark" data-id="${esc(m.id)}" data-st="done">Состоялась</button><button class="btn small ghost" data-act="meet-mark" data-id="${esc(m.id)}" data-st="missed">Нет</button>` : ""}</span></li>`;
+}
+function calendarView() {
+  const t = today(), [y, mo] = S.cal.ym.split("-").map(Number);
+  const lead = (new Date(y, mo - 1, 1).getDay() + 6) % 7, total = Math.ceil((lead + new Date(y, mo, 0).getDate()) / 7) * 7;
+  const cells = Array.from({ length: total }, (_, i) => dstr(new Date(y, mo - 1, 1 - lead + i)));
+  const by = {}; for (const e of events(cells[0], cells[total - 1])) (by[e.date] = by[e.date] || []).push(e);
+  const sel = S.cal.day, dayEvs = by[sel] || [], late = unmarked();
+  const planned = Object.entries(by).filter(([d]) => d.slice(0, 7) === S.cal.ym).flatMap(([, l]) => l).filter(e => e.status === "planned").length;
+  const chip = e => `<span class="ev k-${esc(e.kind)} st-${esc(e.status)}" title="${esc((e.time ? e.time + " " : "") + e.title + (e.s ? " · " + e.s.name : ""))}">${esc((e.time ? e.time + " " : "") + (e.s ? mask(e.s.name) : e.title))}</span>`;
+  const grid = cells.map(d => { const l = by[d] || []; return `<button class="cal-cell${d.slice(0, 7) !== S.cal.ym ? " out" : ""}${d === t ? " now" : ""}${d === sel ? " sel" : ""}" id="cal-${d}" data-act="cal-day" data-d="${d}" aria-pressed="${d === sel}" aria-label="${fShort(d)}${l.length ? `, событий: ${l.length}` : ""}">
+      <span class="dn">${+d.slice(8)}</span>${l.slice(0, 3).map(chip).join("")}${l.length > 3 ? `<span class="ev-more">ещё ${l.length - 3}</span>` : ""}</button>`; }).join("");
+  const dayTitle = new Date(sel + "T12:00").toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
+  const add = S.readOnly ? "" : `<button class="btn small" data-act="meet-new" data-date="${esc(sel)}">+ Встреча</button>`;
+  return headHTML("Календарь", "", mentorSelect() + add.replace("btn small", "btn primary"), `Запланировано на месяц: ${planned}${late.length ? ` · не отмечено прошедших: ${late.length}` : ""}`) + `
+  <div class="cal-bar"><button class="btn small" id="cal-prev" data-act="cal-go" data-n="-1" aria-label="Предыдущий месяц">←</button><h2>${MONTHS[mo - 1]} ${y}</h2><button class="btn small" id="cal-next" data-act="cal-go" data-n="1" aria-label="Следующий месяц">→</button>
+    <button class="btn small ghost" data-act="cal-go" data-n="0">Сегодня</button></div>
+  <div class="cal-wrap">
+    <div class="cal"><div class="cal-head">${WD.map(w => `<span>${w}</span>`).join("")}</div><div class="cal-grid">${grid}</div></div>
+    <div class="stack">
+      ${panel(esc(dayTitle[0].toUpperCase() + dayTitle.slice(1)), dayEvs.length || "", dayEvs.length ? `<ul class="rows">${dayEvs.map(e => evRow(e)).join("")}</ul>` : `<p class="empty">На этот день встреч нет</p>`, add)}
+      ${late.length ? panel("Прошли и не отмечены", late.length, `<ul class="rows">${late.map(e => evRow(e, true)).join("")}</ul>`) : ""}
+      <p class="hint">Собеседования попадают сюда из откликов студентов. Состоявшаяся встреча со студентом записывается в его заметки.</p>
+    </div>
+  </div>`;
+}
+
 // ----- Воронка -----
 function boardView() {
   const keys = ["cohort", "mentor", "partner"], list = filtered(keys);
@@ -851,16 +954,23 @@ function bulkBar(ids) {
     <button class="btn small" data-act="bulk" data-kind="mentor">Ментор</button><button class="btn small" data-act="bulk" data-kind="cohort">Поток</button>
     <button class="btn small ghost" data-act="sel-clear">Снять выбор</button></div>`;
 }
+const SORTS = {
+  name: s => String(s.name || "").toLowerCase(), stage: s => SIDX[s.stage] ?? 99, step: s => hasStep(s) ? s.next.date : "9999",
+  cohort: s => cohortName(s.cohortId).toLowerCase() || "\uffff", source: s => String(partnerById(s.partnerId)?.name || s.utmSource || "\uffff").toLowerCase(),
+  mentor: s => teamName(s.mentorId).toLowerCase() || "\uffff", paid: s => paidSum(s),
+};
 function studentsTable(list, mods, emptyText) {
+  if (S.sort && SORTS[S.sort.k]) { list = sortBy(list, SORTS[S.sort.k]); if (S.sort.dir < 0) list.reverse(); }
   const ids = list.map(s => s.id), all = ids.length > 0 && ids.every(id => S.sel.has(id));
   S.visible = ids;
+  const th = (k, label, cls = "") => { const on = S.sort?.k === k; return `<th${cls ? ` class="${cls}"` : ""}${on ? ` aria-sort="${S.sort.dir > 0 ? "ascending" : "descending"}"` : ""}><button class="th-sort${on ? " on" : ""}" id="th-${k}" data-act="sort" data-k="${k}" title="Сортировать">${label}${on ? `<span aria-hidden="true">${S.sort.dir > 0 ? "↑" : "↓"}</span>` : ""}</button></th>`; };
   const stepCell = s => hasStep(s) ? `${esc(s.next.text)} <span class="sub${stepLate(s) ? " danger-text" : ""}">· ${dueLabel(s.next.date)}</span>` : isActive(s) ? `<span class="warn-text">не назначен</span>` : `<span class="muted">—</span>`;
   const paidCell = s => s.price ? `${money(paidSum(s))} <span class="sub">из ${money(s.price)}</span>` : money(paidSum(s) || null);
   const cols = 6 + (mods ? mods.length : 2);
   return `<div class="panel table-wrap" id="tbl"><table>
-    <thead><tr><th class="selc"><input type="checkbox" data-sel-all data-ids="${esc(ids.join(","))}"${all ? " checked" : ""} aria-label="Выбрать всех"></th><th>Студент</th><th>Этап</th>
-      ${mods ? mods.map((m, i) => `<th class="mxh" title="${esc(m.title)}">${i + 1}</th>`).join("") : `<th>Следующий шаг</th><th>Поток</th>`}
-      ${mods ? `<th>Следующий шаг</th>` : `<th>Источник</th>`}<th>Ментор</th><th class="num">Оплачено</th></tr></thead>
+    <thead><tr><th class="selc"><input type="checkbox" data-sel-all data-ids="${esc(ids.join(","))}"${all ? " checked" : ""} aria-label="Выбрать всех"></th>${th("name", "Студент")}${th("stage", "Этап")}
+      ${mods ? mods.map((m, i) => `<th class="mxh" title="${esc(m.title)}">${i + 1}</th>`).join("") : th("step", "Следующий шаг") + th("cohort", "Поток")}
+      ${mods ? th("step", "Следующий шаг") : th("source", "Источник")}${th("mentor", "Ментор")}${th("paid", "Оплачено", "num")}</tr></thead>
     <tbody>${list.map(s => `<tr class="click" data-act="open" data-id="${esc(s.id)}">
       <td class="selc" data-stop><input type="checkbox" id="sel-${esc(s.id)}" data-sel="${esc(s.id)}"${S.sel.has(s.id) ? " checked" : ""} aria-label="Выбрать: ${esc(s.name)}"></td>
       <td><strong>${esc(s.name)}</strong><div class="sub">${esc(s.telegram || s.phone || s.email || "")}</div></td>
@@ -946,11 +1056,20 @@ function progSection(s) {
   return `<section class="sec"><header><h3>Программа</h3><span class="sub">${p.done} из ${p.total}</span><span class="right"></span>${progHTML(p)}</header>
     <div class="box"><ul class="mods">${mods.map((m, i) => { const done = s.progress && s.progress[m.id]; return `<li class="${done ? "done" : ""}"><label><input type="checkbox" id="mod-${esc(s.id)}-${esc(m.id)}" data-mod="${esc(m.id)}" data-sid="${esc(s.id)}"${done ? " checked" : ""}><span class="t">${i + 1}. ${esc(m.title)}</span>${done ? `<span class="sub">${fShort(String(done))}</span>` : ""}</label></li>`; }).join("")}</ul></div></section>`;
 }
+function meetSection(s) {
+  const list = sortBy(D().meetings.filter(m => m.studentId === s.id), m => m.date + (m.time || "")).reverse();
+  return `<section class="sec"><header><h3>Встречи</h3><span class="sub">${list.length || ""}</span><span class="right"></span><button class="btn small" data-act="meet-new" data-sid="${esc(s.id)}">+ Встреча</button></header>
+    ${list.length ? `<div class="box"><div class="table-wrap"><table class="compact"><tbody>
+      ${list.map(m => { const st = m.status || "planned", late = st === "planned" && m.date < today(); return `<tr><td>${fShort(m.date)}${m.time ? `<div class="sub">${esc(m.time)}</div>` : ""}</td><td>${esc(m.title)}${teamName(m.mentorId) ? `<div class="sub">${esc(teamName(m.mentorId))}</div>` : ""}</td>
+        <td><span class="tag${st === "done" ? " ok" : late ? " danger" : ""}">${late ? "не отмечена" : esc((MEETL[st] || st).toLowerCase())}</span></td>
+        <td class="row-actions">${st === "planned" && m.date <= today() ? `<button class="btn small" data-act="meet-mark" data-id="${esc(m.id)}" data-st="done">Состоялась</button> ` : ""}<button class="btn small ghost" data-act="meet-edit" data-id="${esc(m.id)}">Изменить</button></td></tr>`; }).join("")}
+    </tbody></table></div></div>` : ""}</section>`;
+}
 function noteSection(s) {
   const notes = sortBy(s.notes || [], n => n.at).reverse();
   return `<section class="sec"><header><h3>Заметки</h3></header><div class="box flush">
     <div class="note-form"><textarea id="note-${esc(s.id)}" data-keep rows="2" placeholder="Созвон, фидбэк по домашке, договорённости…" aria-label="Новая заметка"></textarea><button class="btn primary" data-act="note-add" data-id="${esc(s.id)}">Добавить</button></div>
-    ${notes.length ? `<ul class="feed">${notes.map(n => `<li class="${n.kind === "step" ? "auto" : ""}"><div class="feed-head"><strong>${esc(n.by ? personName(n.by) : "Команда")}</strong><span class="muted">${fDT(n.at)}</span></div><p class="pre">${esc(n.text)}</p></li>`).join("")}</ul>` : ""}
+    ${notes.length ? `<ul class="feed">${notes.map(n => `<li class="${n.kind === "step" || n.kind === "meet" ? "auto" : ""}"><div class="feed-head"><strong>${esc(n.by ? personName(n.by) : "Команда")}</strong><span class="muted">${fDT(n.at)}</span></div><p class="pre">${esc(n.text)}</p></li>`).join("")}</ul>` : ""}
   </div></section>`;
 }
 function drawerHTML(s) {
@@ -969,7 +1088,8 @@ function drawerHTML(s) {
         <button class="btn small ghost" data-act="step-edit" data-id="${esc(s.id)}">Изменить</button></div>`
     : isActive(s) ? `<div class="stepbox none"><div class="body"><strong>Следующий шаг не назначен</strong></div><button class="btn small" data-act="step-edit" data-id="${esc(s.id)}">Назначить</button></div>` : "";
   // Порядок разделов зависит от этапа: на продажах важнее заметки, на обучении — платежи, на поиске работы — отклики
-  const order = { sales: [noteSection, paySection], study: [progSection, paySection, noteSection, appSection], job: [appSection, noteSection, paySection, progSection], closed: [noteSection, paySection, appSection, progSection] }[SGROUP[s.stage]];
+  const order = { sales: [noteSection, meetSection, paySection], study: [progSection, meetSection, paySection, noteSection, appSection], job: [appSection, meetSection, noteSection, paySection, progSection], closed: [noteSection, paySection, appSection, meetSection, progSection] }[SGROUP[s.stage]];
+  const log = sortBy(s.log || [], l => l.at).reverse();
   const result = s.jobCompany ? `${esc(s.jobCompany)}${s.jobPosition ? ", " + esc(s.jobPosition) : ""}${s.jobSalary ? " · " + money(s.jobSalary) : ""}${s.offerDate ? " · " + fDate(s.offerDate) : ""}` : "";
   return `<div class="scrim" data-act="d-close"></div>
   <aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(s.name)}">
@@ -994,6 +1114,8 @@ function drawerHTML(s) {
       ${order.map(f => f(s)).join("")}
       <details id="d-hist"${S.histOpen ? " open" : ""}><summary>История этапов: ${hist.length}</summary>
         <ul class="timeline">${hist.map(h => `<li><span class="muted">${fDT(h.at)}</span> ${h.from ? esc(SLABEL[h.from]) + " → " : ""}<strong>${esc(SLABEL[h.to])}</strong> <span class="muted">· ${esc(personName(h.by))}</span></li>`).join("")}</ul></details>
+      ${log.length ? `<details id="d-log"${S.logOpen ? " open" : ""}><summary>Изменения по деньгам: ${log.length}</summary>
+        <ul class="timeline">${log.map(l => `<li><span class="muted">${fDT(l.at)}</span> ${esc(l.text)} <span class="muted">· ${esc(personName(l.by))}</span></li>`).join("")}</ul></details>` : ""}
     </div>
   </aside>`;
 }
@@ -1044,7 +1166,7 @@ function partnerView() {
   const st = partnerStats(p), rep = D().reports.find(r => r.id === p.id);
   const sub = `Доля ${esc(p.share ?? 0)}% от фактических оплат${p.promo ? ` · промокод ${esc(p.promo)}` : ""}${p.utm ? ` · utm_source ${esc(p.utm)}` : ""}. ${rep ? `Отчёт для партнёра обновлён ${fDT(rep.updatedAt)}.` : "Отчёт для партнёра ещё не публиковался."}`;
   return headHTML(esc(p.name), `<button class="back" data-act="nav" data-v="partners">← Партнёры</button>`,
-    `<button class="btn" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button><button class="btn primary" data-act="report-publish" data-id="${esc(p.id)}">Обновить отчёт для партнёра</button>`, sub) + `
+    `<button class="btn" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button><button class="btn primary" data-act="report-publish" data-id="${esc(p.id)}">${rep ? "Обновить отчёт сейчас" : "Опубликовать отчёт для партнёра"}</button>`, sub) + `
   ${kpisPartner(st)}
   <div class="grid-2">
     ${panel("Воронка по трафику партнёра", "", `<div class="pad">${funnelHTML(st.funnel)}</div>`)}
@@ -1054,7 +1176,7 @@ function partnerView() {
     <thead><tr><th>Студент</th><th>Этап</th><th>Заявка</th><th class="num">Оплатил</th><th class="num">Доля партнёра</th></tr></thead>
     <tbody>${st.rows.map(r => `<tr class="click" data-act="open" data-id="${esc(r.s.id)}"><td><strong>${esc(r.s.name)}</strong></td><td>${badge(r.s.stage)}</td><td class="muted">${fDate(isoDay(r.s.createdAt))}</td><td class="num">${money(r.paid)}</td><td class="num">${money(r.share)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">Заявок от партнёра пока нет</td></tr>`}</tbody>
   </table></div>
-  <p class="hint" style="margin-top:12px">Партнёр видит только опубликованный отчёт: цифры, воронку и сокращённые имена («Иван П.») без контактов. Нажимайте «Обновить отчёт для партнёра», когда хотите показать ему свежие данные.</p>`;
+  <p class="hint" style="margin-top:12px">Партнёр видит только опубликованный отчёт: цифры, воронку и сокращённые имена («Иван П.») без контактов. После первой публикации отчёт обновляется сам, когда меняются оплаты, этапы или выплаты.</p>`;
 }
 
 // ----- Отчёт для партнёра (режим просмотра) -----
@@ -1078,7 +1200,7 @@ function reportView() {
 
 // ----- Настройки -----
 function settingsView() {
-  const hasDemo = COLS.some(c => D()[c].some(x => x.demo));
+  const hasDemo = COLS.some(c => D()[c].some(x => x.demo)) || S.trash.some(x => x.demo);
   return headHTML("Настройки") + `<div class="grid-2">
   ${panel("Команда", "", (D().team.length ? `<ul class="rows">${D().team.map(m => `<li><span class="who"><strong>${esc(m.name)}</strong></span>${m.userId && m.userId === S.myId ? `<span class="tag ok">это вы</span>` : ""}${S.myId && m.userId !== S.myId ? `<button class="btn small ghost" data-act="team-me" data-id="${esc(m.id)}">Это я</button>` : ""}<button class="btn small ghost" data-act="team-edit" data-id="${esc(m.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Добавьте себя и менторов</p>`) + `<p class="hint pad">Нажмите «Это я» у своего имени: в фильтрах появится «Мои студенты», а ваши заметки будут подписаны.</p>`, `<button class="btn small" data-act="team-new">+ Ментор</button>`)}
   ${panel("Партнёры", "", D().partners.length ? `<ul class="rows">${D().partners.map(p => `<li><span class="who"><strong>${esc(p.name)}</strong><span>${esc(p.share ?? 0)}%${p.promo ? " · " + esc(p.promo) : ""}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Партнёров нет</p>`, `<button class="btn small" data-act="partner-new">+ Партнёр</button>`)}
@@ -1087,7 +1209,10 @@ function settingsView() {
       <li><span><strong>Блогеру:</strong> пригласите его по email с правами просмотра. Он увидит только опубликованный отчёт без контактов студентов.</span></li>
       <li><span class="warn-text">Не включайте доступ по публичной ссылке: пока он включён, приглашённые редакторы теряют право на изменения.</span></li>
     </ul>`)}
-  ${panel("Резервная копия", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, команда, партнёры и выплаты. Этот же файл загружается в версию для своего сервера при переезде.</p>
+  ${S.trash.length ? panel("Корзина", S.trash.length, `<ul class="rows">${sortBy(S.trash, x => x.deletedAt).reverse().map(x => `<li><span class="who"><strong>${esc(x.name)}</strong><span>удалён ${fDT(x.deletedAt)} · ${esc(personName(x.deletedBy))}</span></span>
+      <span class="acts"><button class="btn small" data-act="trash-restore" data-id="${esc(x.id)}">Вернуть</button><button class="btn small ghost" data-act="trash-purge" data-id="${esc(x.id)}">Удалить навсегда</button></span></li>`).join("")}</ul>
+      <p class="hint pad">Удалённые студенты не участвуют в списках, расчётах и отчётах, но остаются в резервной копии, пока лежат в корзине.</p>`) : ""}
+  ${panel("Резервная копия", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, встречи, команда, партнёры и выплаты. Этот же файл загружается в версию для своего сервера при переезде.</p>
     <div class="actions"><button class="btn" data-act="backup">Скачать резервную копию</button></div>
     <p class="hint" style="margin-top:8px">В файле есть контакты студентов. Храните его там, куда нет доступа посторонним.</p></div>`)}
   ${panel("Пример данных", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вымышленные студенты, потоки и партнёры с пометкой «пример», чтобы посмотреть, как всё работает. Ваши настоящие записи не затрагиваются.</p>
@@ -1100,7 +1225,8 @@ let namesBusy = false;
 async function resolveNames() {
   if (!S.user || namesBusy || S.mode !== "staff") return;
   const ids = new Set(), s = S.openId ? stu(S.openId) : null;
-  if (s) { (s.notes || []).forEach(n => n.by && ids.add(n.by)); (s.history || []).forEach(h => h.by && ids.add(h.by)); }
+  if (s) { (s.notes || []).forEach(n => n.by && ids.add(n.by)); (s.history || []).forEach(h => h.by && ids.add(h.by)); (s.log || []).forEach(l => l.by && ids.add(l.by)); }
+  S.trash.forEach(x => x.deletedBy && ids.add(x.deletedBy));
   const missing = [...ids].filter(i => !(i in S.names) && !D().team.some(m => m.userId === i));
   if (!missing.length) return;
   namesBusy = true;
@@ -1132,11 +1258,12 @@ function clean(o) { return JSON.parse(JSON.stringify(o)); } // поля со з�
 async function save(fn, okMsg) {
   if (S.readOnly) { toast("У вас доступ только для просмотра"); return false; }
   S.pending++; renderSync();
-  try { await fn(); if (okMsg) toast(okMsg); return true; }
+  try { await fn(); if (okMsg) toast(okMsg); scheduleReports(); return true; }
   catch (e) {
     console.warn(e);
     if (e && e.code === "invalid_argument" && S.canWrite !== true && !S.isOwner) { S.readOnly = true; toast("Нет прав на изменение данных"); scheduleRender(); }
     else if (e && e.code === "gone") { toast("Этого студента уже удалили"); scheduleRender(); }
+    else if (e && e.code === "gone-item") { toast("Эту запись уже удалили"); scheduleRender(); }
     else if (e && e.code === "quota_exceeded") toast("База заполнена: удалите старые записи и попробуйте снова");
     else toast("Не удалось сохранить. Проверьте интернет и попробуйте ещё раз");
     return false;
@@ -1179,14 +1306,23 @@ async function copyText(text, okMsg) {
   try { await navigator.clipboard.writeText(text); toast(okMsg); }
   catch (e) { openModal({ title: "Скопируйте текст", submit: "Готово", cancel: "Закрыть", values: { text }, fields: [{ k: "text", label: "Текст", type: "textarea", wide: true }], onSubmit: () => true }); }
 }
+// Журнал изменений по деньгам: кто и когда добавил, изменил или удалил платёж
+const logItem = text => ({ id: newId("x"), at: new Date().toISOString(), by: S.myId, text });
+const withLog = (cur, item) => [...(cur.log || []), item].slice(-LOG_MAX);
+const payText = p => `${money(p.amount)}, срок ${fDate(p.due)}`;
 function toggleModule(id, mid) {
   return save(() => patchStudent(id, cur => ({ progress: { [mid]: cur.progress && cur.progress[mid] ? null : today() } })));
 }
 async function payDone(id, pid) {
   const s = stu(id); if (!s) return;
-  const mark = paid => cur => ({ payments: (cur.payments || []).map(p => p.id === pid ? { ...p, paid } : p) });
-  const ok = await save(() => patchStudent(id, mark(today())));
-  if (ok) toast("Платёж отмечен оплаченным", () => save(() => patchStudent(id, mark(null)), "Отметка снята"));
+  const mark = paid => cur => (cur.payments || []).map(p => p.id === pid ? { ...p, paid } : p);
+  let item = null;
+  const ok = await save(() => patchStudent(id, cur => {
+    const p = (cur.payments || []).find(x => x.id === pid); if (!p || p.paid) return null;
+    item = logItem(`Платёж отмечен оплаченным: ${payText(p)}`);
+    return { payments: mark(today())(cur), log: withLog(cur, item) };
+  }));
+  if (ok && item) toast("Платёж отмечен оплаченным", () => save(() => patchStudent(id, cur => ({ payments: mark(null)(cur), log: (cur.log || []).filter(l => l.id !== item.id) })), "Отметка снята"));
 }
 
 // ---------- Окна с формами ----------
@@ -1264,7 +1400,7 @@ function parseContact(raw) {
 }
 function findDuplicate(c) {
   const digits = x => String(x || "").replace(/\D/g, "").slice(-10), low = x => String(x || "").trim().toLowerCase().replace(/^@/, "");
-  return D().students.find(s => (c.phone && digits(c.phone).length >= 6 && digits(s.phone) === digits(c.phone)) || (c.email && low(s.email) === low(c.email)) || (c.telegram && low(s.telegram) === low(c.telegram)));
+  return [...D().students, ...S.trash].find(s => (c.phone && digits(c.phone).length >= 6 && digits(s.phone) === digits(c.phone)) || (c.email && low(s.email) === low(c.email)) || (c.telegram && low(s.telegram) === low(c.telegram)));
 }
 const shareFor = partnerId => partnerId ? (partnerById(partnerId)?.share ?? 0) : 0;
 function leadDoc(name, c, partnerId, stage = "new") {
@@ -1314,7 +1450,7 @@ function parseLeads(text, defPartner) {
     const keys = key(r), contact = r.phone || r.email || r.telegram;
     const dup = contact ? findDuplicate(r) : D().students.find(s => low(s.name) === low(r.name));
     r.status = dup ? "dup" : keys.some(k => seen.has(k)) ? "repeat" : "new";
-    r.note = dup ? `уже есть: ${dup.name}` : r.status === "repeat" ? "повтор в списке" : "новая";
+    r.note = dup ? `${dup.deletedAt ? "в корзине" : "уже есть"}: ${dup.name}` : r.status === "repeat" ? "повтор в списке" : "новая";
     keys.forEach(k => seen.add(k)); out.push(r);
   });
   return out;
@@ -1373,7 +1509,7 @@ function quickForm(stage = "new") {
     link: { label: "Все поля", go: v => studentForm(null, { name: v.name, ...parseContact(v.contact), partnerId: v.partnerId, stage }) },
     onSubmit: v => {
       const c = parseContact(v.contact), dup = findDuplicate(c);
-      if (dup) return `Уже есть в базе: ${dup.name} (${SLABEL[dup.stage]}). Если это другой человек, добавьте его через «Все поля».`;
+      if (dup) return dup.deletedAt ? `Этот человек лежит в корзине: ${dup.name}. Верните его в настройках или добавьте заново через «Все поля».` : `Уже есть в базе: ${dup.name} (${SLABEL[dup.stage]}). Если это другой человек, добавьте его через «Все поля».`;
       return save(() => setDoc("students", newId("students"), leadDoc(v.name, c, v.partnerId || null, stage)), stage === "new" ? "Заявка добавлена, шаг «Связаться» на сегодня" : "Студент добавлен");
     },
   });
@@ -1407,11 +1543,28 @@ function studentForm(s, prefill = {}) {
       { k: "jobSalary", label: "Зарплата, ₽", type: "number" }, { k: "offerDate", label: "Дата оффера", type: "date" },
       { section: "" }, { k: "comment", label: "Комментарий", type: "textarea", wide: true },
     ],
-    onDelete: s ? () => save(() => delDoc("students", s.id), "Студент удалён").then(ok => { if (ok) { S.openId = null; render(); } return ok; }) : null,
-    onSubmit: v => saveStudent(s, v),
+    del: "В корзину",
+    onDelete: s ? () => trashStudent(s.id) : null,
+    onSubmit: v => saveStudent(s, v, vals),
   });
 }
-async function saveStudent(s, v) {
+// Удаление обратимо: запись помечается и уходит в корзину (Настройки → Корзина)
+async function trashStudent(id) {
+  const s = stu(id); if (!s) return false;
+  const ok = await save(() => patchStudent(id, () => ({ deletedAt: new Date().toISOString(), deletedBy: S.myId })));
+  if (!ok) return false;
+  S.openId = null; S.sel.delete(id); moveToTrash(); render();
+  toast(`${s.name}: в корзине`, () => restoreStudent(id));
+  return true;
+}
+function moveToTrash() { const gone = D().students.filter(x => x.deletedAt); if (gone.length) { S.trash = [...S.trash.filter(x => !gone.some(g => g.id === x.id)), ...gone]; D().students = D().students.filter(x => !x.deletedAt); } }
+const restoreStudent = id => S.trash.some(x => x.id === id) || stu(id) ? save(() => updDoc("students", id, { deletedAt: null, deletedBy: null }), "Студент возвращён") : toast("Этого студента уже удалили навсегда");
+async function purgeStudent(id) {
+  const meets = D().meetings.filter(m => m.studentId === id);
+  await save(async () => { for (const m of meets) await delDoc("meetings", m.id); await delDoc("students", id); }, "Удалено навсегда");
+}
+const blank = x => x === undefined || x === null || x === false ? "" : x;
+async function saveStudent(s, v, orig = {}) {
   let partnerId = v.partnerId || null;
   if (!partnerId && (v.promo || v.utmSource)) {
     const m = D().partners.find(p => p.active !== false && ((v.promo && p.promo && p.promo.toLowerCase() === v.promo.toLowerCase()) || (v.utmSource && p.utm && p.utm.toLowerCase() === v.utmSource.toLowerCase())));
@@ -1430,18 +1583,44 @@ async function saveStudent(s, v) {
     if (ok) { S.openId = id; render(); }
     return ok;
   }
-  return save(() => patchStudent(s.id, cur => v.stage !== cur.stage ? { ...doc, ...stageChange(cur, v.stage) } : doc), "Сохранено");
+  // Пишем только те поля, которые изменили в форме: чужие правки соседних полей, сделанные за это время, остаются
+  const changed = Object.fromEntries(Object.entries(doc).filter(([k, val]) => blank(val) !== blank(orig[k])));
+  const stageTo = v.stage !== orig.stage ? v.stage : null;
+  if (!Object.keys(changed).length && !stageTo) return true;
+  return save(() => patchStudent(s.id, cur => {
+    const patch = { ...changed };
+    if ("price" in changed) patch.log = withLog(cur, logItem(`Стоимость по договору: ${money(cur.price)} → ${money(changed.price)}`));
+    return stageTo && stageTo !== cur.stage ? { ...patch, ...stageChange(cur, stageTo) } : patch;
+  }), "Сохранено");
 }
 function paymentForm(s, p) {
   openModal({
     title: p ? "Платёж" : "Новый платёж", values: p ? { ...p } : { due: today() },
     fields: [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }, { k: "due", label: "Срок оплаты", type: "date", req: true },
       { k: "paid", label: "Дата оплаты", type: "date", help: "Пусто, если ещё не оплачен" }, { k: "comment", label: "Комментарий", ph: "Например, «Рассрочка 1/3, СБП»", wide: true }],
-    onDelete: p ? () => save(() => patchStudent(s.id, cur => ({ payments: (cur.payments || []).filter(x => x.id !== p.id) })), "Платёж удалён") : null,
+    onDelete: p ? () => save(() => patchStudent(s.id, cur => {
+      const old = (cur.payments || []).find(x => x.id === p.id); if (!old) return null;
+      return { payments: cur.payments.filter(x => x.id !== p.id), log: withLog(cur, logItem(`Платёж удалён: ${payText(old)}${old.paid ? `, был оплачен ${fDate(old.paid)}` : ""}`)) };
+    }), "Платёж удалён") : null,
     onSubmit: v => {
       if (!(v.amount > 0)) return "Сумма должна быть больше нуля";
       const item = { id: p?.id || newId("x"), amount: v.amount, due: v.due, paid: v.paid || null, comment: v.comment };
-      return save(() => patchStudent(s.id, cur => { const list = cur.payments || []; return { payments: p ? list.map(x => x.id === p.id ? item : x) : [...list, item] }; }), "Сохранено");
+      return save(() => patchStudent(s.id, cur => {
+        const list = cur.payments || [], old = p ? list.find(x => x.id === p.id) : null;
+        if (p && !old) throw { code: "gone-item" };
+        let text;
+        if (!old) text = `Платёж добавлен: ${payText(item)}${item.paid ? `, оплачен ${fDate(item.paid)}` : ""}`;
+        else {
+          const ch = [];
+          if (+old.amount !== +item.amount) ch.push(`сумма ${money(old.amount)} → ${money(item.amount)}`);
+          if (old.due !== item.due) ch.push(`срок ${fDate(old.due)} → ${fDate(item.due)}`);
+          if ((old.paid || null) !== item.paid) ch.push(`оплата ${old.paid ? fDate(old.paid) : "нет"} → ${item.paid ? fDate(item.paid) : "нет"}`);
+          if (ch.length) text = `Платёж изменён (${payText(old)}): ${ch.join("; ")}`;
+        }
+        const patch = { payments: old ? list.map(x => x.id === p.id ? item : x) : [...list, item] };
+        if (text) patch.log = withLog(cur, logItem(text));
+        return patch;
+      }), "Сохранено");
     },
   });
 }
@@ -1458,9 +1637,68 @@ function planForm(s) {
       if (!(n >= 1 && n <= 24)) return "Платежей должно быть от 1 до 24";
       const base = Math.floor(v.total / n), items = [];
       for (let i = 0; i < n; i++) items.push({ id: newId("x"), amount: i < n - 1 ? base : v.total - base * (n - 1), due: addMonths(v.first, i), paid: null, comment: `Рассрочка ${i + 1}/${n}` });
-      return save(() => patchStudent(s.id, cur => { const patch = { payments: [...(cur.payments || []), ...items] }; if (!cur.price) patch.price = v.total; return patch; }), `Создан график: ${n} ${plural(n, "платёж", "платежа", "платежей")}`);
+      return save(() => patchStudent(s.id, cur => { const patch = { payments: [...(cur.payments || []), ...items], log: withLog(cur, logItem(`Создана рассрочка: ${n} ${plural(n, "платёж", "платежа", "платежей")} на ${money(v.total)}, первый ${fDate(v.first)}`)) }; if (!cur.price) patch.price = v.total; return patch; }), `Создан график: ${n} ${plural(n, "платёж", "платежа", "платежей")}`);
     },
   });
+}
+function meetingForm(m, prefill = {}) {
+  const vals = m ? { ...m, studentId: m.studentId || "", cohortId: m.cohortId || "", mentorId: m.mentorId || "", status: m.status || "planned" }
+    : { kind: "call", date: S.view === "calendar" ? S.cal.day : today(), time: "12:00", duration: 60, studentId: "", cohortId: "", mentorId: myTeam()?.id || "", status: "planned", ...prefill };
+  const students = sortBy(D().students.filter(s => isActive(s) || s.id === vals.studentId), s => String(s.name || "").toLowerCase());
+  openModal({
+    title: m ? "Встреча" : "Новая встреча", wide: true, values: vals, submit: m ? "Сохранить" : "Добавить",
+    fields: [{ k: "title", label: "Название", req: true, wide: true, ph: "Разбор домашки", list: MEET_HINTS },
+      { k: "date", label: "Дата", type: "date", req: true, quick: true }, { k: "time", label: "Время", type: "time", help: "Пусто — на весь день" },
+      { k: "kind", label: "Тип", type: "select", options: MEET_KINDS }, { k: "duration", label: "Длительность, мин", type: "number" },
+      { k: "studentId", label: "Студент", type: "select", options: [["", "—"], ...students.map(s => [s.id, s.name])] },
+      { k: "cohortId", label: "Поток", type: "select", options: cohortOpts(), help: "Для занятия всей группы" },
+      { k: "mentorId", label: "Кто проводит", type: "select", options: teamOpts() },
+      ...(m ? [{ k: "status", label: "Статус", type: "select", options: MEET_ST }] : []),
+      { k: "link", label: "Ссылка на созвон", type: "url", wide: true, ph: "https://" }, { k: "notes", label: "Заметки", type: "textarea", wide: true, rows: 2 }],
+    link: m && m.studentId && stu(m.studentId) ? { label: "Карточка студента", go: () => openStudent(m.studentId) } : null,
+    onDelete: m ? () => save(() => delDoc("meetings", m.id), "Встреча удалена") : null,
+    extra: m ? "" : `<p class="hint">Отметить встречу состоявшейся можно в календаре, на экране «Сегодня» или в карточке студента.</p>`,
+    onSubmit: async v => {
+      if (v.link && !/^https?:\/\//i.test(v.link)) return "Ссылка должна начинаться с http:// или https://";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v.date)) return "Укажите дату";
+      if (v.time && !/^\d{2}:\d{2}$/.test(v.time)) return "Время укажите в виде 15:30";
+      if (v.duration !== null && !(v.duration > 0 && v.duration <= 1440)) return "Длительность — от 1 до 1440 минут";
+      const doc = { title: v.title, date: v.date, time: v.time || "", kind: v.kind, duration: v.duration, studentId: v.studentId || null, cohortId: v.cohortId || null, mentorId: v.mentorId || null, link: v.link, notes: v.notes };
+      // При правке пишем только изменённые поля: отметку «состоялась», поставленную другим человеком, форма не затрёт
+      const changed = m ? Object.fromEntries(Object.entries(doc).filter(([k, val]) => blank(val) !== blank(vals[k]))) : null;
+      const toStatus = m && v.status !== vals.status ? v.status : null, any = !m || Object.keys(changed).length > 0;
+      if (m && !meetById(m.id)) return "Эту встречу уже удалили";
+      const ok = !any ? true : await save(() => m ? updDoc("meetings", m.id, changed) : setDoc("meetings", newId("meetings"), { ...doc, status: "planned", createdAt: new Date().toISOString(), by: S.myId }), m ? "Сохранено" : `Встреча назначена на ${dueLabel(v.date)}${v.time ? ", " + v.time : ""}`);
+      if (ok && S.view === "calendar") { S.cal = { ym: v.date.slice(0, 7), day: v.date }; render(); }
+      if (ok && toStatus) meetMark(m.id, toStatus); // статус меняется тем же путём, что и кнопкой: с заметкой и отменой
+      return ok;
+    },
+  });
+}
+// Отметка «состоялась / не состоялась». Состоявшаяся встреча со студентом попадает в его заметки
+const meetById = id => D().meetings.find(x => x.id === id);
+async function meetMark(id, status) {
+  const m = meetById(id); if (!m || (m.status || "planned") === status) return;
+  const sid = m.studentId && stu(m.studentId) ? m.studentId : null, nid = "meet-" + id; // заметка одна на встречу: её id выводится из id встречи
+  const note = { id: nid, text: `Встреча: ${m.title}${m.notes ? "\n" + m.notes : ""}`, at: new Date().toISOString(), by: S.myId, kind: "meet" };
+  const without = c => (c.notes || []).some(n => n.id === nid) ? { notes: c.notes.filter(n => n.id !== nid) } : null;
+  let prev = null, removed = null;
+  const ok = await save(() => enqueue("meetings/" + id, async () => {
+    const cur = meetById(id); if (!cur) throw { code: "gone-item" };
+    if ((cur.status || "planned") === status) return; // уже отметили: второй клик или другой человек
+    const was = cur.status || "planned";
+    await ref("meetings", id).update({ status }); cur.status = status; prev = was;
+    if (!sid) return;
+    if (status === "done") await patchStudent(sid, c => (c.notes || []).some(n => n.id === nid) ? null : { notes: [...(c.notes || []), note] });
+    else if (was === "done") await patchStudent(sid, c => { removed = (c.notes || []).find(n => n.id === nid) || null; return without(c); });
+  }));
+  if (ok && prev) toast(`Встреча: ${(MEETL[status] || status).toLowerCase()}`, () => save(async () => {
+    if (!meetById(id)) throw { code: "gone-item" };
+    await updDoc("meetings", id, { status: prev });
+    if (!sid || !stu(sid)) return;
+    if (status === "done") await patchStudent(sid, without);
+    else if (removed) await patchStudent(sid, c => (c.notes || []).some(n => n.id === nid) ? null : { notes: [...(c.notes || []), removed] });
+  }, "Отметка снята"));
 }
 function appForm(s, a) {
   openModal({
@@ -1498,7 +1736,7 @@ function cohortForm(c) {
     fields: [{ k: "name", label: "Название", req: true, ph: "Поток 4" }, { k: "price", label: "Базовая цена, ₽", type: "number" },
       { k: "start", label: "Старт", type: "date" }, { k: "end", label: "Окончание обучения", type: "date" }, { k: "active", label: "Идёт набор или обучение", type: "checkbox" },
       { k: "modules", label: "Программа: модули, по одному в строке", type: "textarea", rows: 7, wide: true, ph: "Введение в 1С\nОписание бизнес-процессов\nНаписание ТЗ", help: "По модулям отмечается прогресс студентов. Чтобы отметки сохранились, переименовывайте по одному модулю за сохранение." }],
-    onDelete: c ? () => D().students.some(s => s.cohortId === c.id) ? (showErr("В потоке есть студенты. Сначала перенесите их в другой поток."), false) : save(() => delDoc("cohorts", c.id), "Поток удалён") : null,
+    onDelete: c ? () => [...D().students, ...S.trash].some(s => s.cohortId === c.id) ? (showErr("В потоке есть студенты. Сначала перенесите их в другой поток."), false) : save(() => delDoc("cohorts", c.id), "Поток удалён") : null,
     onSubmit: v => {
       const id = c?.id || newId("cohorts"), isNew = !c;
       return save(() => setDoc("cohorts", id, { ...(c || {}), ...v, modules: mergeModules(c?.modules || [], v.modules), id: undefined }), "Сохранено").then(ok => { if (ok && isNew) { S.cohortId = id; S.view = "cohort"; render(); } return ok; });
@@ -1531,7 +1769,7 @@ function partnerForm(p) {
     fields: [{ k: "name", label: "Название", req: true, ph: "Блог «…»", wide: true }, { k: "share", label: "Доля партнёра, %", type: "number", req: true },
       { k: "promo", label: "Промокод" }, { k: "utm", label: "utm_source" }, { k: "contacts", label: "Контакты и реквизиты", type: "textarea", wide: true },
       { k: "active", label: "Активен", type: "checkbox" }],
-    onDelete: p ? () => D().students.some(s => s.partnerId === p.id) ? (showErr("У партнёра есть студенты. Отметьте его неактивным вместо удаления."), false) : save(() => delDoc("partners", p.id), "Партнёр удалён") : null,
+    onDelete: p ? () => [...D().students, ...S.trash].some(s => s.partnerId === p.id) ? (showErr("У партнёра есть студенты. Отметьте его неактивным вместо удаления."), false) : save(() => delDoc("partners", p.id), "Партнёр удалён") : null,
     onSubmit: v => {
       if (v.share < 0 || v.share > 100) return "Доля должна быть от 0 до 100%";
       const id = p?.id || newId("partners");
@@ -1547,17 +1785,31 @@ function payoutForm(p) {
     onSubmit: v => v.amount > 0 ? save(() => setDoc("payouts", newId("payouts"), { partnerId: p.id, ...v }), "Выплата записана") : "Сумма должна быть больше нуля",
   });
 }
-function publishReport(p) {
+function reportDoc(p) {
   const st = partnerStats(p);
   const doc = {
     partnerId: p.id, name: p.name, share: p.share ?? 0, promo: p.promo || "", updatedAt: new Date().toISOString(),
     leads: st.leads, paidStudents: st.paidStudents, conv: st.conv, employed: st.employed, revenue: st.revenue,
     accrued: st.accrued, paidOut: st.paidOut, balance: st.balance, funnel: st.funnel,
     payouts: st.payouts.map(x => ({ date: x.date, amount: x.amount, comment: x.comment || "" })),
-    rows: st.rows.map(r => ({ name: mask(r.s.name), stage: r.s.stage, date: isoDay(r.s.createdAt), paid: r.paid, share: r.share })),
+    rows: st.rows.map(r => ({ name: mask(r.s.name), stage: r.s.stage, date: String(r.s.createdAt || "").slice(0, 10), paid: r.paid, share: r.share })),
   };
   if (p.demo) doc.demo = true;
-  save(() => setDoc("reports", p.id, doc), "Отчёт для партнёра обновлён");
+  return doc;
+}
+function publishReport(p) { save(() => setDoc("reports", p.id, reportDoc(p)), "Отчёт для партнёра обновлён"); }
+// Уже опубликованный отчёт обновляется сам после правок, если его цифры изменились
+const stable = o => JSON.stringify(o, (k, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(x => [x, v[x]])) : v);
+const reportBody = d => { const { updatedAt, id, ...rest } = d; return stable(clean(rest)); };
+let repT;
+function scheduleReports() { clearTimeout(repT); repT = setTimeout(refreshReports, 2500); }
+function refreshReports() {
+  if (S.readOnly || S.mode !== "staff" || !S.loaded.reports || !S.loaded.students || !S.loaded.payouts || !S.loaded.partners) return;
+  for (const r of D().reports) {
+    const p = partnerById(r.id); if (!p) continue;
+    const doc = reportDoc(p);
+    if (reportBody(doc) !== reportBody(r)) setDoc("reports", p.id, doc).catch(e => console.warn("report", e));
+  }
 }
 
 // ---------- CSV ----------
@@ -1578,7 +1830,8 @@ async function exportBackup() {
   const dl = await claude.use("downloads");
   if (!dl) return toast("Выгрузка недоступна в этом окне");
   const data = {}; for (const c of COLS) data[c] = D()[c];
-  const backup = { format: "crm-menti-backup", version: 3, exportedAt: new Date().toISOString(), data };
+  data.students = [...D().students, ...S.trash]; // корзина тоже попадает в копию, с пометкой deletedAt
+  const backup = { format: "crm-menti-backup", version: 4, exportedAt: new Date().toISOString(), data };
   try {
     await dl.save({ filename: `crm-menti-копия-${today()}.json`, data: JSON.stringify(backup, null, 1) }); toast("Резервная копия сохранена");
     // Дату копии помним в базе, чтобы напомнить о следующей
@@ -1647,6 +1900,12 @@ async function loadDemo() {
       next, progress, payments, apps, notes, demo: true,
     }]);
   }
+  const live = W.filter(w => w[0] === "students" && !["lost", "probation_passed"].includes(w[2].stage));
+  const meet = (off, time, title, kind, status, extra = {}) => W.push(["meetings", newId("meetings"), { title, kind, date: daysAhead(off), time, duration: kind === "lesson" ? 90 : 45, status, studentId: null, cohortId: null, mentorId: m1, link: "", notes: "", createdAt: tAgo(5), by: null, demo: true, ...extra }]);
+  [-7, 0, 7, 14].forEach(off => meet(off, "19:00", "Занятие потока", "lesson", off < 0 ? "done" : "planned", { cohortId: c2 }));
+  [[0, "11:00", "Созвон-знакомство", "call", "planned"], [1, "15:30", "Разбор домашки", "call", "planned"], [3, "12:00", "Карьерная консультация", "consult", "planned"],
+    [-2, "17:00", "Разбор домашки", "call", "planned"], [-4, "10:30", "Созвон-знакомство", "call", "done"], [9, "16:00", "Пробное собеседование", "consult", "planned"]]
+    .forEach(([off, time, title, kind, status], i) => { const w = live[i]; if (w) meet(off, time, title, kind, status, { studentId: w[1], mentorId: w[2].mentorId }); });
   S.pending++; renderSync();
   let ok = true;
   for (const [c, id, d] of W) { try { await setDoc(c, id, d); } catch (e) { console.warn(e); ok = false; break; } }
@@ -1657,7 +1916,7 @@ async function loadDemo() {
 async function clearDemo() {
   if (S.busy) return; S.busy = true; toast("Удаляю примеры…");
   S.pending++; renderSync();
-  try { for (const c of COLS) for (const x of D()[c].filter(x => x.demo)) await delDoc(c, x.id); toast("Примеры удалены"); }
+  try { for (const c of COLS) for (const x of [...D()[c], ...(c === "students" ? S.trash : [])].filter(x => x.demo)) await delDoc(c, x.id); toast("Примеры удалены"); }
   catch (e) { console.warn(e); toast("Не удалось удалить всё. Попробуйте ещё раз"); }
   S.pending--; S.busy = false; renderSync();
   S.openId = null; if (S.view === "partner") S.view = "partners";
@@ -1688,9 +1947,9 @@ function renderSearch() {
 function closeSearch() { $("#gq").value = ""; $("#gq-res").hidden = true; }
 
 // ---------- События ----------
-function go(view) { S.view = view; S.openId = null; S.sel.clear(); if (VIEWS.includes(view)) lsSet("crm-menti-view", view); render(); window.scrollTo(0, 0); }
+function go(view) { S.view = view; S.openId = null; S.sel.clear(); S.sort = null; if (VIEWS.includes(view)) lsSet("crm-menti-view", view); render(); window.scrollTo(0, 0); }
 function openStudent(id) {
-  const was = S.openId; S.openId = id; S.histOpen = false; closeSearch(); render();
+  const was = S.openId; S.openId = id; S.histOpen = false; S.logOpen = false; closeSearch(); render();
   const el = $(".drawer"); if (el && !was) el.classList.add("enter");
   $("#d-x")?.focus({ preventScroll: true });
 }
@@ -1702,9 +1961,22 @@ const ACT = {
   quick: d => quickForm(d.st || "new"),
   import: () => importForm(),
   antab: d => { S.anTab = d.v; render(); },
-  "cohort-open": d => { S.cohortId = d.id; S.sel.clear(); S.view = "cohort"; render(); window.scrollTo(0, 0); },
+  "cohort-open": d => { S.cohortId = d.id; S.sel.clear(); S.sort = null; S.view = "cohort"; render(); window.scrollTo(0, 0); },
   "list-nocohort": () => { S.f = { q: "", cohort: "none", mentor: "", partner: "", stage: "" }; go("students"); },
   "mod-toggle": d => toggleModule(d.id, d.mid),
+  sort: d => { const s = S.sort; S.sort = !s || s.k !== d.k ? { k: d.k, dir: 1 } : s.dir > 0 ? { k: d.k, dir: -1 } : null; render(); },
+  "cal-day": d => { S.cal.day = d.d; S.cal.ym = d.d.slice(0, 7); render(); },
+  "cal-go": d => {
+    const n = +d.n, t = today();
+    if (!n) S.cal = { ym: t.slice(0, 7), day: t };
+    else { const [y, m] = S.cal.ym.split("-").map(Number), x = new Date(y, m - 1 + n, 1), ym = `${x.getFullYear()}-${pad(x.getMonth() + 1)}`; S.cal = { ym, day: ym === t.slice(0, 7) ? t : ym + "-01" }; }
+    render();
+  },
+  "meet-new": d => meetingForm(null, { ...(d.date ? { date: d.date } : {}), ...(d.sid ? { studentId: d.sid, title: "Созвон", mentorId: stu(d.sid)?.mentorId || myTeam()?.id || "" } : {}) }),
+  "meet-edit": d => { const m = meetById(d.id); if (m) meetingForm(m); },
+  "meet-mark": d => meetMark(d.id, d.st),
+  "trash-restore": d => restoreStudent(d.id),
+  "trash-purge": (d, el) => { if (el.dataset.armed) return purgeStudent(d.id); el.dataset.armed = "1"; el.textContent = "Точно удалить?"; },
   bulk: d => bulkForm(d.kind),
   "sel-clear": () => { S.sel.clear(); render(); },
   "student-edit": d => studentForm(stu(d.id)),
@@ -1784,7 +2056,7 @@ document.addEventListener("mousemove", e => {
   tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, e.clientY - tip.offsetHeight - 12) + "px";
 });
 document.addEventListener("focusin", e => { if (e.target.id === "gq") renderSearch(); });
-document.addEventListener("toggle", e => { if (e.target.id === "d-hist") S.histOpen = e.target.open; }, true);
+document.addEventListener("toggle", e => { if (e.target.id === "d-hist") S.histOpen = e.target.open; if (e.target.id === "d-log") S.logOpen = e.target.open; }, true);
 document.addEventListener("submit", e => { if (e.target.id === "mform") { e.preventDefault(); submitModal(); } });
 document.addEventListener("keydown", e => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
@@ -1833,7 +2105,9 @@ async function boot() {
   const cols = S.mode === "partner" ? ["reports"] : COLS;
   for (const c of cols) {
     db.collection(c).onSnapshot(snap => {
-      D()[c] = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      if (c === "students") { S.trash = docs.filter(x => x.deletedAt); D()[c] = docs.filter(x => !x.deletedAt); }
+      else D()[c] = docs;
       S.loaded[c] = true; scheduleRender();
     }, err => {
       console.warn(c, err); S.loaded[c] = true;

@@ -5,7 +5,7 @@
 (сопоставление по external_id), если не указано overwrite.
 """
 import json
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth import get_user_model
@@ -14,13 +14,14 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import (
-    Cohort, JobApplication, Note, Partner, PartnerPayout, Payment, Stage, StageHistory, Student,
+    Cohort, JobApplication, Meeting, Note, Partner, PartnerPayout, Payment, Stage, StageHistory, Student,
 )
 from .permissions import MENTOR_GROUP
 
 BACKUP_FORMAT = "crm-menti-backup"
-# 2: у студента появился следующий шаг (next); 3: программа потока (modules) и прогресс студента (progress)
-SUPPORTED_VERSIONS = (1, 2, 3)
+# 2: у студента появился следующий шаг (next); 3: программа потока (modules) и прогресс студента (progress);
+# 4: встречи (meetings), корзина (deletedAt у студента) и журнал изменений по деньгам (log)
+SUPPORTED_VERSIONS = (1, 2, 3, 4)
 
 
 class BackupError(ValueError):
@@ -56,6 +57,14 @@ def _dt(value):
     if timezone.is_naive(parsed):
         parsed = timezone.make_aware(parsed)
     return parsed
+
+
+def _time(value):
+    try:
+        hours, minutes = str(value or "").split(":")[:2]
+        return time(int(hours), int(minutes))
+    except (TypeError, ValueError):
+        return None
 
 
 def _text(value, limit=None):
@@ -119,10 +128,15 @@ def import_backup(raw, overwrite=False, with_demo=False):
     """
     data = parse_backup(raw)["data"]
     stats = {k: {"created": 0, "updated": 0, "skipped": 0}
-             for k in ("cohorts", "team", "partners", "students", "payouts")}
+             for k in ("cohorts", "team", "partners", "students", "payouts", "meetings")}
     stats["warnings"] = []
 
     student_rows = _rows(data, "students", with_demo)
+    # Студенты из корзины веб-версии не переносятся
+    trashed = [r for r in student_rows if r.get("deletedAt")]
+    if trashed:
+        student_rows = [r for r in student_rows if not r.get("deletedAt")]
+        stats["warnings"].append(f"Студентов в корзине: {len(trashed)}, они не перенесены")
     used = {key: {r.get(key) for r in student_rows} for key in ("cohortId", "mentorId", "partnerId")}
 
     # --- Потоки ---
@@ -184,10 +198,12 @@ def import_backup(raw, overwrite=False, with_demo=False):
         partners[row["id"]] = obj
 
     # --- Студенты ---
+    students = {}
     for row in student_rows:
         existing = Student.objects.filter(external_id=row["id"]).first()
         if existing and not overwrite:
             stats["students"]["skipped"] += 1
+            students[row["id"]] = existing
             continue
 
         stage = row.get("stage")
@@ -227,6 +243,7 @@ def import_backup(raw, overwrite=False, with_demo=False):
             student = Student(external_id=row["id"], **fields)
             stats["students"]["created"] += 1
         student.save()
+        students[row["id"]] = student
 
         # save() сам фиксирует долю партнёра и пишет историю — возвращаем значения из копии
         share = _dec(row.get("partnerShare"))
@@ -286,7 +303,38 @@ def import_backup(raw, overwrite=False, with_demo=False):
                 student=student, author=people.get(n.get("by")), text=_text(n.get("text")),
                 created_at=_dt(n.get("at")) or created_at,
             ))
+        # Журнал изменений по деньгам сохраняется заметками
+        for entry in row.get("log") or []:
+            if not isinstance(entry, dict) or not _text(entry.get("text")):
+                continue
+            notes.append(Note(
+                student=student, author=people.get(entry.get("by")), text=f"Деньги: {_text(entry.get('text'))}",
+                created_at=_dt(entry.get("at")) or created_at,
+            ))
         Note.objects.bulk_create(notes)
+
+    # --- Встречи ---
+    for row in _rows(data, "meetings", with_demo):
+        day = _date(row.get("date"))
+        student = students.get(row.get("studentId"))
+        if day is None or (row.get("studentId") and not student):
+            # без даты или со студентом, которого нет в базе (пример, корзина)
+            stats["meetings"]["skipped"] += 1
+            continue
+        if Meeting.objects.filter(external_id=row["id"]).exists():
+            stats["meetings"]["skipped"] += 1
+            continue
+        duration = _dec(row.get("duration"))
+        Meeting.objects.create(
+            external_id=row["id"], title=_text(row.get("title"), 200) or "Встреча",
+            kind=row.get("kind") if row.get("kind") in Meeting.Kind.values else Meeting.Kind.OTHER,
+            status=row.get("status") if row.get("status") in Meeting.Status.values else Meeting.Status.PLANNED,
+            date=day, time=_time(row.get("time")),
+            duration_min=int(duration) if duration is not None and 0 < duration < 100000 else None,
+            student=student, cohort=cohorts.get(row.get("cohortId")), mentor=mentors.get(row.get("mentorId")),
+            link=_text(row.get("link"), 500), notes=_text(row.get("notes")),
+        )
+        stats["meetings"]["created"] += 1
 
     # --- Выплаты партнёрам ---
     for row in _rows(data, "payouts", with_demo):
@@ -307,7 +355,8 @@ def import_backup(raw, overwrite=False, with_demo=False):
     return stats
 
 
-LABELS = {"cohorts": "Потоки", "team": "Менторы", "partners": "Партнёры", "students": "Студенты", "payouts": "Выплаты"}
+LABELS = {"cohorts": "Потоки", "team": "Менторы", "partners": "Партнёры", "students": "Студенты", "payouts": "Выплаты",
+          "meetings": "Встречи"}
 
 
 def summary_lines(stats):

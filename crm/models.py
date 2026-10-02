@@ -411,3 +411,43 @@ class Note(models.Model):
 
     def __str__(self):
         return self.text[:50]
+
+
+class Meeting(models.Model):
+    """Встреча в календаре: созвон со студентом, занятие потока, консультация."""
+
+    class Kind(models.TextChoices):
+        CALL = "call", "Созвон"
+        LESSON = "lesson", "Занятие"
+        CONSULT = "consult", "Консультация"
+        OTHER = "other", "Другое"
+
+    class Status(models.TextChoices):
+        PLANNED = "planned", "Запланирована"
+        DONE = "done", "Состоялась"
+        MISSED = "missed", "Не состоялась"
+        CANCELLED = "cancelled", "Отменена"
+
+    title = models.CharField("Название", max_length=200)
+    kind = models.CharField("Тип", max_length=20, choices=Kind.choices, default=Kind.CALL)
+    status = models.CharField("Статус", max_length=20, choices=Status.choices, default=Status.PLANNED)
+    date = models.DateField("Дата")
+    time = models.TimeField("Время", null=True, blank=True)
+    duration_min = models.PositiveIntegerField("Длительность, мин", null=True, blank=True)
+    student = models.ForeignKey(Student, null=True, blank=True, on_delete=models.CASCADE,
+                                related_name="meetings", verbose_name="Студент")
+    cohort = models.ForeignKey(Cohort, null=True, blank=True, on_delete=models.SET_NULL,
+                               related_name="meetings", verbose_name="Поток")
+    mentor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                               related_name="meetings", verbose_name="Кто проводит")
+    link = models.CharField("Ссылка", max_length=500, blank=True)
+    notes = models.TextField("Заметки", blank=True)
+    external_id = models.CharField(max_length=64, blank=True, db_index=True, editable=False)
+
+    class Meta:
+        verbose_name = "Встреча"
+        verbose_name_plural = "Встречи"
+        ordering = ["date", "time"]
+
+    def __str__(self):
+        return f"{self.date:%d.%m.%Y} {self.title}"
