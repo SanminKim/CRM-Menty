@@ -3,114 +3,121 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
 <style>
-/* Раскладка: боковое меню + рабочая область; доска — горизонтальные колонки этапов. */
+/* Раскладка: узкое меню слева, рабочая область, карточка студента выезжает панелью справа. */
 :root {
-  --bg: #f4f5f1;
+  --bg: #f5f6f3;
   --surface: #ffffff;
-  --surface-2: #eef0ea;
-  --border: #dfe2d9;
-  --text: #1b1f1b;
-  --muted: #697064;
+  --surface-2: #eef0eb;
+  --border: #e0e3db;
+  --text: #1a1e1a;
+  --muted: #687064;
   --brand: #2f5d50;
   --brand-ink: #ffffff;
-  --brand-soft: #e1ece7;
+  --brand-soft: #e2ece8;
   --danger: #b2412e;
-  --danger-soft: #f8e4df;
-  --warn: #946500;
-  --warn-soft: #faefd2;
+  --danger-soft: #f8e5e0;
+  --warn: #8f6200;
+  --warn-soft: #faf0d4;
   --ok: #2c7a4c;
   --ok-soft: #dff0e5;
-  --g-sales: #3a6bb2;  --g-sales-soft: #e3ebf6;
-  --g-study: #85549f;  --g-study-soft: #eee5f5;
+  --g-sales: #3a6bb2;  --g-sales-soft: #e4ebf6;
+  --g-study: #85549f;  --g-study-soft: #eee6f5;
   --g-job: #2c7a4c;    --g-job-soft: #dff0e5;
-  --g-closed: #848a80; --g-closed-soft: #e9ebe5;
-  --shadow: 0 1px 2px rgba(25, 35, 25, .06);
-  --overlay: rgba(20, 26, 22, .42);
+  --g-closed: #848a80; --g-closed-soft: #e9ebe6;
+  --overlay: rgba(20, 26, 22, .38);
+  --pop: 0 12px 36px rgba(20, 30, 22, .16);
   --font: "Onest", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --radius: 10px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #141714; --surface: #1c201c; --surface-2: #252a25; --border: #333a33;
-    --text: #e6e9e3; --muted: #9aa195; --brand: #72b49f; --brand-ink: #0f231c; --brand-soft: #21352e;
-    --danger: #eb8a77; --danger-soft: #3a2420; --warn: #e0b452; --warn-soft: #383020;
-    --ok: #77c795; --ok-soft: #1e3427;
-    --g-sales: #85aae3; --g-sales-soft: #1f2a3a; --g-study: #c19ce3; --g-study-soft: #2c2437;
-    --g-job: #77c795; --g-job-soft: #1e3427; --g-closed: #9aa195; --g-closed-soft: #282c28;
-    --shadow: none; --overlay: rgba(0, 0, 0, .6);
+    --bg: #131613; --surface: #1b1f1b; --surface-2: #242924; --border: #313831;
+    --text: #e6e9e3; --muted: #99a094; --brand: #74b6a1; --brand-ink: #0f231c; --brand-soft: #20342d;
+    --danger: #ec8c79; --danger-soft: #3a2420; --warn: #e1b655; --warn-soft: #38301f;
+    --ok: #78c896; --ok-soft: #1e3427;
+    --g-sales: #86abe4; --g-sales-soft: #1f2a3a; --g-study: #c29ee4; --g-study-soft: #2c2437;
+    --g-job: #78c896; --g-job-soft: #1e3427; --g-closed: #99a094; --g-closed-soft: #282c28;
+    --overlay: rgba(0, 0, 0, .58); --pop: 0 12px 36px rgba(0, 0, 0, .5);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #141714; --surface: #1c201c; --surface-2: #252a25; --border: #333a33;
-  --text: #e6e9e3; --muted: #9aa195; --brand: #72b49f; --brand-ink: #0f231c; --brand-soft: #21352e;
-  --danger: #eb8a77; --danger-soft: #3a2420; --warn: #e0b452; --warn-soft: #383020;
-  --ok: #77c795; --ok-soft: #1e3427;
-  --g-sales: #85aae3; --g-sales-soft: #1f2a3a; --g-study: #c19ce3; --g-study-soft: #2c2437;
-  --g-job: #77c795; --g-job-soft: #1e3427; --g-closed: #9aa195; --g-closed-soft: #282c28;
-  --shadow: none; --overlay: rgba(0, 0, 0, .6);
+  --bg: #131613; --surface: #1b1f1b; --surface-2: #242924; --border: #313831;
+  --text: #e6e9e3; --muted: #99a094; --brand: #74b6a1; --brand-ink: #0f231c; --brand-soft: #20342d;
+  --danger: #ec8c79; --danger-soft: #3a2420; --warn: #e1b655; --warn-soft: #38301f;
+  --ok: #78c896; --ok-soft: #1e3427;
+  --g-sales: #86abe4; --g-sales-soft: #1f2a3a; --g-study: #c29ee4; --g-study-soft: #2c2437;
+  --g-job: #78c896; --g-job-soft: #1e3427; --g-closed: #99a094; --g-closed-soft: #282c28;
+  --overlay: rgba(0, 0, 0, .58); --pop: 0 12px 36px rgba(0, 0, 0, .5);
   color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 html, body { min-height: 100%; }
+html.locked { overflow: hidden; }
 body { background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); }
 a { color: var(--brand); }
-h1 { font-size: 22px; line-height: 1.25; margin: 0; font-weight: 650; letter-spacing: -.01em; text-wrap: balance; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
-h3 { font-size: 13px; margin: 16px 0 6px; font-weight: 600; }
-h1 small, h2 small, h3 small { color: var(--muted); font-weight: 400; font-size: 13px; }
+h1 { font-size: 24px; line-height: 1.2; margin: 0; font-weight: 650; letter-spacing: -.015em; text-wrap: balance; }
+h1 small { color: var(--muted); font-weight: 400; font-size: 15px; letter-spacing: 0; }
+h2 { font-size: 15px; margin: 0; font-weight: 600; }
 p { margin: 0; }
 .muted { color: var(--muted); }
 .right { margin-left: auto; }
 .pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-.empty { color: var(--muted); padding: 14px 0; text-align: center; }
+.empty { color: var(--muted); padding: 14px 16px; }
 .hint { color: var(--muted); font-size: 12.5px; }
 .danger-text { color: var(--danger); }
 .warn-text { color: var(--warn); }
-:focus-visible, .tabs button:focus-visible, .link:focus-visible, .back:focus-visible, .x:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+:focus-visible, .tabs button:focus-visible, .link:focus-visible, .x:focus-visible, .nav button:focus-visible, .seg button:focus-visible, .chk:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 /* Каркас */
-.layout { display: grid; grid-template-columns: 212px minmax(0, 1fr); min-height: 100vh; background: linear-gradient(to right, var(--surface) 211px, var(--border) 211px, var(--border) 212px, var(--bg) 212px); }
-.side {
-  background: var(--surface); border-right: 1px solid var(--border);
-  padding: 18px 12px; display: flex; flex-direction: column; gap: 18px;
-  position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; align-self: start;
-}
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; padding: 0 8px; font-size: 15px; }
-.brand-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; font-weight: 700; }
-.nav { display: flex; flex-direction: column; gap: 2px; }
-.nav button { all: unset; cursor: pointer; padding: 7px 10px; border-radius: 8px; color: var(--text); }
-.nav button:hover { background: var(--surface-2); }
+.layout { display: grid; grid-template-columns: 204px minmax(0, 1fr); min-height: 100vh; background: linear-gradient(to right, var(--surface) 203px, var(--border) 203px, var(--border) 204px, var(--bg) 204px); }
+.side { padding: 16px 10px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; align-self: start; min-width: 0; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 650; padding: 0 8px; font-size: 15px; }
+.brand-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--brand); color: var(--brand-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.gsearch { position: relative; }
+.gsearch input { background: var(--surface-2); border-color: transparent; padding: 6px 10px; }
+.gsearch input:focus { background: var(--surface); }
+#gq-res { position: absolute; z-index: 12; left: 0; top: calc(100% + 4px); width: max(100%, 280px); max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--pop); padding: 4px; }
+#gq-res button { all: unset; box-sizing: border-box; display: flex; gap: 8px; align-items: center; width: 100%; padding: 7px 8px; border-radius: 7px; cursor: pointer; }
+#gq-res button:hover, #gq-res button.on { background: var(--surface-2); }
+#gq-res .sub { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
+.nav { display: flex; flex-direction: column; gap: 1px; }
+.nav button { all: unset; box-sizing: border-box; cursor: pointer; padding: 6px 10px; border-radius: 7px; color: var(--muted); display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.nav button:hover { background: var(--surface-2); color: var(--text); }
 .nav button.on { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
-.nav button:focus-visible { outline: 2px solid var(--brand); }
-.side-foot { margin-top: auto; padding: 0 8px; font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+.nav .n { margin-left: auto; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--surface-2); color: var(--muted); border-radius: 99px; padding: 0 7px; line-height: 18px; }
+.nav .n.hot { background: var(--danger-soft); color: var(--danger); }
+.side-foot { margin-top: auto; padding: 0 8px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
 .dot.busy { background: var(--warn); }
-.main { padding: 22px 28px 48px; min-width: 0; }
-.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.main { padding: 24px 28px 56px; min-width: 0; }
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 16px; margin-bottom: 18px; flex-wrap: wrap; }
 .page-head > div { min-width: 0; }
 .page-head p { margin-top: 4px; }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.actions select { width: auto; }
 .back { all: unset; cursor: pointer; font-size: 13px; color: var(--muted); display: inline-block; margin-bottom: 4px; }
 .back:hover { color: var(--text); }
 
 /* Элементы */
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); min-width: 0; }
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--border);
-  background: var(--surface); color: var(--text); padding: 7px 12px; border-radius: 8px;
-  font: inherit; font-weight: 500; cursor: pointer; white-space: nowrap;
-}
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); min-width: 0; }
+.panel > header { display: flex; align-items: center; gap: 8px; padding: 12px 16px 10px; flex-wrap: wrap; }
+.panel > header h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+.panel > header .cnt { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.panel .pad { padding: 0 16px 14px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; min-width: 0; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 6px 12px; border-radius: 8px; font: inherit; font-weight: 500; cursor: pointer; white-space: nowrap; }
 .btn:hover { background: var(--surface-2); }
 .btn.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
 .btn.primary:hover { filter: brightness(1.08); }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
 .btn.ghost:hover { color: var(--text); background: var(--surface-2); }
 .btn.danger { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
-.btn.small { padding: 3px 9px; font-size: 12.5px; }
+.btn.small { padding: 2px 9px; font-size: 12.5px; }
 .btn:disabled { opacity: .5; cursor: default; }
-.badge, .tag { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 500; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.badge, .tag { display: inline-block; padding: 0 8px; border-radius: 99px; font-size: 12px; line-height: 20px; font-weight: 500; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
 .b-sales { background: var(--g-sales-soft); color: var(--g-sales); }
 .b-study { background: var(--g-study-soft); color: var(--g-study); }
 .b-job { background: var(--g-job-soft); color: var(--g-job); }
@@ -118,14 +125,13 @@ p { margin: 0; }
 .tag.ok, .tag.a-accepted, .tag.a-offer { background: var(--ok-soft); color: var(--ok); }
 .tag.danger, .tag.a-rejected { background: var(--danger-soft); color: var(--danger); }
 .tag.warn, .tag.a-interview, .tag.a-test { background: var(--warn-soft); color: var(--warn); }
-.avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-size: 10px; font-weight: 700; display: inline-grid; place-items: center; margin-left: auto; flex: none; }
-.banner { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border-radius: var(--radius); background: var(--warn-soft); color: var(--warn); margin-bottom: 16px; }
+.avatar { width: 20px; height: 20px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-size: 9.5px; font-weight: 700; display: inline-grid; place-items: center; margin-left: auto; flex: none; }
+.banner { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 9px 14px; border-radius: var(--radius); background: var(--warn-soft); color: var(--warn); margin-bottom: 16px; }
 .banner p { flex: 1 1 260px; }
+.link { all: unset; cursor: pointer; color: var(--brand); font-weight: 500; }
+.link:hover { text-decoration: underline; }
 
-input, select, textarea {
-  font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
-  border-radius: 8px; padding: 7px 10px; width: 100%; min-width: 0;
-}
+input, select, textarea { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; width: 100%; min-width: 0; }
 textarea { resize: vertical; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand-soft); border-color: var(--brand); }
 input[type=checkbox] { width: auto; accent-color: var(--brand); }
@@ -134,95 +140,144 @@ input[type=checkbox] { width: auto; accent-color: var(--brand); }
 .filters input[type=search] { flex: 1 1 220px; max-width: 280px; }
 .filters select { width: auto; max-width: 100%; }
 .check { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+.seg { display: inline-flex; background: var(--surface-2); border-radius: 9px; padding: 3px; gap: 2px; max-width: 100%; overflow-x: auto; }
+.seg button { all: unset; cursor: pointer; padding: 4px 12px; border-radius: 7px; color: var(--muted); font-weight: 500; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.seg button.on { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
+.seg .n { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 500; }
 .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); overflow-x: auto; }
 .tabs button { all: unset; cursor: pointer; padding: 8px 12px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .tabs button.on { color: var(--text); border-color: var(--brand); font-weight: 600; }
 
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
-th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12.5px; padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 8px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 8px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 tbody tr:last-child td { border-bottom: 0; }
+tbody tr.click { cursor: pointer; }
+tbody tr.click:hover td { background: var(--surface-2); }
 tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 600; }
 .compact th, .compact td { padding: 6px 8px; }
 .compact th:first-child, .compact td:first-child { padding-left: 0; }
-.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.compact th:last-child, .compact td:last-child { padding-right: 0; }
 .row-danger td { background: var(--danger-soft); }
 .row-actions { text-align: right; white-space: nowrap; }
-.link { all: unset; cursor: pointer; color: var(--brand); font-weight: 500; }
-.link:hover { text-decoration: underline; }
-.list { list-style: none; margin: 0; padding: 0; }
-.list li { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.list li:last-child { border-bottom: 0; }
+.sub { color: var(--muted); font-size: 12.5px; }
 
-/* Сводка */
-.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; box-shadow: var(--shadow); }
-.kpi.accent { border-color: var(--brand); background: var(--brand-soft); }
+/* Списки дел */
+.rows { list-style: none; margin: 0; padding: 0; }
+.rows li { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-top: 1px solid var(--border); min-width: 0; }
+.rows li.click { cursor: pointer; }
+.rows li.click:hover { background: var(--surface-2); }
+.rows li:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+.rows .who { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.rows .who strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rows .who span { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rows .when { color: var(--muted); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rows .when.late { color: var(--danger); font-weight: 600; }
+.rows .amt { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+.chk { all: unset; box-sizing: border-box; flex: none; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--muted); cursor: pointer; display: grid; place-items: center; }
+.chk:hover { border-color: var(--ok); background: var(--ok-soft); }
+.chk:hover::after { content: ""; width: 9px; height: 5px; border-left: 2px solid var(--ok); border-bottom: 2px solid var(--ok); transform: rotate(-45deg) translateY(-1px); }
+.today { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.allclear { padding: 22px 16px; color: var(--muted); border-top: 1px solid var(--border); }
+.allclear strong { color: var(--text); display: block; font-weight: 600; }
+
+/* Аналитика */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; }
+.kpi { padding: 14px 16px; display: flex; flex-direction: column; gap: 1px; box-shadow: 1px 0 0 var(--border), 0 1px 0 var(--border); min-width: 0; }
+.kpi.accent { background: var(--brand-soft); }
 .kpi-label { color: var(--muted); font-size: 12.5px; }
-.kpi-value { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.kpi-value { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .kpi-sub { color: var(--muted); font-size: 12px; }
-.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; margin-bottom: 16px; }
-.funnel { display: flex; flex-direction: column; gap: 6px; }
-.funnel-row { display: grid; grid-template-columns: minmax(96px, 150px) 1fr 74px; gap: 10px; align-items: center; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; margin-bottom: 16px; align-items: start; }
+.funnel { display: flex; flex-direction: column; gap: 7px; }
+.funnel-row { display: grid; grid-template-columns: minmax(96px, 160px) 1fr 74px; gap: 10px; align-items: center; }
 .funnel-label { font-size: 13px; }
-.funnel-bar { height: 10px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
+.funnel-bar { height: 8px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
 .funnel-bar > span { display: block; height: 100%; background: var(--brand); border-radius: 99px; min-width: 2px; }
 .funnel-num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .funnel-num small { color: var(--muted); font-weight: 400; }
 
 /* Доска */
-.board { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 12px; align-items: flex-start; }
-.col { flex: 0 0 232px; background: var(--surface-2); border-radius: var(--radius); display: flex; flex-direction: column; border-top: 3px solid var(--g-sales); max-height: calc(100vh - 200px); }
-.col.g-study { border-top-color: var(--g-study); }
-.col.g-job { border-top-color: var(--g-job); }
-.col.g-closed { border-top-color: var(--g-closed); }
-.col > header { display: flex; justify-content: space-between; gap: 8px; padding: 10px 12px 6px; font-weight: 600; font-size: 13px; }
-.count { color: var(--muted); font-weight: 500; }
-.col-body { padding: 4px 8px 10px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 64px; }
+.board-bar { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.board-bar .filters { margin: 0; }
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(232px, 1fr); gap: 10px; overflow-x: auto; padding-bottom: 12px; align-items: start; }
+.col { background: var(--surface-2); border-radius: var(--radius); display: flex; flex-direction: column; max-height: calc(100vh - 190px); min-width: 0; }
+.col > header { display: flex; align-items: center; gap: 8px; padding: 9px 8px 5px 12px; font-weight: 600; font-size: 13px; }
+.col > header::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--g-sales); flex: none; }
+.col.g-study > header::before { background: var(--g-study); }
+.col.g-job > header::before { background: var(--g-job); }
+.col.g-closed > header::before { background: var(--g-closed); }
+.count { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+.col-add { all: unset; cursor: pointer; margin-left: auto; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--muted); font-size: 17px; line-height: 1; }
+.col-add:hover { background: var(--surface); color: var(--text); }
+.col-body { padding: 4px 8px 10px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 56px; }
+.col-body .empty { padding: 8px 4px; font-size: 12.5px; }
 .col.drop { outline: 2px dashed var(--brand); outline-offset: -2px; }
-.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; display: flex; flex-direction: column; gap: 3px; cursor: grab; box-shadow: var(--shadow); }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; display: flex; flex-direction: column; gap: 3px; cursor: grab; min-width: 0; }
 .tile:hover { border-color: var(--brand); }
 .tile.alert { box-shadow: inset 3px 0 0 var(--danger); }
 .tile.dragging { opacity: .45; }
 .tile strong { font-weight: 600; font-size: 13.5px; }
 .tile-meta { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.tile-foot { display: flex; align-items: center; gap: 6px; font-size: 11.5px; margin-top: 2px; flex-wrap: wrap; }
+.tile-step { font-size: 12.5px; display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.tile-step .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tile-step .d { margin-left: auto; white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tile-step.late .d { color: var(--danger); font-weight: 600; }
+.tile-step.none { color: var(--warn); }
+.tile-foot { display: flex; align-items: center; gap: 6px; font-size: 11.5px; margin-top: 2px; flex-wrap: wrap; color: var(--muted); }
+.tile-move { display: none; width: auto; align-self: flex-start; padding: 2px 6px; font-size: 12px; border-radius: 6px; max-width: 100%; color: var(--muted); }
+@media (hover: none), (pointer: coarse) { .tile-move { display: block; } .tile { cursor: pointer; } }
 
-/* Карточка студента */
-.stepper { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 16px; }
-.step { border: 1px solid var(--border); background: var(--surface); color: var(--muted); font: inherit; font-size: 12.5px; padding: 5px 10px; border-radius: 99px; cursor: pointer; }
-.step:hover { color: var(--text); border-color: var(--brand); }
-.step.on { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 600; }
-.step.lost.on { background: var(--g-closed); border-color: var(--g-closed); }
-.detail { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 16px; align-items: start; }
-.stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.facts h2 { margin: 16px 0 8px; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
-.facts h2:first-child { margin-top: 0; }
-.facts dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; }
+/* Панель студента */
+#drawer[hidden] { display: none; }
+.scrim { position: fixed; inset: 0; background: var(--overlay); z-index: 14; }
+.drawer { position: fixed; z-index: 15; top: 0; right: 0; bottom: 0; width: min(600px, 100%); background: var(--bg); border-left: 1px solid var(--border); box-shadow: var(--pop); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
+.d-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px 12px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.d-head h2 { font-size: 18px; font-weight: 650; letter-spacing: -.01em; min-width: 0; overflow-wrap: anywhere; flex: 1; }
+.d-body { overflow-y: auto; padding: 16px 20px calc(28px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 14px; flex: 1; }
+.d-stage { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.d-stage select { width: auto; font-weight: 600; }
+.stepbox { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
+.stepbox .body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.stepbox .body span { color: var(--muted); font-size: 12.5px; }
+.stepbox.late { border-color: var(--danger); }
+.stepbox.late .body span { color: var(--danger); font-weight: 600; }
+.stepbox.none { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface); border-radius: 99px; padding: 3px 11px; font: inherit; font-size: 13px; color: var(--text); cursor: pointer; text-decoration: none; max-width: 100%; overflow-wrap: anywhere; }
+.chip:hover { border-color: var(--brand); }
+.chip small { color: var(--muted); font-size: 11.5px; }
+.facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 14px; margin: 0; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; overflow-wrap: anywhere; }
-.card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-.card-head h2 { margin: 0; }
-.note-form { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 8px; }
-.feed { list-style: none; margin: 0; padding: 0; }
-.feed li { padding: 10px 0; border-top: 1px solid var(--border); }
-.feed-head { display: flex; gap: 8px; font-size: 12.5px; margin-bottom: 2px; flex-wrap: wrap; }
-.timeline { list-style: none; margin: 0; padding: 0; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.sec > header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.sec > header h3 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+.sec .box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 14px; }
+.sec .box.flush { padding: 12px 14px; }
+.sec .box .empty { padding: 10px 0; }
+.note-form { display: flex; gap: 8px; align-items: flex-end; }
+.feed { list-style: none; margin: 8px 0 0; padding: 0; }
+.feed li { padding: 9px 0; border-top: 1px solid var(--border); }
+.feed li.auto p { color: var(--muted); }
+.feed-head { display: flex; gap: 8px; font-size: 12.5px; margin-bottom: 1px; flex-wrap: wrap; }
+.timeline { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+details > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 
 /* Окна */
 #modal[hidden] { display: none; }
 .overlay { position: fixed; inset: 0; background: var(--overlay); display: grid; place-items: start center; padding: max(24px, env(safe-area-inset-top, 0px)) 16px 24px; overflow-y: auto; z-index: 20; }
-.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 520px; box-shadow: 0 18px 48px rgba(0, 0, 0, .25); }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 480px; box-shadow: var(--pop); }
 .modal.wide { max-width: 760px; }
 .modal header { display: flex; align-items: center; gap: 12px; padding: 16px 20px 0; }
-.modal header h2 { margin: 0; flex: 1; font-size: 17px; }
-.x { all: unset; cursor: pointer; font-size: 22px; line-height: 1; color: var(--muted); padding: 2px 6px; border-radius: 6px; }
+.modal header h2 { flex: 1; font-size: 17px; overflow-wrap: anywhere; }
+.x { all: unset; cursor: pointer; font-size: 22px; line-height: 1; color: var(--muted); padding: 2px 7px; border-radius: 6px; }
 .x:hover { color: var(--text); background: var(--surface-2); }
 .mbody { padding: 14px 20px 4px; }
-.mbody fieldset { border: 0; padding: 0; margin: 0 0 14px; }
-.mbody legend { font-weight: 600; font-size: 13px; margin-bottom: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.fgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 10px 14px; }
+.mbody fieldset { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
+.mbody legend { font-weight: 600; font-size: 12px; margin-bottom: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; padding: 0; }
+.fgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 10px 14px; }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; min-width: 0; }
 .field > span { color: var(--muted); }
 .field.span2 { grid-column: 1 / -1; }
@@ -232,7 +287,9 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .merr { color: var(--danger); padding: 0 20px; }
 .modal footer { display: flex; gap: 8px; align-items: center; padding: 14px 20px 18px; flex-wrap: wrap; }
 .sp { flex: 1; }
-#toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 9px 16px; border-radius: 99px; font-size: 13px; z-index: 30; max-width: calc(100% - 32px); text-align: center; }
+#toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 8px 8px 16px; border-radius: 99px; font-size: 13px; z-index: 30; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 10px; }
+#toast span { padding-right: 8px; }
+#toast button { all: unset; cursor: pointer; font-weight: 600; padding: 2px 12px; border-radius: 99px; border: 1px solid currentColor; }
 #toast[hidden] { display: none; }
 
 .welcome { max-width: 640px; display: flex; flex-direction: column; gap: 14px; }
@@ -241,27 +298,42 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 
 @media (max-width: 860px) {
   .layout { grid-template-columns: minmax(0, 1fr); background: var(--bg); }
-  .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 10px 16px; gap: 8px 12px; border-right: 0; border-bottom: 1px solid var(--border); }
-  .nav { flex-direction: row; flex-wrap: wrap; }
-  .side-foot { margin: 0; flex-basis: 100%; }
-  .main { padding: 16px 16px 40px; }
-  .detail { grid-template-columns: minmax(0, 1fr); }
-  .col { max-height: none; flex-basis: 220px; }
+  .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 10px 16px; gap: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .brand { padding: 0; }
+  .gsearch { flex: 1 1 140px; }
+  .nav { flex-direction: row; flex-basis: 100%; overflow-x: auto; gap: 2px; margin: 0 -6px; }
+  .nav button { white-space: nowrap; }
+  .nav .n { margin-left: 0; }
+  .side-foot { display: none; }
+  .main { padding: 18px 16px 48px; }
+  .today { grid-template-columns: minmax(0, 1fr); }
+  .board { grid-auto-columns: minmax(78vw, 1fr); }
+  .col { max-height: none; }
+  .tile-move { display: block; }
   .filters input[type=search] { max-width: none; }
+  .d-body { padding-inline: 16px; }
+  .d-head { padding-left: 16px; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .tile, .btn, .step { transition: border-color .12s, background-color .12s; }
+  .tile, .btn, .chip, .chk { transition: border-color .12s, background-color .12s; }
+  .drawer.enter { animation: slide .16s ease-out; }
+  @keyframes slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 }
 </style>
 
 <div class="layout">
   <aside class="side">
     <div class="brand"><span class="brand-mark">М</span><span>CRM Менти</span></div>
+    <div class="gsearch" id="gsearch" hidden>
+      <input type="search" id="gq" placeholder="Найти студента" autocomplete="off" aria-label="Найти студента">
+      <div id="gq-res" hidden></div>
+    </div>
     <nav class="nav" id="nav"></nav>
     <div class="side-foot" id="sync"></div>
   </aside>
   <main class="main" id="main"><p class="loading">Загружаю базу…</p></main>
 </div>
+<div id="drawer" hidden></div>
 <div id="modal" hidden></div>
 <div id="toast" hidden></div>
 
@@ -278,10 +350,14 @@ const STAGES = [
 const SIDX = Object.fromEntries(STAGES.map((s, i) => [s[0], i]));
 const SLABEL = Object.fromEntries(STAGES.map(s => [s[0], s[1]]));
 const SGROUP = Object.fromEntries(STAGES.map(s => [s[0], s[2]]));
+const PIPES = [["sales", "Продажи"], ["study", "Обучение"], ["job", "Трудоустройство"], ["all", "Все"]];
 const EMPLOYED = ["offer", "probation_passed"];
 const APP_ST = [["applied", "Отклик"], ["hr", "Скрининг HR"], ["test", "Тестовое"], ["interview", "Собеседование"], ["offer", "Оффер"], ["accepted", "Оффер принят"], ["rejected", "Отказ"]];
 const APPL = Object.fromEntries(APP_ST);
 const COLS = ["students", "cohorts", "partners", "payouts", "team", "reports"];
+const VIEWS = ["today", "board", "students", "payments", "analytics", "partners", "settings"];
+const STEP_HINTS = ["Связаться", "Созвон", "Написать про оплату", "Проверить домашку", "Ревью резюме", "Узнать итог собеседования", "Спросить, как дела"];
+const MON = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
 // ---------- Утилиты ----------
 const $ = (s, r = document) => r.querySelector(s);
@@ -291,33 +367,49 @@ const money = v => (v === null || v === undefined || v === "" || isNaN(v)) ? "�
 const pad = n => String(n).padStart(2, "0");
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const today = () => dstr(new Date());
-const daysAhead = n => dstr(new Date(Date.now() + n * 864e5));
+const daysAhead = n => { const d = new Date(); d.setDate(d.getDate() + n); return dstr(d); };
 const fDate = s => s ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : "—";
 const fDay = s => s ? `${s.slice(8, 10)}.${s.slice(5, 7)}` : "";
+const fShort = s => s ? `${+s.slice(8, 10)} ${MON[+s.slice(5, 7) - 1]}` : "";
 const fDT = iso => { if (!iso) return ""; const d = new Date(iso); return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-const fLocalDT = s => s ? `${s.slice(8, 10)}.${s.slice(5, 7)} ${s.slice(11, 16)}` : "";
+const fLocalDT = s => s ? `${fShort(s.slice(0, 10))}, ${s.slice(11, 16)}` : "";
 const isoDay = iso => iso ? dstr(new Date(iso)) : "";
 const daysSince = iso => iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 864e5)) : 0;
 const daysBetween = (a, b) => Math.round((new Date(b + "T12:00") - new Date(a + "T12:00")) / 864e5);
 const pct = (a, b) => b ? Math.round(a * 100 / b) : 0;
 function plural(n, one, few, many) { n = Math.abs(n) % 100; const d = n % 10; if (n > 10 && n < 20) return many; if (d === 1) return one; if (d >= 2 && d <= 4) return few; return many; }
 const days = n => `${n} ${plural(n, "день", "дня", "дней")}`;
+// Подпись даты относительно сегодня: «сегодня», «завтра», «3 дн. назад», «5 окт»
+function dueLabel(date) {
+  const diff = daysBetween(today(), date);
+  if (diff === 0) return "сегодня";
+  if (diff === 1) return "завтра";
+  if (diff === -1) return "вчера";
+  if (diff < 0) return `${-diff} дн. назад`;
+  return fShort(date);
+}
 function addMonths(s, n) { const [y, m, d] = s.split("-").map(Number); const first = new Date(y, m - 1 + n, 1); const last = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate(); first.setDate(Math.min(d, last)); return dstr(first); }
 const initials = name => String(name || "").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
 const mask = name => { const p = String(name || "").split(/\s+/).filter(Boolean); return p.length >= 2 ? `${p[1]} ${p[0][0]}.` : (p[0] || ""); };
 const num = v => (v === null || v === undefined || v === "" || isNaN(v)) ? null : Number(v);
 const badge = st => `<span class="badge b-${SGROUP[st] || "sales"}">${esc(SLABEL[st] || st)}</span>`;
 const sortBy = (arr, f) => [...arr].sort((a, b) => { const x = f(a), y = f(b); return x < y ? -1 : x > y ? 1 : 0; });
+const sum = (arr, f) => arr.reduce((a, x) => a + (+f(x) || 0), 0);
+const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
 
 // ---------- Состояние ----------
 const S = {
   status: "loading", mode: "staff", db: null, user: null, myId: null, isOwner: false, canWrite: null, readOnly: false,
   data: { students: [], cohorts: [], partners: [], payouts: [], team: [], reports: [] }, loaded: {},
-  view: "dashboard", studentId: null, partnerId: null, reportId: null,
+  view: "today", openId: null, partnerId: null, reportId: null, pipe: "sales",
   f: { q: "", cohort: "", mentor: "", partner: "", stage: "" }, showLost: false, payTab: "overdue",
-  pending: 0, names: {}, drag: null, busy: false,
+  moreNoStep: false, histOpen: false, pending: 0, names: {}, drag: null, busy: false,
 };
-try { const v = localStorage.getItem("crm-menti-view"); if (["dashboard", "board", "students", "payments", "partners", "settings"].includes(v)) S.view = v; } catch (e) { }
+{
+  const v = lsGet("crm-menti-view"); if (VIEWS.includes(v)) S.view = v;
+  const p = lsGet("crm-menti-pipe"); if (PIPES.some(x => x[0] === p)) S.pipe = p;
+}
 
 const D = () => S.data;
 const stu = id => D().students.find(s => s.id === id);
@@ -332,9 +424,12 @@ function personName(uid) {
 }
 
 // ---------- Расчёты ----------
-const paidSum = s => (s.payments || []).filter(p => p.paid).reduce((a, p) => a + (+p.amount || 0), 0);
+const paidSum = s => sum((s.payments || []).filter(p => p.paid), p => p.amount);
 const debt = s => s.price ? Math.max(s.price - paidSum(s), 0) : null;
 const overdue = s => (s.payments || []).filter(p => !p.paid && p.due < today());
+const isActive = s => s.stage !== "lost" && s.stage !== "probation_passed";
+const hasStep = s => !!(s.next && s.next.text && s.next.date);
+const stepLate = s => hasStep(s) && s.next.date < today();
 const isStuck = s => !["new", "lost", "probation_passed"].includes(s.stage) && daysSince(s.stageAt) >= STUCK_DAYS;
 function reached(s) { let m = 0; for (const h of [...(s.history || []), { to: s.stage }]) { const i = SIDX[h.to]; if (h.to !== "lost" && i > m) m = i; } return m; }
 function funnel(list) {
@@ -342,66 +437,84 @@ function funnel(list) {
   return STAGES.filter(s => s[0] !== "lost").map((s, i) => { const c = r.filter(v => v >= i).length; return { label: s[1], count: c, pct: pct(c, list.length) }; });
 }
 function metrics(list) {
-  const t = today(), month = t.slice(0, 8) + "01", in14 = daysAhead(14), in7 = daysAhead(7);
+  const month = today().slice(0, 8) + "01";
   const by = st => list.filter(s => s.stage === st).length;
   const paidStudents = list.filter(s => paidSum(s) > 0).length;
   const graduates = list.filter(s => reached(s) >= SIDX.job_search).length;
   const employed = list.filter(s => EMPLOYED.includes(s.stage));
   const sal = employed.map(s => s.jobSalary).filter(Boolean);
   const dto = employed.filter(s => s.offerDate && s.createdAt).map(s => daysBetween(isoDay(s.createdAt), s.offerDate));
-  const pays = list.flatMap(s => (s.payments || []).map(p => ({ ...p, s })));
-  const paid = pays.filter(p => p.paid);
+  const paid = list.flatMap(s => (s.payments || []).filter(p => p.paid));
+  const lost = list.filter(s => s.stage === "lost");
+  const reasons = {};
+  for (const s of lost) { const k = (s.lostReason || "").trim() || "Причина не указана"; reasons[k] = (reasons[k] || 0) + 1; }
   return {
     total: list.length, paidStudents, conv: pct(paidStudents, list.length),
     studying: by("studying") + by("final_project"), jobSearch: by("job_search"),
     graduates, employed: employed.length, rate: pct(employed.length, graduates),
-    avgSalary: sal.length ? sal.reduce((a, b) => a + b, 0) / sal.length : null,
-    avgDays: dto.length ? Math.round(dto.reduce((a, b) => a + b, 0) / dto.length) : null,
-    revMonth: paid.filter(p => p.paid >= month).reduce((a, p) => a + (+p.amount || 0), 0),
-    revTotal: paid.reduce((a, p) => a + (+p.amount || 0), 0),
-    overdue: sortBy(pays.filter(p => !p.paid && p.due < t), p => p.due),
-    upcoming: sortBy(pays.filter(p => !p.paid && p.due >= t && p.due <= in14), p => p.due),
-    stuck: sortBy(list.filter(isStuck), s => s.stageAt).slice(0, 15),
-    interviews: sortBy(list.flatMap(s => (s.apps || []).filter(a => a.interview && a.interview.slice(0, 10) >= t && a.interview.slice(0, 10) <= in7 && !["rejected", "accepted"].includes(a.status)).map(a => ({ ...a, s }))), a => a.interview),
+    avgSalary: sal.length ? sum(sal, x => x) / sal.length : null,
+    avgDays: dto.length ? Math.round(sum(dto, x => x) / dto.length) : null,
+    revMonth: sum(paid.filter(p => p.paid >= month), p => p.amount), revTotal: sum(paid, p => p.amount),
+    stuck: sortBy(list.filter(isStuck), s => s.stageAt).slice(0, 12),
+    lost: lost.length, reasons: Object.entries(reasons).sort((a, b) => b[1] - a[1]),
     funnel: funnel(list),
+  };
+}
+// Что требует внимания: шаги, платежи, собеседования, студенты без шага
+function agenda(list) {
+  const t = today(), in3 = daysAhead(3), in7 = daysAhead(7);
+  const act = list.filter(isActive);
+  const stepped = sortBy(act.filter(hasStep), s => s.next.date);
+  const pays = list.filter(s => s.stage !== "lost").flatMap(s => (s.payments || []).filter(p => !p.paid).map(p => ({ ...p, s })));
+  const apps = act.flatMap(s => (s.apps || []).filter(a => a.interview && !["rejected", "accepted"].includes(a.status)).map(a => ({ ...a, s })));
+  return {
+    due: stepped.filter(s => s.next.date <= t),
+    week: stepped.filter(s => s.next.date > t && s.next.date <= in7),
+    noStep: sortBy(act.filter(s => !hasStep(s)), s => s.stageAt || ""),
+    pays: sortBy(pays.filter(p => p.due <= in3), p => p.due),
+    interviews: sortBy(apps.filter(a => a.interview.slice(0, 10) >= t && a.interview.slice(0, 10) <= in7), a => a.interview),
   };
 }
 function partnerStats(p) {
   const list = sortBy(D().students.filter(s => s.partnerId === p.id), s => s.createdAt).reverse();
   const rows = list.map(s => { const paid = paidSum(s); const share = Math.round(paid * (s.partnerShare ?? p.share ?? 0)) / 100; return { s, paid, share }; });
   const payouts = sortBy(D().payouts.filter(x => x.partnerId === p.id), x => x.date).reverse();
-  const accrued = rows.reduce((a, r) => a + r.share, 0);
-  const paidOut = payouts.reduce((a, x) => a + (+x.amount || 0), 0);
+  const accrued = sum(rows, r => r.share), paidOut = sum(payouts, x => x.amount);
   const paidStudents = rows.filter(r => r.paid > 0).length;
   return {
     list, rows, payouts, accrued, paidOut, balance: accrued - paidOut, leads: list.length, paidStudents,
     conv: pct(paidStudents, list.length), employed: list.filter(s => EMPLOYED.includes(s.stage)).length,
-    revenue: rows.reduce((a, r) => a + r.paid, 0), funnel: funnel(list),
+    revenue: sum(rows, r => r.paid), funnel: funnel(list),
   };
 }
 
 // ---------- Фильтры ----------
-function filtered() {
-  const f = S.f, q = f.q.trim().toLowerCase(), me = myTeam();
+// keys — какие фильтры действуют на этом экране; остальные не применяются
+function filtered(keys = ["q", "cohort", "mentor", "partner", "stage"]) {
+  const f = S.f, on = k => keys.includes(k), q = on("q") ? f.q.trim().toLowerCase() : "", me = myTeam();
   return D().students.filter(s => {
     if (q && ![s.name, s.phone, s.email, s.telegram].some(v => String(v || "").toLowerCase().includes(q))) return false;
-    if (f.cohort === "none" ? s.cohortId : (f.cohort && s.cohortId !== f.cohort)) return false;
-    if (f.mentor === "me" ? (!me || s.mentorId !== me.id) : (f.mentor && s.mentorId !== f.mentor)) return false;
-    if (f.partner === "none" ? s.partnerId : (f.partner && s.partnerId !== f.partner)) return false;
-    if (f.stage && s.stage !== f.stage) return false;
+    if (on("cohort") && (f.cohort === "none" ? s.cohortId : (f.cohort && s.cohortId !== f.cohort))) return false;
+    if (on("mentor") && (f.mentor === "me" ? (!me || s.mentorId !== me.id) : (f.mentor && s.mentorId !== f.mentor))) return false;
+    if (on("partner") && (f.partner === "none" ? s.partnerId : (f.partner && s.partnerId !== f.partner))) return false;
+    if (on("stage") && f.stage && s.stage !== f.stage) return false;
     return true;
   });
 }
 const opt = (v, l, cur) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(l)}</option>`;
-function filtersHTML({ stage = false, lost = false } = {}) {
-  const f = S.f, any = f.q || f.cohort || f.mentor || f.partner || f.stage;
+function mentorSelect() {
+  if (!D().team.length) return "";
+  return `<select id="f-mentor" data-filter="mentor" aria-label="Ментор">${opt("", "Все менторы", S.f.mentor)}${myTeam() ? opt("me", "Мои студенты", S.f.mentor) : ""}${D().team.map(m => opt(m.id, m.name, S.f.mentor)).join("")}</select>`;
+}
+function filtersHTML(keys, { lost = false } = {}) {
+  const f = S.f, on = k => keys.includes(k), any = keys.some(k => f[k]);
   return `<div class="filters">
-    <input type="search" id="f-q" placeholder="Поиск: имя, телефон, email" value="${esc(f.q)}" aria-label="Поиск">
-    <select id="f-cohort" data-filter="cohort" aria-label="Поток">${opt("", "Все потоки", f.cohort)}${sortBy(D().cohorts, c => c.start || "").reverse().map(c => opt(c.id, c.name, f.cohort)).join("")}${opt("none", "Без потока", f.cohort)}</select>
-    <select id="f-mentor" data-filter="mentor" aria-label="Ментор">${opt("", "Все менторы", f.mentor)}${myTeam() ? opt("me", "Мои студенты", f.mentor) : ""}${D().team.map(m => opt(m.id, m.name, f.mentor)).join("")}</select>
-    <select id="f-partner" data-filter="partner" aria-label="Источник">${opt("", "Все источники", f.partner)}${D().partners.map(p => opt(p.id, p.name, f.partner)).join("")}${opt("none", "Без партнёра", f.partner)}</select>
-    ${stage ? `<select id="f-stage" data-filter="stage" aria-label="Этап">${opt("", "Все этапы", f.stage)}${STAGES.map(s => opt(s[0], s[1], f.stage)).join("")}</select>` : ""}
-    ${lost ? `<label class="check"><input type="checkbox" id="f-lost" data-act="toggle-lost"${S.showLost ? " checked" : ""}> Показать выбывших</label>` : ""}
+    ${on("q") ? `<input type="search" id="f-q" placeholder="Имя, телефон, email" value="${esc(f.q)}" aria-label="Поиск по списку">` : ""}
+    ${on("cohort") && D().cohorts.length ? `<select id="f-cohort" data-filter="cohort" aria-label="Поток">${opt("", "Все потоки", f.cohort)}${sortBy(D().cohorts, c => c.start || "").reverse().map(c => opt(c.id, c.name, f.cohort)).join("")}${opt("none", "Без потока", f.cohort)}</select>` : ""}
+    ${on("mentor") ? mentorSelect() : ""}
+    ${on("partner") && D().partners.length ? `<select id="f-partner" data-filter="partner" aria-label="Источник">${opt("", "Все источники", f.partner)}${D().partners.map(p => opt(p.id, p.name, f.partner)).join("")}${opt("none", "Без партнёра", f.partner)}</select>` : ""}
+    ${on("stage") ? `<select id="f-stage" data-filter="stage" aria-label="Этап">${opt("", "Все этапы", f.stage)}${STAGES.map(s => opt(s[0], s[1], f.stage)).join("")}</select>` : ""}
+    ${lost ? `<label class="check"><input type="checkbox" id="f-lost" data-act="toggle-lost"${S.showLost ? " checked" : ""}> Выбывшие</label>` : ""}
     ${any ? `<button class="btn ghost" data-act="freset">Сбросить</button>` : ""}
   </div>`;
 }
@@ -412,10 +525,20 @@ function scheduleRender() { if (rq) return; rq = true; requestAnimationFrame(() 
 function render() {
   const active = document.activeElement, aid = active?.id, sel = active && "selectionStart" in active ? [active.selectionStart, active.selectionEnd] : null;
   const kept = {}; document.querySelectorAll("[data-keep]").forEach(el => kept[el.id] = el.value);
+  const boardX = $("#board")?.scrollLeft, drawerY = $("#d-body")?.scrollTop;
+  const ready = S.status === "ready" && S.mode === "staff";
+  $("#gsearch").hidden = !ready;
   $("#nav").innerHTML = navHTML();
   $("#main").innerHTML = mainHTML();
+  const open = ready && S.openId && stu(S.openId);
+  if (S.openId && !open && S.loaded.students) S.openId = null;
+  $("#drawer").innerHTML = open ? drawerHTML(open) : "";
+  $("#drawer").hidden = !open;
+  document.documentElement.classList.toggle("locked", !!open);
   for (const [id, v] of Object.entries(kept)) { const el = document.getElementById(id); if (el) el.value = v; }
-  if (aid && aid !== "mform" && !aid.startsWith("m-")) { const el = document.getElementById(aid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) { } } }
+  if (boardX && $("#board")) $("#board").scrollLeft = boardX;
+  if (drawerY && $("#d-body")) $("#d-body").scrollTop = drawerY;
+  if (aid && aid !== "mform" && aid !== "gq" && !aid.startsWith("m-")) { const el = document.getElementById(aid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) { } } }
   renderSync();
   resolveNames();
 }
@@ -423,14 +546,15 @@ function renderSync() {
   const el = $("#sync"); if (!el) return;
   if (S.status !== "ready") { el.innerHTML = ""; return; }
   if (S.readOnly || S.mode === "partner") { el.innerHTML = `<span class="dot"></span>Только просмотр`; return; }
-  el.innerHTML = S.pending ? `<span class="dot busy"></span>Сохраняю…` : `<span class="dot"></span>Все изменения сохранены`;
+  el.innerHTML = S.pending ? `<span class="dot busy"></span>Сохраняю…` : `<span class="dot"></span>Изменения сохранены`;
 }
 function navHTML() {
   if (S.status !== "ready") return "";
   if (S.mode === "partner") return `<button class="on">Отчёт</button>`;
-  const items = [["dashboard", "Сводка"], ["board", "Воронка"], ["students", "Студенты"], ["payments", "Платежи"], ["partners", "Партнёры"], ["settings", "Настройки"]];
-  const cur = S.view === "student" ? "students" : S.view === "partner" ? "partners" : S.view;
-  return items.map(([v, l]) => `<button data-act="nav" data-v="${v}" class="${cur === v ? "on" : ""}">${l}</button>`).join("");
+  const ag = agenda(D().students), late = ag.pays.filter(p => p.due < today()).length;
+  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["board", "Воронка"], ["students", "Студенты"], ["payments", "Платежи", late, true], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"]];
+  const cur = S.view === "partner" ? "partners" : S.view;
+  return items.map(([v, l, n, hot]) => `<button data-act="nav" data-v="${v}" class="${cur === v ? "on" : ""}"${cur === v ? ' aria-current="page"' : ""}>${l}${n ? `<span class="n${hot ? " hot" : ""}">${n}</span>` : ""}</button>`).join("");
 }
 function mainHTML() {
   if (S.status === "loading") return `<p class="loading">Загружаю базу…</p>`;
@@ -440,55 +564,62 @@ function mainHTML() {
   const need = ["students", "cohorts", "partners", "team"];
   if (!need.every(c => S.loaded[c])) return `<p class="loading">Загружаю базу…</p>`;
   const ro = S.readOnly ? `<div class="banner"><p>У вас доступ только для просмотра. Чтобы вносить изменения, попросите владельца выдать права редактора.</p></div>` : "";
-  const v = { dashboard: dashboardView, board: boardView, students: listView, student: studentView, payments: paymentsView, partners: partnersView, partner: partnerView, settings: settingsView }[S.view] || dashboardView;
+  const v = { today: todayView, board: boardView, students: listView, payments: paymentsView, analytics: analyticsView, partners: partnersView, partner: partnerView, settings: settingsView }[S.view] || todayView;
   return ro + v();
 }
-
-function headHTML(title, extra = "", actions = "") {
-  return `<header class="page-head"><div>${extra}<h1>${title}</h1></div><div class="actions">${actions}</div></header>`;
+function headHTML(title, extra = "", actions = "", sub = "") {
+  return `<header class="page-head"><div>${extra}<h1>${title}</h1>${sub ? `<p class="muted">${sub}</p>` : ""}</div><div class="actions">${actions}</div></header>`;
 }
-const addBtn = `<button class="btn primary" data-act="student-new">+ Студент</button>`;
+const addBtn = `<button class="btn primary" data-act="quick">+ Заявка</button>`;
+const demoBanner = () => D().students.some(s => s.demo) ? `<div class="banner"><p>В базе лежат примерные данные, чтобы было видно, как всё работает. Перед началом работы удалите их.</p><button class="btn small" data-act="demo-clear">Удалить примеры</button></div>` : "";
+const panel = (title, count, body, extra = "") => `<section class="panel"><header><h2>${title}</h2>${count !== "" ? `<span class="cnt">${count}</span>` : ""}<span class="right"></span>${extra}</header>${body}</section>`;
 
-// ----- Сводка -----
-function dashboardView() {
+// ----- Сегодня -----
+function stepRow(s) {
+  const late = stepLate(s);
+  return `<li class="click" data-act="open" data-id="${esc(s.id)}">
+    <button class="chk" data-act="step-done" data-id="${esc(s.id)}" aria-label="Отметить выполненным: ${esc(s.next.text)}" title="Выполнено"></button>
+    <span class="who"><strong>${esc(s.name)}</strong><span>${esc(s.next.text)}</span></span>
+    ${badge(s.stage)}<span class="when${late ? " late" : ""}">${dueLabel(s.next.date)}</span></li>`;
+}
+function todayView() {
   if (!D().students.length) return welcomeView();
-  const m = metrics(filtered());
-  const demo = D().students.some(s => s.demo);
-  return headHTML("Сводка", "", addBtn) +
-    (demo ? `<div class="banner"><p>В базе лежат примерные данные, чтобы было видно, как всё работает. Перед началом работы удалите их.</p><button class="btn small" data-act="demo-clear">Удалить примеры</button></div>` : "") +
-    filtersHTML() + `
-  <section class="kpis">
-    <div class="kpi"><span class="kpi-label">Всего в базе</span><span class="kpi-value">${m.total}</span></div>
-    <div class="kpi"><span class="kpi-label">Оплатили</span><span class="kpi-value">${m.paidStudents}</span><span class="kpi-sub">${m.conv}% от заявок</span></div>
-    <div class="kpi"><span class="kpi-label">Учатся сейчас</span><span class="kpi-value">${m.studying}</span><span class="kpi-sub">в поиске работы: ${m.jobSearch}</span></div>
-    <div class="kpi"><span class="kpi-label">Трудоустроены</span><span class="kpi-value">${m.employed}</span><span class="kpi-sub">${m.rate}% из вышедших на поиск (${m.graduates})</span></div>
-    <div class="kpi"><span class="kpi-label">Средняя зарплата</span><span class="kpi-value">${money(m.avgSalary)}</span><span class="kpi-sub">${m.avgDays !== null ? `~${days(m.avgDays)} от заявки до оффера` : "пока нет офферов"}</span></div>
-    <div class="kpi"><span class="kpi-label">Выручка за месяц</span><span class="kpi-value">${money(m.revMonth)}</span><span class="kpi-sub">всего: ${money(m.revTotal)}</span></div>
-  </section>
-  <div class="grid-2">
-    <section class="card"><h2>Воронка: сколько дошли до этапа</h2>${funnelHTML(m.funnel)}</section>
-    <section class="card"><h2>Требуют внимания <small>без движения ${STUCK_DAYS}+ дней</small></h2>
-      ${m.stuck.length ? `<ul class="list">${m.stuck.map(s => `<li><button class="link" data-act="open" data-id="${s.id}">${esc(s.name)}</button>${badge(s.stage)}<span class="muted right">${days(daysSince(s.stageAt))}</span></li>`).join("")}</ul>` : `<p class="empty">Все в движении</p>`}
-    </section>
-    <section class="card"><h2>Просроченные платежи <small>${money(m.overdue.reduce((a, p) => a + (+p.amount || 0), 0))}</small></h2>
-      ${m.overdue.length ? `<ul class="list">${m.overdue.map(p => `<li><button class="link" data-act="open" data-id="${p.s.id}">${esc(p.s.name)}</button><span class="danger-text">${money(p.amount)}</span><span class="muted right">срок ${fDay(p.due)}</span></li>`).join("")}</ul>` : `<p class="empty">Просрочек нет</p>`}
-      ${m.upcoming.length ? `<h3>Ближайшие 14 дней <small>${money(m.upcoming.reduce((a, p) => a + (+p.amount || 0), 0))}</small></h3><ul class="list">${m.upcoming.map(p => `<li><button class="link" data-act="open" data-id="${p.s.id}">${esc(p.s.name)}</button>${money(p.amount)}<span class="muted right">${fDay(p.due)}</span></li>`).join("")}</ul>` : ""}
-    </section>
-    <section class="card"><h2>Собеседования на неделе</h2>
-      ${m.interviews.length ? `<ul class="list">${m.interviews.map(a => `<li><button class="link" data-act="open" data-id="${a.s.id}">${esc(a.s.name)}</button><span>${esc(a.company)}</span><span class="muted right">${fLocalDT(a.interview)}</span></li>`).join("")}</ul>` : `<p class="empty">Собеседований не запланировано</p>`}
-    </section>
+  const list = filtered(["mentor"]), ag = agenda(list), t = today();
+  const act = list.filter(isActive), g = k => act.filter(s => SGROUP[s.stage] === k).length;
+  const dateLine = new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
+  const sub = `${dateLine} · в продажах ${g("sales")} · учатся ${g("study")} · ищут работу ${g("job")}`;
+  const noStep = S.moreNoStep ? ag.noStep : ag.noStep.slice(0, 6);
+  const dueBody = ag.due.length ? `<ul class="rows">${ag.due.map(stepRow).join("")}</ul>`
+    : `<div class="allclear"><strong>На сегодня шагов нет</strong>${ag.noStep.length ? "Назначьте следующий шаг студентам из списка «Без следующего шага»." : "Все студенты под контролем."}</div>`;
+  return headHTML("Сегодня", "", mentorSelect() + addBtn, sub) + demoBanner() + `
+  <div class="today">
+    <div class="stack">
+      ${panel("Сделать", ag.due.length || "", dueBody)}
+      ${ag.week.length ? panel("На неделе", ag.week.length, `<ul class="rows">${ag.week.map(stepRow).join("")}</ul>`) : ""}
+    </div>
+    <div class="stack">
+      ${panel("Платежи", ag.pays.length ? money(sum(ag.pays, p => p.amount)) : "", ag.pays.length ? `<ul class="rows">${ag.pays.map(p => `<li class="click" data-act="open" data-id="${esc(p.s.id)}">
+          <span class="who"><strong>${esc(p.s.name)}</strong><span>${esc(p.comment || "Платёж")}</span></span>
+          <span class="amt">${money(p.amount)}</span><span class="when${p.due < t ? " late" : ""}">${dueLabel(p.due)}</span>
+          <button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button></li>`).join("")}</ul>`
+        : `<p class="empty">Просрочек и платежей на ближайшие три дня нет</p>`)}
+      ${ag.interviews.length ? panel("Собеседования на неделе", ag.interviews.length, `<ul class="rows">${ag.interviews.map(a => `<li class="click" data-act="open" data-id="${esc(a.s.id)}">
+          <span class="who"><strong>${esc(a.s.name)}</strong><span>${esc(a.company)}${a.position ? " · " + esc(a.position) : ""}</span></span>
+          <span class="when">${fLocalDT(a.interview)}</span></li>`).join("")}</ul>`) : ""}
+      ${ag.noStep.length ? panel("Без следующего шага", ag.noStep.length, `<ul class="rows">${noStep.map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
+          <span class="who"><strong>${esc(s.name)}</strong><span>${days(daysSince(s.stageAt))} на этапе</span></span>
+          ${badge(s.stage)}<button class="btn small" data-act="step-edit" data-id="${esc(s.id)}">Назначить</button></li>`).join("")}
+          ${ag.noStep.length > 6 ? `<li><button class="link" data-act="more-nostep">${S.moreNoStep ? "Свернуть" : `Показать всех: ещё ${ag.noStep.length - 6}`}</button></li>` : ""}</ul>`) : ""}
+    </div>
   </div>`;
-}
-function funnelHTML(rows) {
-  return `<div class="funnel">${rows.map(r => `<div class="funnel-row"><span class="funnel-label">${esc(r.label)}</span><span class="funnel-bar"><span style="width:${r.pct}%"></span></span><span class="funnel-num">${r.count} <small>${r.pct}%</small></span></div>`).join("")}</div>`;
 }
 function welcomeView() {
   return `<div class="card welcome">
     <h1>База пока пустая</h1>
-    <p>Здесь вы будете вести каждого человека от заявки до оффера: этапы, платежи, отклики, заметки и расчёт с партнёром. Всё сохраняется автоматически и видно всем, у кого есть доступ к странице.</p>
+    <p>Здесь вы ведёте каждого человека от заявки до оффера. У каждого студента есть следующий шаг с датой, а экран «Сегодня» собирает всё, что нужно сделать: кому написать, чей платёж подошёл, у кого собеседование.</p>
     <ol>
       <li>В <button class="link" data-act="nav" data-v="settings">настройках</button> заведите потоки, менторов и партнёра-блогера.</li>
-      <li>Добавьте студентов. Этап меняется перетаскиванием карточки на доске.</li>
+      <li>Добавляйте заявки. Этап меняется перетаскиванием карточки на доске.</li>
       <li>В карточке студента ведите платежи, отклики и заметки.</li>
     </ol>
     <div class="actions">${addBtn}<button class="btn" data-act="demo-load">Посмотреть на примере</button></div>
@@ -496,116 +627,147 @@ function welcomeView() {
   </div>`;
 }
 
+// ----- Аналитика -----
+function funnelHTML(rows) {
+  return `<div class="funnel">${rows.map(r => `<div class="funnel-row"><span class="funnel-label">${esc(r.label)}</span><span class="funnel-bar"><span style="width:${Math.max(0, Math.min(100, +r.pct || 0))}%"></span></span><span class="funnel-num">${esc(r.count)} <small>${esc(r.pct)}%</small></span></div>`).join("")}</div>`;
+}
+function analyticsView() {
+  const keys = ["cohort", "mentor", "partner"], m = metrics(filtered(keys));
+  return headHTML("Аналитика") + filtersHTML(keys) + `
+  <section class="kpis">
+    <div class="kpi"><span class="kpi-label">Всего заявок</span><span class="kpi-value">${m.total}</span></div>
+    <div class="kpi"><span class="kpi-label">Оплатили</span><span class="kpi-value">${m.paidStudents}</span><span class="kpi-sub">${m.conv}% от заявок</span></div>
+    <div class="kpi"><span class="kpi-label">Учатся сейчас</span><span class="kpi-value">${m.studying}</span><span class="kpi-sub">в поиске работы: ${m.jobSearch}</span></div>
+    <div class="kpi"><span class="kpi-label">Трудоустроены</span><span class="kpi-value">${m.employed}</span><span class="kpi-sub">${m.rate}% из вышедших на поиск (${m.graduates})</span></div>
+    <div class="kpi"><span class="kpi-label">Средняя зарплата</span><span class="kpi-value">${money(m.avgSalary)}</span><span class="kpi-sub">${m.avgDays !== null ? `~${days(m.avgDays)} от заявки до оффера` : "пока нет офферов"}</span></div>
+    <div class="kpi"><span class="kpi-label">Выручка за месяц</span><span class="kpi-value">${money(m.revMonth)}</span><span class="kpi-sub">всего: ${money(m.revTotal)}</span></div>
+  </section>
+  <div class="grid-2">
+    ${panel("Сколько дошли до этапа", "", `<div class="pad">${funnelHTML(m.funnel)}</div>`)}
+    <div class="stack">
+      ${panel(`Давно на одном этапе`, m.stuck.length || "", m.stuck.length ? `<ul class="rows">${m.stuck.map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}"><span class="who"><strong>${esc(s.name)}</strong></span>${badge(s.stage)}<span class="when">${days(daysSince(s.stageAt))}</span></li>`).join("")}</ul>` : `<p class="empty">Никто не стоит дольше ${STUCK_DAYS} дней</p>`)}
+      ${m.lost ? panel("Почему уходят", m.lost, `<ul class="rows">${m.reasons.map(([k, n]) => `<li><span class="who"><strong>${esc(k)}</strong></span><span class="when">${n}</span></li>`).join("")}</ul>`) : ""}
+    </div>
+  </div>`;
+}
+
 // ----- Воронка -----
 function boardView() {
-  const list = filtered();
-  const cols = STAGES.filter(s => S.showLost || s[0] !== "lost").map(([st, label, g]) => {
-    const items = sortBy(list.filter(s => s.stage === st), s => s.stageAt || "");
-    return `<section class="col g-${g}" data-stage="${st}"><header><span>${label}</span><span class="count">${items.length}</span></header>
-      <div class="col-body">${items.map(tileHTML).join("") || `<p class="empty">—</p>`}</div></section>`;
+  const keys = ["cohort", "mentor", "partner"], list = filtered(keys);
+  const inPipe = k => list.filter(s => k === "all" ? s.stage !== "lost" : SGROUP[s.stage] === k).length;
+  const stages = STAGES.filter(s => (S.pipe === "all" ? s[2] !== "closed" : s[2] === S.pipe) || (S.showLost && s[0] === "lost"));
+  const cols = stages.map(([st, label, g]) => {
+    const items = sortBy(list.filter(s => s.stage === st), s => (hasStep(s) ? s.next.date : "9999") + (s.stageAt || ""));
+    return `<section class="col g-${g}" data-stage="${st}"><header><span>${label}</span><span class="count">${items.length}</span>${st !== "lost" ? `<button class="col-add" data-act="quick" data-st="${st}" aria-label="Добавить в «${label}»" title="Добавить">+</button>` : ""}</header>
+      <div class="col-body">${items.map(tileHTML).join("") || `<p class="empty">Пусто</p>`}</div></section>`;
   }).join("");
-  return headHTML("Воронка", "", addBtn) + filtersHTML({ lost: true }) +
-    `<p class="hint" style="margin-bottom:10px">Перетащите карточку в другую колонку, чтобы сменить этап. Красная полоса: нет движения больше ${STUCK_DAYS} дней или просрочен платёж.</p>
-    <div class="board" id="board">${cols}</div>`;
+  return headHTML("Воронка", "", addBtn) + `
+  <div class="board-bar">
+    <div class="seg" role="tablist">${PIPES.map(([k, l]) => `<button data-act="pipe" data-v="${k}" class="${S.pipe === k ? "on" : ""}" role="tab" aria-selected="${S.pipe === k}">${l}<span class="n">${inPipe(k)}</span></button>`).join("")}</div>
+    ${filtersHTML(keys, { lost: true })}
+  </div>
+  <div class="board" id="board">${cols}</div>`;
 }
 function tileHTML(s) {
-  const od = overdue(s).length > 0, alert = od || isStuck(s);
+  const od = overdue(s).length > 0, late = stepLate(s);
   const meta = [cohortName(s.cohortId), partnerById(s.partnerId)?.name].filter(Boolean).join(" · ");
   const mentor = teamName(s.mentorId);
-  return `<div class="tile${alert ? " alert" : ""}" draggable="${S.readOnly ? "false" : "true"}" data-act="open" data-id="${s.id}" tabindex="0">
-    <strong>${esc(s.name)}</strong>${meta ? `<span class="tile-meta">${esc(meta)}</span>` : ""}
-    <span class="tile-foot"><span class="muted">${daysSince(s.stageAt)} дн. на этапе</span>${od ? `<span class="tag danger">просрочка</span>` : ""}${s.demo ? `<span class="tag">пример</span>` : ""}${mentor ? `<span class="avatar" title="${esc(mentor)}">${esc(initials(mentor))}</span>` : ""}</span>
+  const step = hasStep(s) ? `<span class="tile-step${late ? " late" : ""}"><span class="t">${esc(s.next.text)}</span><span class="d">${dueLabel(s.next.date)}</span></span>`
+    : isActive(s) ? `<span class="tile-step none">Нет следующего шага</span>` : "";
+  return `<div class="tile${od || late ? " alert" : ""}" draggable="${S.readOnly ? "false" : "true"}" data-act="open" data-id="${esc(s.id)}" tabindex="0" role="button" aria-label="${esc(s.name)}">
+    <strong>${esc(s.name)}</strong>${meta ? `<span class="tile-meta">${esc(meta)}</span>` : ""}${step}
+    <span class="tile-foot"><span>${daysSince(s.stageAt)} дн. на этапе</span>${od ? `<span class="tag danger">просрочен платёж</span>` : ""}${s.demo ? `<span class="tag">пример</span>` : ""}${mentor ? `<span class="avatar" title="${esc(mentor)}">${esc(initials(mentor))}</span>` : ""}</span>
+    <select class="tile-move" data-move="${esc(s.id)}" data-stop aria-label="Сменить этап">${STAGES.map(x => opt(x[0], x[1], s.stage)).join("")}</select>
   </div>`;
 }
 
 // ----- Список -----
 function listView() {
-  const list = sortBy(filtered(), s => s.createdAt || "").reverse();
-  return headHTML(`Студенты <small>${list.length}</small>`, "", `<button class="btn" data-act="csv">Выгрузить в CSV</button>${addBtn}`) +
-    filtersHTML({ stage: true }) + `
-  <div class="card table-wrap" style="padding:4px 0"><table>
-    <thead><tr><th>ФИО</th><th>Этап</th><th>Поток</th><th>Ментор</th><th>Источник</th><th class="num">Оплачено</th><th class="num">Цена</th><th>Контакт</th><th>Заявка</th></tr></thead>
-    <tbody>${list.map(s => `<tr>
-      <td><button class="link" data-act="open" data-id="${s.id}">${esc(s.name)}</button>${isStuck(s) ? ` <span class="tag warn">стоит ${daysSince(s.stageAt)} дн.</span>` : ""}</td>
-      <td>${badge(s.stage)}</td><td>${esc(cohortName(s.cohortId) || "—")}</td><td>${esc(teamName(s.mentorId) || "—")}</td>
+  const keys = ["q", "cohort", "mentor", "partner", "stage"], list = sortBy(filtered(keys), s => s.createdAt || "").reverse();
+  return headHTML(`Студенты <small>${list.length}</small>`, "", `<button class="btn" data-act="csv">Выгрузить в CSV</button>${addBtn}`) + filtersHTML(keys) + `
+  <div class="panel table-wrap"><table>
+    <thead><tr><th>Студент</th><th>Этап</th><th>Следующий шаг</th><th>Поток</th><th>Ментор</th><th>Источник</th><th class="num">Оплачено</th></tr></thead>
+    <tbody>${list.map(s => `<tr class="click" data-act="open" data-id="${esc(s.id)}">
+      <td><strong>${esc(s.name)}</strong><div class="sub">${esc(s.telegram || s.phone || s.email || "")}</div></td>
+      <td>${badge(s.stage)}</td>
+      <td>${hasStep(s) ? `${esc(s.next.text)} <span class="sub${stepLate(s) ? " danger-text" : ""}">· ${dueLabel(s.next.date)}</span>` : isActive(s) ? `<span class="warn-text">не назначен</span>` : `<span class="muted">—</span>`}</td>
+      <td>${esc(cohortName(s.cohortId) || "—")}</td><td>${esc(teamName(s.mentorId) || "—")}</td>
       <td>${esc(partnerById(s.partnerId)?.name || s.utmSource || "—")}</td>
-      <td class="num">${money(paidSum(s))}</td><td class="num">${money(s.price)}</td>
-      <td class="muted">${esc(s.telegram || s.phone || s.email || "")}</td><td class="muted">${fDate(isoDay(s.createdAt))}</td>
-    </tr>`).join("") || `<tr><td colspan="9" class="empty">Никого не нашли</td></tr>`}</tbody>
+      <td class="num">${s.price ? `${money(paidSum(s))} <span class="sub">из ${money(s.price)}</span>` : money(paidSum(s) || null)}</td>
+    </tr>`).join("") || `<tr><td colspan="7" class="empty">Никого не нашли. Измените фильтры или добавьте заявку.</td></tr>`}</tbody>
   </table></div>`;
 }
 
-// ----- Карточка студента -----
-function studentView() {
-  const s = stu(S.studentId);
-  if (!s) return headHTML("Студент не найден", `<button class="back" data-act="nav" data-v="board">← Воронка</button>`) + `<p class="muted">Возможно, запись удалили.</p>`;
-  const p = partnerById(s.partnerId), d = debt(s), t = today();
-  const pays = sortBy(s.payments || [], x => x.due);
+// ----- Панель студента -----
+function paySection(s) {
+  const t = today(), pays = sortBy(s.payments || [], x => x.due);
+  return `<section class="sec"><header><h3>Платежи</h3><span class="sub">${s.price ? `${money(paidSum(s))} из ${money(s.price)}` : pays.length ? money(paidSum(s)) : ""}</span><span class="right"></span>
+      <button class="btn small" data-act="pay-new" data-id="${esc(s.id)}">+ Платёж</button><button class="btn small" data-act="pay-plan" data-id="${esc(s.id)}">+ Рассрочка</button></header>
+    <div class="box">${pays.length ? `<div class="table-wrap"><table class="compact"><tbody>
+      ${pays.map(x => { const od = !x.paid && x.due < t; return `<tr><td>${fShort(x.due)}${x.comment ? `<div class="sub">${esc(x.comment)}</div>` : ""}</td><td class="num">${money(x.amount)}</td>
+        <td>${x.paid ? `<span class="tag ok">оплачен ${fDay(x.paid)}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
+        <td class="row-actions">${x.paid ? "" : `<button class="btn small" data-act="pay-done" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Оплачен</button> `}<button class="btn small ghost" data-act="pay-edit" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Изменить</button></td></tr>`; }).join("")}
+    </tbody></table></div>` : `<p class="empty">Платежей пока нет</p>`}</div></section>`;
+}
+function appSection(s) {
   const apps = sortBy(s.apps || [], a => a.date || "").reverse();
+  return `<section class="sec"><header><h3>Трудоустройство</h3><span class="sub">${apps.length ? `${apps.length} ${plural(apps.length, "отклик", "отклика", "откликов")}` : ""}</span><span class="right"></span><button class="btn small" data-act="app-new" data-id="${esc(s.id)}">+ Отклик</button></header>
+    <div class="box">${apps.length ? `<div class="table-wrap"><table class="compact"><tbody>
+      ${apps.map(a => `<tr><td>${/^https?:\/\//i.test(a.url || "") ? `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.company)}</a>` : esc(a.company)}<div class="sub">${esc(a.position || "")}${a.salary ? ` · ${money(a.salary)}` : ""}</div></td>
+        <td><span class="tag a-${esc(a.status)}">${esc(APPL[a.status] || a.status)}</span>${a.interview ? `<div class="sub">${fLocalDT(a.interview)}</div>` : ""}</td>
+        <td class="row-actions"><button class="btn small ghost" data-act="app-edit" data-id="${esc(s.id)}" data-aid="${esc(a.id)}">Изменить</button></td></tr>`).join("")}
+    </tbody></table></div>` : `<p class="empty">Откликов пока нет. Статус «Оффер принят» сам переведёт студента на этап «Оффер».</p>`}</div></section>`;
+}
+function noteSection(s) {
   const notes = sortBy(s.notes || [], n => n.at).reverse();
+  return `<section class="sec"><header><h3>Заметки</h3></header><div class="box flush">
+    <div class="note-form"><textarea id="note-${esc(s.id)}" data-keep rows="2" placeholder="Созвон, фидбэк по домашке, договорённости…" aria-label="Новая заметка"></textarea><button class="btn primary" data-act="note-add" data-id="${esc(s.id)}">Добавить</button></div>
+    ${notes.length ? `<ul class="feed">${notes.map(n => `<li class="${n.kind === "step" ? "auto" : ""}"><div class="feed-head"><strong>${esc(n.by ? personName(n.by) : "Команда")}</strong><span class="muted">${fDT(n.at)}</span></div><p class="pre">${esc(n.text)}</p></li>`).join("")}</ul>` : ""}
+  </div></section>`;
+}
+function drawerHTML(s) {
+  const p = partnerById(s.partnerId), d = debt(s), late = stepLate(s);
   const hist = sortBy(s.history || [], h => h.at).reverse();
-  const steps = STAGES.filter(x => x[0] !== "lost").map(([st, l]) => `<button class="step${st === s.stage ? " on" : ""}" data-act="stage" data-id="${s.id}" data-st="${st}">${l}</button>`).join("") +
-    `<button class="step lost${s.stage === "lost" ? " on" : ""}" data-act="lost" data-id="${s.id}">Отказ / выбыл</button>`;
   const dd = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
-  return headHTML(`${esc(s.name)} ${badge(s.stage)}${s.demo ? ` <span class="tag">пример</span>` : ""}`,
-    `<button class="back" data-act="nav" data-v="board">← Воронка</button>`,
-    `<button class="btn" data-act="student-edit" data-id="${s.id}">Редактировать</button>`) + `
-  <p class="muted" style="margin:-8px 0 14px">${days(daysSince(s.stageAt))} на этапе · в базе с ${fDate(isoDay(s.createdAt))}${isStuck(s) ? ` · <span class="warn-text">нет движения больше ${STUCK_DAYS} дней</span>` : ""}</p>
-  <div class="stepper">${steps}</div>
-  <div class="detail">
-    <aside class="card facts">
-      <h2>Контакты</h2><dl>
-        ${dd("Телефон", esc(s.phone))}
-        ${dd("Telegram", s.telegram ? `<a href="https://t.me/${esc(String(s.telegram).replace(/^@/, ""))}" target="_blank" rel="noopener">${esc(s.telegram)}</a>` : "")}
-        ${dd("Email", esc(s.email))}${dd("Город", esc(s.city))}
-        <dt>Согласие на ПД</dt><dd>${s.consent ? "есть" : `<span class="warn-text">нет</span>`}</dd>
-      </dl>
-      <h2>Обучение</h2><dl>
+  const tg = s.telegram ? String(s.telegram).replace(/^@/, "") : "";
+  const contacts = [
+    s.telegram && /^[A-Za-z0-9_]{3,}$/.test(tg) ? `<a class="chip" href="https://t.me/${esc(tg)}" target="_blank" rel="noopener">${esc(s.telegram)} <small>Telegram</small></a>` : s.telegram ? `<button class="chip" data-act="copy" data-text="${esc(s.telegram)}">${esc(s.telegram)} <small>копировать</small></button>` : "",
+    s.phone ? `<button class="chip" data-act="copy" data-text="${esc(s.phone)}">${esc(s.phone)} <small>копировать</small></button>` : "",
+    s.email ? `<button class="chip" data-act="copy" data-text="${esc(s.email)}">${esc(s.email)} <small>копировать</small></button>` : "",
+  ].filter(Boolean).join("");
+  const step = hasStep(s)
+    ? `<div class="stepbox${late ? " late" : ""}"><button class="chk" data-act="step-done" data-id="${esc(s.id)}" aria-label="Отметить выполненным" title="Выполнено"></button>
+        <div class="body"><strong>${esc(s.next.text)}</strong><span>${dueLabel(s.next.date)}${late ? " · просрочено" : ""}</span></div>
+        <button class="btn small ghost" data-act="step-edit" data-id="${esc(s.id)}">Изменить</button></div>`
+    : isActive(s) ? `<div class="stepbox none"><div class="body"><strong>Следующий шаг не назначен</strong></div><button class="btn small" data-act="step-edit" data-id="${esc(s.id)}">Назначить</button></div>` : "";
+  // Порядок разделов зависит от этапа: на продажах важнее заметки, на обучении — платежи, на поиске работы — отклики
+  const order = { sales: [noteSection, paySection], study: [paySection, noteSection, appSection], job: [appSection, noteSection, paySection], closed: [noteSection, paySection, appSection] }[SGROUP[s.stage]];
+  const result = s.jobCompany ? `${esc(s.jobCompany)}${s.jobPosition ? ", " + esc(s.jobPosition) : ""}${s.jobSalary ? " · " + money(s.jobSalary) : ""}${s.offerDate ? " · " + fDate(s.offerDate) : ""}` : "";
+  return `<div class="scrim" data-act="d-close"></div>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(s.name)}">
+    <header class="d-head"><h2>${esc(s.name)}${s.demo ? ` <span class="tag">пример</span>` : ""}</h2>
+      <button class="btn small" data-act="student-edit" data-id="${esc(s.id)}">Изменить</button>
+      <button class="x" id="d-x" data-act="d-close" aria-label="Закрыть">×</button></header>
+    <div class="d-body" id="d-body">
+      <div class="d-stage"><select id="d-stage" data-move="${esc(s.id)}" aria-label="Этап">${STAGES.map(x => opt(x[0], x[1], s.stage)).join("")}</select>
+        <span class="muted">${days(daysSince(s.stageAt))} на этапе · заявка от ${fShort(isoDay(s.createdAt))}</span></div>
+      ${step}
+      ${contacts ? `<div class="chips">${contacts}</div>` : ""}
+      <dl class="facts">
         <dt>Поток</dt><dd>${esc(cohortName(s.cohortId) || "—")}</dd>
         <dt>Ментор</dt><dd>${esc(teamName(s.mentorId) || "—")}</dd>
-        <dt>Стоимость</dt><dd>${money(s.price)}</dd>
-        <dt>Оплачено</dt><dd>${money(paidSum(s))}</dd>
+        <dt>Источник</dt><dd>${p ? `${esc(p.name)} <span class="sub">доля ${esc(s.partnerShare ?? p.share)}%</span>` : esc(s.utmSource || "—")}${s.promo ? ` <span class="sub">промокод ${esc(s.promo)}</span>` : ""}</dd>
         ${d ? `<dt>Остаток</dt><dd class="warn-text">${money(d)}</dd>` : ""}
-        ${dd("Причина отказа", esc(s.lostReason))}
+        ${dd("Город", esc(s.city))}
+        ${s.consent ? "" : `<dt>Согласие на ПД</dt><dd class="warn-text">не получено</dd>`}
+        ${dd("Причина отказа", esc(s.lostReason))}${dd("Оффер", result)}
+        ${dd("Комментарий", s.comment ? `<span class="pre">${esc(s.comment)}</span>` : "")}
       </dl>
-      <h2>Источник</h2><dl>
-        <dt>Партнёр</dt><dd>${p ? `${esc(p.name)} <small class="muted">(${s.partnerShare ?? p.share}%)</small>` : "—"}</dd>
-        ${dd("Промокод", esc(s.promo))}${dd("UTM", esc([s.utmSource, s.utmCampaign].filter(Boolean).join(" / ")))}
-      </dl>
-      ${s.jobCompany ? `<h2>Результат</h2><dl>${dd("Компания", esc(s.jobCompany))}${dd("Должность", esc(s.jobPosition))}<dt>Зарплата</dt><dd>${money(s.jobSalary)}</dd>${dd("Дата оффера", fDate(s.offerDate))}</dl>` : ""}
-      ${s.comment ? `<h2>Комментарий</h2><p class="pre">${esc(s.comment)}</p>` : ""}
-    </aside>
-    <div class="stack">
-      <section class="card">
-        <div class="card-head"><h2>Платежи</h2><span class="right"></span><button class="btn small" data-act="pay-new" data-id="${s.id}">+ Платёж</button><button class="btn small" data-act="pay-plan" data-id="${s.id}">+ Рассрочка</button></div>
-        ${pays.length ? `<div class="table-wrap"><table class="compact"><thead><tr><th>Срок</th><th class="num">Сумма</th><th>Статус</th><th>Комментарий</th><th></th></tr></thead><tbody>
-          ${pays.map(x => { const od = !x.paid && x.due < t; return `<tr class="${od ? "row-danger" : ""}"><td>${fDate(x.due)}</td><td class="num">${money(x.amount)}</td>
-            <td>${x.paid ? `<span class="tag ok">оплачен ${fDay(x.paid)}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
-            <td class="muted">${esc(x.comment)}</td>
-            <td class="row-actions">${x.paid ? "" : `<button class="btn small" data-act="pay-done" data-id="${s.id}" data-pid="${x.id}">Оплачен</button> `}<button class="btn small ghost" data-act="pay-edit" data-id="${s.id}" data-pid="${x.id}" aria-label="Изменить платёж">Изменить</button></td></tr>`; }).join("")}
-        </tbody></table></div>` : `<p class="empty">Платежей пока нет. Добавьте разовый платёж или график рассрочки.</p>`}
-      </section>
-      <section class="card">
-        <div class="card-head"><h2>Трудоустройство</h2><span class="right"></span><button class="btn small" data-act="app-new" data-id="${s.id}">+ Отклик</button></div>
-        ${apps.length ? `<div class="table-wrap"><table class="compact"><thead><tr><th>Компания</th><th>Вакансия</th><th>Статус</th><th class="num">Зарплата</th><th>Дата</th><th></th></tr></thead><tbody>
-          ${apps.map(a => `<tr><td>${a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.company)}</a>` : esc(a.company)}</td><td>${esc(a.position || "—")}</td>
-            <td><span class="tag a-${a.status}">${esc(APPL[a.status] || a.status)}</span>${a.interview ? ` <small class="muted">${fLocalDT(a.interview)}</small>` : ""}</td>
-            <td class="num">${money(a.salary)}</td><td class="muted">${fDay(a.date)}</td>
-            <td class="row-actions"><button class="btn small ghost" data-act="app-edit" data-id="${s.id}" data-aid="${a.id}">Изменить</button></td></tr>`).join("")}
-        </tbody></table></div>` : `<p class="empty">Откликов пока нет</p>`}
-        <p class="hint" style="margin-top:8px">Статус «Оффер принят» сам переведёт студента на этап «Оффер» и заполнит компанию и зарплату.</p>
-      </section>
-      <section class="card">
-        <h2>Заметки</h2>
-        <div class="note-form"><textarea id="note-${s.id}" data-keep rows="2" placeholder="Созвон, фидбэк по домашке, договорённости…" aria-label="Новая заметка"></textarea><button class="btn primary" data-act="note-add" data-id="${s.id}">Добавить</button></div>
-        <ul class="feed">${notes.map(n => `<li><div class="feed-head"><strong>${esc(n.by ? personName(n.by) : "Команда")}</strong><span class="muted">${fDT(n.at)}</span></div><p class="pre">${esc(n.text)}</p></li>`).join("") || `<li class="empty">Заметок нет</li>`}</ul>
-      </section>
-      <section class="card">
-        <h2>История этапов</h2>
-        <ul class="timeline">${hist.map(h => `<li><span class="muted">${fDT(h.at)}</span> ${h.from ? esc(SLABEL[h.from]) + " → " : ""}<strong>${esc(SLABEL[h.to])}</strong> <span class="muted">· ${esc(personName(h.by))}</span></li>`).join("")}</ul>
-      </section>
+      ${order.map(f => f(s)).join("")}
+      <details id="d-hist"${S.histOpen ? " open" : ""}><summary>История этапов: ${hist.length}</summary>
+        <ul class="timeline">${hist.map(h => `<li><span class="muted">${fDT(h.at)}</span> ${h.from ? esc(SLABEL[h.from]) + " → " : ""}<strong>${esc(SLABEL[h.to])}</strong> <span class="muted">· ${esc(personName(h.by))}</span></li>`).join("")}</ul></details>
     </div>
-  </div>`;
+  </aside>`;
 }
 
 // ----- Платежи -----
@@ -615,15 +777,15 @@ function paymentsView() {
   if (S.payTab === "overdue") list = sortBy(all.filter(p => !p.paid && p.due < t), p => p.due);
   else if (S.payTab === "upcoming") list = sortBy(all.filter(p => !p.paid && p.due >= t), p => p.due);
   else list = sortBy(all.filter(p => p.paid), p => p.paid).reverse();
-  const total = list.reduce((a, p) => a + (+p.amount || 0), 0);
   const tab = (k, l) => `<button data-act="paytab" data-v="${k}" class="${S.payTab === k ? "on" : ""}">${l}</button>`;
+  const emptyText = { overdue: "Просроченных платежей нет", upcoming: "Ожидаемых платежей нет. График рассрочки создаётся в карточке студента.", paid: "Оплат пока не было" }[S.payTab];
   return headHTML("Платежи") + `<nav class="tabs">${tab("overdue", "Просроченные")}${tab("upcoming", "Ожидаются")}${tab("paid", "Оплаченные")}</nav>
-  <div class="card table-wrap" style="padding:4px 0"><table>
+  <div class="panel table-wrap"><table>
     <thead><tr><th>Студент</th><th>Поток</th><th>${S.payTab === "paid" ? "Оплачен" : "Срок"}</th><th class="num">Сумма</th><th>Комментарий</th><th></th></tr></thead>
-    <tbody>${list.map(p => `<tr class="${!p.paid && p.due < t ? "row-danger" : ""}"><td><button class="link" data-act="open" data-id="${p.s.id}">${esc(p.s.name)}</button></td>
-      <td>${esc(cohortName(p.s.cohortId) || "—")}</td><td>${fDate(S.payTab === "paid" ? p.paid : p.due)}</td><td class="num">${money(p.amount)}</td><td class="muted">${esc(p.comment)}</td>
-      <td class="row-actions">${p.paid ? "" : `<button class="btn small" data-act="pay-done" data-id="${p.s.id}" data-pid="${p.id}">Оплачен</button>`}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">Пусто</td></tr>`}</tbody>
-    ${list.length ? `<tfoot><tr><td colspan="3">Итого</td><td class="num">${money(total)}</td><td colspan="2"></td></tr></tfoot>` : ""}
+    <tbody>${list.map(p => `<tr class="click" data-act="open" data-id="${esc(p.s.id)}"><td><strong>${esc(p.s.name)}</strong></td>
+      <td>${esc(cohortName(p.s.cohortId) || "—")}</td><td${!p.paid && p.due < t ? ' class="danger-text"' : ""}>${fDate(S.payTab === "paid" ? p.paid : p.due)}</td><td class="num">${money(p.amount)}</td><td class="muted">${esc(p.comment)}</td>
+      <td class="row-actions">${p.paid ? "" : `<button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button>`}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">${emptyText}</td></tr>`}</tbody>
+    ${list.length ? `<tfoot><tr><td colspan="3">Итого</td><td class="num">${money(sum(list, p => p.amount))}</td><td colspan="2"></td></tr></tfoot>` : ""}
   </table></div>`;
 }
 
@@ -631,42 +793,40 @@ function paymentsView() {
 function partnersView() {
   const rows = D().partners.map(p => ({ p, st: partnerStats(p) }));
   return headHTML("Партнёры", "", `<button class="btn" data-act="partner-new">+ Партнёр</button>`) + `
-  <div class="card table-wrap" style="padding:4px 0"><table>
+  <div class="panel table-wrap"><table>
     <thead><tr><th>Партнёр</th><th>Промокод / UTM</th><th class="num">Доля</th><th class="num">Заявок</th><th class="num">Оплатили</th><th class="num">Начислено</th><th class="num">Выплачено</th><th class="num">К выплате</th></tr></thead>
-    <tbody>${rows.map(({ p, st }) => `<tr><td><button class="link" data-act="partner-open" data-id="${p.id}">${esc(p.name)}</button>${p.active === false ? ` <span class="tag">неактивен</span>` : ""}</td>
-      <td class="muted">${esc(p.promo || "—")} / ${esc(p.utm || "—")}</td><td class="num">${p.share ?? 0}%</td><td class="num">${st.leads}</td><td class="num">${st.paidStudents}</td>
+    <tbody>${rows.map(({ p, st }) => `<tr class="click" data-act="partner-open" data-id="${esc(p.id)}"><td><strong>${esc(p.name)}</strong>${p.active === false ? ` <span class="tag">неактивен</span>` : ""}</td>
+      <td class="muted">${esc(p.promo || "—")} / ${esc(p.utm || "—")}</td><td class="num">${esc(p.share ?? 0)}%</td><td class="num">${st.leads}</td><td class="num">${st.paidStudents}</td>
       <td class="num">${money(st.accrued)}</td><td class="num">${money(st.paidOut)}</td><td class="num"><strong>${money(st.balance)}</strong></td></tr>`).join("") || `<tr><td colspan="8" class="empty">Партнёров пока нет. Добавьте блогера, чтобы считать его долю.</td></tr>`}</tbody>
   </table></div>`;
+}
+function kpisPartner(st) {
+  return `<section class="kpis">
+    <div class="kpi"><span class="kpi-label">Заявок</span><span class="kpi-value">${esc(st.leads)}</span></div>
+    <div class="kpi"><span class="kpi-label">Оплатили</span><span class="kpi-value">${esc(st.paidStudents)}</span><span class="kpi-sub">конверсия ${esc(st.conv)}%</span></div>
+    <div class="kpi"><span class="kpi-label">Трудоустроены</span><span class="kpi-value">${esc(st.employed)}</span></div>
+    <div class="kpi"><span class="kpi-label">Оплаты студентов</span><span class="kpi-value">${money(st.revenue)}</span></div>
+    <div class="kpi"><span class="kpi-label">Начислено партнёру</span><span class="kpi-value">${money(st.accrued)}</span><span class="kpi-sub">выплачено: ${money(st.paidOut)}</span></div>
+    <div class="kpi accent"><span class="kpi-label">К выплате сейчас</span><span class="kpi-value">${money(st.balance)}</span></div>
+  </section>`;
 }
 function partnerView() {
   const p = partnerById(S.partnerId);
   if (!p) return headHTML("Партнёр не найден", `<button class="back" data-act="nav" data-v="partners">← Партнёры</button>`);
   const st = partnerStats(p), rep = D().reports.find(r => r.id === p.id);
+  const sub = `Доля ${esc(p.share ?? 0)}% от фактических оплат${p.promo ? ` · промокод ${esc(p.promo)}` : ""}${p.utm ? ` · utm_source ${esc(p.utm)}` : ""}. ${rep ? `Отчёт для партнёра обновлён ${fDT(rep.updatedAt)}.` : "Отчёт для партнёра ещё не публиковался."}`;
   return headHTML(esc(p.name), `<button class="back" data-act="nav" data-v="partners">← Партнёры</button>`,
-    `<button class="btn" data-act="partner-edit" data-id="${p.id}">Изменить</button><button class="btn primary" data-act="report-publish" data-id="${p.id}">Обновить отчёт для партнёра</button>`) + `
-  <p class="muted" style="margin:-8px 0 14px">Доля ${p.share ?? 0}% от фактических оплат${p.promo ? ` · промокод ${esc(p.promo)}` : ""}${p.utm ? ` · utm_source ${esc(p.utm)}` : ""}. ${rep ? `Отчёт для партнёра обновлён ${fDT(rep.updatedAt)}.` : "Отчёт для партнёра ещё не публиковался."}</p>
+    `<button class="btn" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button><button class="btn primary" data-act="report-publish" data-id="${esc(p.id)}">Обновить отчёт для партнёра</button>`, sub) + `
   ${kpisPartner(st)}
   <div class="grid-2">
-    <section class="card"><h2>Воронка по трафику партнёра</h2>${funnelHTML(st.funnel)}</section>
-    <section class="card"><div class="card-head"><h2>Выплаты</h2><span class="right"></span><button class="btn small" data-act="payout-new" data-id="${p.id}">+ Выплата</button></div>
-      ${st.payouts.length ? `<ul class="list">${st.payouts.map(x => `<li>${fDate(x.date)} <strong>${money(x.amount)}</strong><span class="muted">${esc(x.comment)}</span><button class="btn small ghost right" data-act="payout-del" data-id="${x.id}">Удалить</button></li>`).join("")}</ul>` : `<p class="empty">Выплат пока не было</p>`}
-    </section>
+    ${panel("Воронка по трафику партнёра", "", `<div class="pad">${funnelHTML(st.funnel)}</div>`)}
+    ${panel("Выплаты", st.payouts.length ? money(st.paidOut) : "", st.payouts.length ? `<ul class="rows">${st.payouts.map(x => `<li><span class="who"><strong>${money(x.amount)}</strong><span>${esc(x.comment || "")}</span></span><span class="when">${fDate(x.date)}</span><button class="btn small ghost" data-act="payout-del" data-id="${esc(x.id)}">Удалить</button></li>`).join("")}</ul>` : `<p class="empty">Выплат пока не было</p>`, `<button class="btn small" data-act="payout-new" data-id="${esc(p.id)}">+ Выплата</button>`)}
   </div>
-  <section class="card table-wrap"><h2>Студенты из трафика</h2><table>
+  <div class="panel table-wrap"><header><h2>Студенты из трафика</h2></header><table>
     <thead><tr><th>Студент</th><th>Этап</th><th>Заявка</th><th class="num">Оплатил</th><th class="num">Доля партнёра</th></tr></thead>
-    <tbody>${st.rows.map(r => `<tr><td><button class="link" data-act="open" data-id="${r.s.id}">${esc(r.s.name)}</button></td><td>${badge(r.s.stage)}</td><td class="muted">${fDate(isoDay(r.s.createdAt))}</td><td class="num">${money(r.paid)}</td><td class="num">${money(r.share)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">Заявок от партнёра пока нет</td></tr>`}</tbody>
-  </table></section>
+    <tbody>${st.rows.map(r => `<tr class="click" data-act="open" data-id="${esc(r.s.id)}"><td><strong>${esc(r.s.name)}</strong></td><td>${badge(r.s.stage)}</td><td class="muted">${fDate(isoDay(r.s.createdAt))}</td><td class="num">${money(r.paid)}</td><td class="num">${money(r.share)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">Заявок от партнёра пока нет</td></tr>`}</tbody>
+  </table></div>
   <p class="hint" style="margin-top:12px">Партнёр видит только опубликованный отчёт: цифры, воронку и сокращённые имена («Иван П.») без контактов. Нажимайте «Обновить отчёт для партнёра», когда хотите показать ему свежие данные.</p>`;
-}
-function kpisPartner(st) {
-  return `<section class="kpis">
-    <div class="kpi"><span class="kpi-label">Заявок</span><span class="kpi-value">${st.leads}</span></div>
-    <div class="kpi"><span class="kpi-label">Оплатили</span><span class="kpi-value">${st.paidStudents}</span><span class="kpi-sub">конверсия ${st.conv}%</span></div>
-    <div class="kpi"><span class="kpi-label">Трудоустроены</span><span class="kpi-value">${st.employed}</span></div>
-    <div class="kpi"><span class="kpi-label">Оплаты студентов</span><span class="kpi-value">${money(st.revenue)}</span></div>
-    <div class="kpi"><span class="kpi-label">Начислено партнёру</span><span class="kpi-value">${money(st.accrued)}</span><span class="kpi-sub">выплачено: ${money(st.paidOut)}</span></div>
-    <div class="kpi accent"><span class="kpi-label">К выплате сейчас</span><span class="kpi-value">${money(st.balance)}</span></div>
-  </section>`;
 }
 
 // ----- Отчёт для партнёра (режим просмотра) -----
@@ -675,18 +835,17 @@ function reportView() {
   const reps = D().reports;
   if (!reps.length) return `<div class="card welcome"><h1>Отчёт пока не опубликован</h1><p class="muted">Как только школа опубликует отчёт по вашему трафику, он появится здесь.</p></div>`;
   const r = reps.find(x => x.id === S.reportId) || reps[0];
-  const tabs = reps.length > 1 ? `<nav class="tabs">${reps.map(x => `<button data-act="report-tab" data-id="${x.id}" class="${x.id === r.id ? "on" : ""}">${esc(x.name)}</button>`).join("")}</nav>` : "";
-  return tabs + headHTML(`Отчёт по трафику: ${esc(r.name)}`) + `
-  <p class="muted" style="margin:-8px 0 14px">Доля ${r.share}% от фактических оплат${r.promo ? ` · промокод ${esc(r.promo)}` : ""} · данные на ${fDT(r.updatedAt)}</p>
+  const tabs = reps.length > 1 ? `<nav class="tabs">${reps.map(x => `<button data-act="report-tab" data-id="${esc(x.id)}" class="${x.id === r.id ? "on" : ""}">${esc(x.name)}</button>`).join("")}</nav>` : "";
+  return tabs + headHTML(`Отчёт по трафику: ${esc(r.name)}`, "", "", `Доля ${esc(r.share)}% от фактических оплат${r.promo ? ` · промокод ${esc(r.promo)}` : ""} · данные на ${fDT(r.updatedAt)}`) + `
   ${kpisPartner(r)}
   <div class="grid-2">
-    <section class="card"><h2>Воронка</h2>${funnelHTML(r.funnel || [])}</section>
-    <section class="card"><h2>Выплаты</h2>${(r.payouts || []).length ? `<ul class="list">${r.payouts.map(x => `<li>${fDate(x.date)} <strong>${money(x.amount)}</strong><span class="muted right">${esc(x.comment)}</span></li>`).join("")}</ul>` : `<p class="empty">Выплат пока не было</p>`}</section>
+    ${panel("Воронка", "", `<div class="pad">${funnelHTML(r.funnel || [])}</div>`)}
+    ${panel("Выплаты", "", (r.payouts || []).length ? `<ul class="rows">${r.payouts.map(x => `<li><span class="who"><strong>${money(x.amount)}</strong><span>${esc(x.comment || "")}</span></span><span class="when">${fDate(x.date)}</span></li>`).join("")}</ul>` : `<p class="empty">Выплат пока не было</p>`)}
   </div>
-  <section class="card table-wrap"><h2>Студенты из вашего трафика</h2><table>
+  <div class="panel table-wrap"><header><h2>Студенты из вашего трафика</h2></header><table>
     <thead><tr><th>Студент</th><th>Этап</th><th>Заявка</th><th class="num">Оплатил</th><th class="num">Ваша доля</th></tr></thead>
     <tbody>${(r.rows || []).map(x => `<tr><td>${esc(x.name)}</td><td>${badge(x.stage)}</td><td class="muted">${fDate(x.date)}</td><td class="num">${money(x.paid)}</td><td class="num">${money(x.share)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">Заявок пока нет</td></tr>`}</tbody>
-  </table></section>`;
+  </table></div>`;
 }
 
 // ----- Настройки -----
@@ -694,35 +853,19 @@ function settingsView() {
   const cohorts = sortBy(D().cohorts, c => c.start || "").reverse();
   const hasDemo = COLS.some(c => D()[c].some(x => x.demo));
   return headHTML("Настройки") + `<div class="grid-2">
-  <section class="card"><div class="card-head"><h2>Потоки</h2><span class="right"></span><button class="btn small" data-act="cohort-new">+ Поток</button></div>
-    ${cohorts.length ? `<div class="table-wrap"><table class="compact"><thead><tr><th>Название</th><th>Старт</th><th>Окончание</th><th class="num">Цена</th><th></th></tr></thead><tbody>
-    ${cohorts.map(c => `<tr><td>${esc(c.name)}${c.active === false ? ` <span class="tag">завершён</span>` : ""}</td><td>${fDate(c.start)}</td><td>${fDate(c.end)}</td><td class="num">${money(c.price)}</td><td class="row-actions"><button class="btn small ghost" data-act="cohort-edit" data-id="${c.id}">Изменить</button></td></tr>`).join("")}
-    </tbody></table></div>` : `<p class="empty">Потоков нет</p>`}
-  </section>
-  <section class="card"><div class="card-head"><h2>Команда</h2><span class="right"></span><button class="btn small" data-act="team-new">+ Ментор</button></div>
-    ${D().team.length ? `<ul class="list">${D().team.map(m => `<li><span>${esc(m.name)}</span>${m.userId && m.userId === S.myId ? `<span class="tag ok">это вы</span>` : ""}
-      <span class="right"></span>${S.myId && m.userId !== S.myId ? `<button class="btn small ghost" data-act="team-me" data-id="${m.id}">Это я</button>` : ""}<button class="btn small ghost" data-act="team-edit" data-id="${m.id}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Добавьте себя и менторов</p>`}
-    <p class="hint" style="margin-top:8px">Нажмите «Это я» у своего имени: тогда в фильтрах появится «Мои студенты», а ваши заметки будут подписаны.</p>
-  </section>
-  <section class="card"><div class="card-head"><h2>Партнёры</h2><span class="right"></span><button class="btn small" data-act="partner-new">+ Партнёр</button></div>
-    ${D().partners.length ? `<ul class="list">${D().partners.map(p => `<li><span>${esc(p.name)}</span><span class="muted">${p.share ?? 0}%${p.promo ? " · " + esc(p.promo) : ""}</span><span class="right"></span><button class="btn small ghost" data-act="partner-edit" data-id="${p.id}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Партнёров нет</p>`}
-  </section>
-  <section class="card"><h2>Доступ</h2>
-    <ul class="list">
+  ${panel("Потоки", "", cohorts.length ? `<ul class="rows">${cohorts.map(c => `<li><span class="who"><strong>${esc(c.name)}${c.active === false ? ` <span class="tag">завершён</span>` : ""}</strong><span>${c.start ? fDate(c.start) : "дата не задана"}${c.end ? " – " + fDate(c.end) : ""}${c.price ? " · " + money(c.price) : ""}</span></span><button class="btn small ghost" data-act="cohort-edit" data-id="${esc(c.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Потоков нет. Добавьте первый, чтобы привязывать к нему студентов.</p>`, `<button class="btn small" data-act="cohort-new">+ Поток</button>`)}
+  ${panel("Команда", "", (D().team.length ? `<ul class="rows">${D().team.map(m => `<li><span class="who"><strong>${esc(m.name)}</strong></span>${m.userId && m.userId === S.myId ? `<span class="tag ok">это вы</span>` : ""}${S.myId && m.userId !== S.myId ? `<button class="btn small ghost" data-act="team-me" data-id="${esc(m.id)}">Это я</button>` : ""}<button class="btn small ghost" data-act="team-edit" data-id="${esc(m.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Добавьте себя и менторов</p>`) + `<p class="hint pad">Нажмите «Это я» у своего имени: в фильтрах появится «Мои студенты», а ваши заметки будут подписаны.</p>`, `<button class="btn small" data-act="team-new">+ Ментор</button>`)}
+  ${panel("Партнёры", "", D().partners.length ? `<ul class="rows">${D().partners.map(p => `<li><span class="who"><strong>${esc(p.name)}</strong><span>${esc(p.share ?? 0)}%${p.promo ? " · " + esc(p.promo) : ""}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Партнёров нет</p>`, `<button class="btn small" data-act="partner-new">+ Партнёр</button>`)}
+  ${panel("Доступ", "", `<ul class="rows">
       <li><span><strong>Менторам:</strong> откройте «Поделиться» и пригласите их по email с правами редактора. Они смогут вносить изменения.</span></li>
       <li><span><strong>Блогеру:</strong> пригласите его по email с правами просмотра. Он увидит только опубликованный отчёт без контактов студентов.</span></li>
       <li><span class="warn-text">Не включайте доступ по публичной ссылке: пока он включён, приглашённые редакторы теряют право на изменения.</span></li>
-    </ul>
-  </section>
-  <section class="card"><h2>Резервная копия</h2>
-    <p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, команда, партнёры и выплаты. Этот же файл загружается в версию для своего сервера при переезде.</p>
+    </ul>`)}
+  ${panel("Резервная копия", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, команда, партнёры и выплаты. Этот же файл загружается в версию для своего сервера при переезде.</p>
     <div class="actions"><button class="btn" data-act="backup">Скачать резервную копию</button></div>
-    <p class="hint" style="margin-top:8px">В файле есть контакты студентов. Храните его там, куда нет доступа посторонним.</p>
-  </section>
-  <section class="card"><h2>Пример данных</h2>
-    <p class="muted" style="margin-bottom:10px">Вымышленные студенты, потоки и партнёры с пометкой «пример», чтобы посмотреть, как всё работает. Ваши настоящие записи не затрагиваются.</p>
-    <div class="actions">${hasDemo ? `<button class="btn danger" data-act="demo-clear">Удалить примеры</button>` : `<button class="btn" data-act="demo-load">Загрузить пример</button>`}</div>
-  </section>
+    <p class="hint" style="margin-top:8px">В файле есть контакты студентов. Храните его там, куда нет доступа посторонним.</p></div>`)}
+  ${panel("Пример данных", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вымышленные студенты, потоки и партнёры с пометкой «пример», чтобы посмотреть, как всё работает. Ваши настоящие записи не затрагиваются.</p>
+    <div class="actions">${hasDemo ? `<button class="btn danger" data-act="demo-clear">Удалить примеры</button>` : `<button class="btn" data-act="demo-load">Загрузить пример</button>`}</div></div>`)}
   </div>`;
 }
 
@@ -730,8 +873,7 @@ function settingsView() {
 let namesBusy = false;
 async function resolveNames() {
   if (!S.user || namesBusy || S.mode !== "staff") return;
-  const ids = new Set();
-  const s = S.view === "student" ? stu(S.studentId) : null;
+  const ids = new Set(), s = S.openId ? stu(S.openId) : null;
   if (s) { (s.notes || []).forEach(n => n.by && ids.add(n.by)); (s.history || []).forEach(h => h.by && ids.add(h.by)); }
   const missing = [...ids].filter(i => !(i in S.names) && !D().team.some(m => m.userId === i));
   if (!missing.length) return;
@@ -747,6 +889,15 @@ function enqueue(key, fn) { const p = (queues[key] || Promise.resolve()).catch((
 const ref = (col, id) => S.db.collection(col).doc(id);
 const setDoc = (col, id, data) => enqueue(col + "/" + id, () => ref(col, id).set(clean(data)));
 const updDoc = (col, id, patch) => enqueue(col + "/" + id, () => ref(col, id).update(clean(patch)));
+// Правка студента: патч считается от актуальной записи в момент выполнения, а не в момент клика
+function patchStudent(id, fn) {
+  return enqueue("students/" + id, async () => {
+    const cur = stu(id); if (!cur) throw { code: "gone" };
+    const patch = fn(cur); if (!patch) return;
+    await ref("students", id).update(clean(patch));
+    Object.assign(cur, patch); // следующая правка в очереди увидит это изменение, не дожидаясь ответа базы
+  });
+}
 const delDoc = (col, id) => enqueue(col + "/" + id, () => ref(col, id).delete());
 const newId = col => S.db.collection(col).doc().id;
 function clean(o) { return JSON.parse(JSON.stringify(o)); } // поля со значением undefined не записываются
@@ -757,6 +908,7 @@ async function save(fn, okMsg) {
   catch (e) {
     console.warn(e);
     if (e && e.code === "invalid_argument" && S.canWrite !== true && !S.isOwner) { S.readOnly = true; toast("Нет прав на изменение данных"); scheduleRender(); }
+    else if (e && e.code === "gone") { toast("Этого студента уже удалили"); scheduleRender(); }
     else if (e && e.code === "quota_exceeded") toast("База заполнена: удалите старые записи и попробуйте снова");
     else toast("Не удалось сохранить. Проверьте интернет и попробуйте ещё раз");
     return false;
@@ -766,9 +918,34 @@ function stageChange(s, to, extra = {}) {
   const at = new Date().toISOString();
   return { stage: to, stageAt: at, history: [...(s.history || []), { from: s.stage, to, at, by: S.myId }], ...extra };
 }
-function moveStage(id, to, extra) {
-  const s = stu(id); if (!s || s.stage === to) return;
-  save(() => updDoc("students", id, stageChange(s, to, extra)), `Этап: ${SLABEL[to]}`);
+// Смена этапа с возможностью отменить: в «Отменить» уходит прежнее состояние записи
+async function moveStage(id, to, extra = {}) {
+  const s = stu(id); if (!s || s.stage === to) return false;
+  const prev = { stage: s.stage, stageAt: s.stageAt || null, lostReason: s.lostReason || "", next: s.next || null };
+  let at = null;
+  const ok = await save(() => patchStudent(id, cur => { if (cur.stage === to) return null; const p = stageChange(cur, to, extra); at = p.stageAt; return p; }));
+  if (ok && at) toast(`${mask(s.name) || s.name}: ${SLABEL[to]}`, () => save(() => patchStudent(id, cur => {
+    // Убираем только свою запись из истории: чужие правки, сделанные за это время, остаются
+    const back = { stage: prev.stage, stageAt: prev.stageAt, lostReason: prev.lostReason, history: (cur.history || []).filter(h => !(h.at === at && h.to === to)) };
+    if ("next" in extra) back.next = cur.next || prev.next;
+    return back;
+  }), "Этап возвращён"));
+  return ok;
+}
+async function stepDone(id) {
+  const s = stu(id); if (!s || !hasStep(s)) return;
+  const step = s.next;
+  const note = { id: newId("x"), text: `Сделано: ${step.text}`, at: new Date().toISOString(), by: S.myId, kind: "step" };
+  const ok = await save(() => patchStudent(id, cur => ({ next: null, notes: [...(cur.notes || []), note] })));
+  if (!ok) return;
+  toast("Шаг выполнен", () => save(() => patchStudent(id, cur => ({ next: hasStep(cur) ? cur.next : step, notes: (cur.notes || []).filter(n => n.id !== note.id) })), "Шаг возвращён"));
+  if (isActive(s)) stepForm(s, true);
+}
+async function payDone(id, pid) {
+  const s = stu(id); if (!s) return;
+  const mark = paid => cur => ({ payments: (cur.payments || []).map(p => p.id === pid ? { ...p, paid } : p) });
+  const ok = await save(() => patchStudent(id, mark(today())));
+  if (ok) toast("Платёж отмечен оплаченным", () => save(() => patchStudent(id, mark(null)), "Отметка снята"));
 }
 
 // ---------- Окна с формами ----------
@@ -784,18 +961,19 @@ function fieldsHTML(spec, vals) {
     if (f.type === "select") ctl = `<select id="${id}" name="${f.k}">${f.options.map(([ov, ol]) => opt(ov, ol, String(v ?? ""))).join("")}</select>`;
     else if (f.type === "textarea") ctl = `<textarea id="${id}" name="${f.k}" rows="3">${esc(v)}</textarea>`;
     else if (f.type === "checkbox") { out += `<label class="field checkbox"><input type="checkbox" id="${id}" name="${f.k}"${v ? " checked" : ""}><span>${esc(f.label)}</span></label>`; continue; }
-    else ctl = `<input id="${id}" name="${f.k}" type="${f.type || "text"}" value="${esc(v)}"${f.type === "number" ? ' step="any" min="0" inputmode="decimal"' : ""}${req}${f.ph ? ` placeholder="${esc(f.ph)}"` : ""}>`;
-    out += `<label class="field${f.wide ? " span2" : ""}"><span>${esc(f.label)}${f.req ? " *" : ""}</span>${ctl}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`;
+    else ctl = `<input id="${id}" name="${f.k}" type="${f.type || "text"}" value="${esc(v)}"${f.type === "number" ? ' step="any" min="0" inputmode="decimal"' : ""}${req}${f.ph ? ` placeholder="${esc(f.ph)}"` : ""}${f.list ? ` list="${id}-list" autocomplete="off"` : ""}>${f.list ? `<datalist id="${id}-list">${f.list.map(x => `<option value="${esc(x)}">`).join("")}</datalist>` : ""}`;
+    const quick = f.quick ? `<div class="chips">${[["Сегодня", 0], ["Завтра", 1], ["Через 3 дня", 3], ["Через неделю", 7]].map(([l, n]) => `<button type="button" class="chip" data-act="qdate" data-target="${id}" data-days="${n}">${l}</button>`).join("")}</div>` : "";
+    out += `<label class="field${f.wide ? " span2" : ""}"><span>${esc(f.label)}${f.req ? " *" : ""}</span>${ctl}${quick}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`;
   }
   return out + close();
 }
-function openModal({ title, fields, values = {}, submit = "Сохранить", onSubmit, onDelete, wide = false }) {
-  MODAL = { fields, onSubmit, onDelete };
+function openModal({ title, fields, values = {}, submit = "Сохранить", cancel = "Отмена", onSubmit, onDelete, del = "Удалить", link = null, wide = false }) {
+  MODAL = { fields, onSubmit, onDelete, link };
   $("#modal").innerHTML = `<div class="overlay" data-act="m-bg"><form class="modal${wide ? " wide" : ""}" id="mform" novalidate>
     <header><h2>${esc(title)}</h2><button type="button" class="x" data-act="m-close" aria-label="Закрыть">×</button></header>
     <div class="mbody">${fieldsHTML(fields, values)}</div><p class="merr" id="m-err" hidden></p>
-    <footer>${onDelete ? `<button type="button" class="btn danger" data-act="m-delete">Удалить</button>` : ""}<span class="sp"></span>
-      <button type="button" class="btn ghost" data-act="m-close">Отмена</button><button type="submit" class="btn primary" id="m-submit">${esc(submit)}</button></footer>
+    <footer>${onDelete ? `<button type="button" class="btn danger" data-act="m-delete">${esc(del)}</button>` : ""}${link ? `<button type="button" class="btn ghost" data-act="m-link">${esc(link.label)}</button>` : ""}<span class="sp"></span>
+      <button type="button" class="btn ghost" data-act="m-close">${esc(cancel)}</button><button type="submit" class="btn primary" id="m-submit">${esc(submit)}</button></footer>
   </form></div>`;
   $("#modal").hidden = false;
   const first = $("#mform input:not([type=checkbox]), #mform select, #mform textarea"); first && first.focus();
@@ -817,7 +995,9 @@ async function submitModal() {
   const v = collect();
   for (const f of MODAL.fields) if (f.req && (v[f.k] === "" || v[f.k] === null)) return showErr(`Заполните поле «${f.label}»`);
   const btn = $("#m-submit"); btn.disabled = true;
-  const res = await MODAL.onSubmit(v);
+  let res;
+  try { res = await MODAL.onSubmit(v); } catch (e) { console.warn(e); res = "Не удалось сохранить. Закройте окно и попробуйте ещё раз."; }
+  if (!MODAL) return;
   if (typeof res === "string") { btn.disabled = false; return showErr(res); }
   if (res === false) { btn.disabled = false; return; }
   closeModal();
@@ -827,10 +1007,62 @@ function showErr(msg) { const e = $("#m-err"); e.textContent = msg; e.hidden = f
 // ----- Формы -----
 const cohortOpts = () => [["", "—"], ...sortBy(D().cohorts, c => c.start || "").reverse().map(c => [c.id, c.name])];
 const teamOpts = () => [["", "—"], ...D().team.map(m => [m.id, m.name])];
-const partnerOpts = () => [["", "—"], ...D().partners.map(p => [p.id, p.name])];
-function studentForm(s) {
-  const nextCohort = sortBy(D().cohorts.filter(c => c.active !== false), c => c.start || "9999").find(c => !c.start || c.start >= today()) || sortBy(D().cohorts.filter(c => c.active !== false), c => c.start || "").pop();
-  const vals = s ? { ...s } : { stage: "new", cohortId: nextCohort?.id || "", mentorId: myTeam()?.id || "", consent: false };
+const partnerOpts = (none = "—") => [["", none], ...D().partners.filter(p => p.active !== false).map(p => [p.id, p.name])];
+function nextCohortId() {
+  const act = D().cohorts.filter(c => c.active !== false);
+  return (sortBy(act, c => c.start || "9999").find(c => !c.start || c.start >= today()) || sortBy(act, c => c.start || "").pop())?.id || "";
+}
+// Контакт одной строкой: сам определяем, что это — телефон, email или Telegram
+function parseContact(raw) {
+  const v = String(raw || "").trim();
+  if (!v) return {};
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) return { email: v };
+  if (/^\+?[\d\s()\-]{6,}$/.test(v)) return { phone: v };
+  const tg = v.replace(/^https?:\/\/t\.me\//i, "").replace(/^@/, "");
+  return { telegram: /^[A-Za-z0-9_]{3,}$/.test(tg) ? "@" + tg : v };
+}
+function findDuplicate(c) {
+  const digits = x => String(x || "").replace(/\D/g, "").slice(-10), low = x => String(x || "").trim().toLowerCase().replace(/^@/, "");
+  return D().students.find(s => (c.phone && digits(c.phone).length >= 6 && digits(s.phone) === digits(c.phone)) || (c.email && low(s.email) === low(c.email)) || (c.telegram && low(s.telegram) === low(c.telegram)));
+}
+const shareFor = partnerId => partnerId ? (partnerById(partnerId)?.share ?? 0) : 0;
+function quickForm(stage = "new") {
+  openModal({
+    title: stage === "new" ? "Новая заявка" : `Новый студент: ${SLABEL[stage]}`, submit: "Добавить", values: { partnerId: "" },
+    fields: [{ k: "name", label: "Имя", req: true, ph: "Фамилия Имя", wide: true },
+      { k: "contact", label: "Контакт", ph: "@telegram, телефон или email", wide: true },
+      { k: "partnerId", label: "Источник", type: "select", options: partnerOpts("Без партнёра"), wide: true }],
+    link: { label: "Все поля", go: v => studentForm(null, { name: v.name, ...parseContact(v.contact), partnerId: v.partnerId, stage }) },
+    onSubmit: v => {
+      const c = parseContact(v.contact), dup = findDuplicate(c);
+      if (dup) return `Уже есть в базе: ${dup.name} (${SLABEL[dup.stage]}). Если это другой человек, добавьте его через «Все поля».`;
+      const id = newId("students"), at = new Date().toISOString(), partnerId = v.partnerId || null;
+      const doc = {
+        name: v.name, phone: c.phone || "", telegram: c.telegram || "", email: c.email || "", city: "", consent: false,
+        stage, stageAt: at, createdAt: at, history: [{ from: null, to: stage, at, by: S.myId }],
+        cohortId: nextCohortId() || null, mentorId: myTeam()?.id || null, price: null, lostReason: "",
+        partnerId, partnerShare: shareFor(partnerId), promo: partnerId ? (partnerById(partnerId)?.promo || "") : "", utmSource: "", utmCampaign: "",
+        jobCompany: "", jobPosition: "", jobSalary: null, offerDate: null, comment: "",
+        next: stage === "new" ? { text: "Связаться", date: today() } : null, payments: [], apps: [], notes: [],
+      };
+      return save(() => setDoc("students", id, doc), stage === "new" ? "Заявка добавлена, шаг «Связаться» на сегодня" : "Студент добавлен");
+    },
+  });
+}
+function stepForm(s, after = false) {
+  const cur = after ? null : (hasStep(s) ? s.next : null);
+  openModal({
+    title: after ? `Что дальше: ${s.name}` : cur ? "Следующий шаг" : `Следующий шаг: ${s.name}`,
+    submit: "Назначить", cancel: after ? "Без шага" : "Отмена", del: "Убрать шаг",
+    values: cur ? { text: cur.text, date: cur.date } : { date: today() },
+    fields: [{ k: "text", label: "Что сделать", req: true, wide: true, ph: "Написать про оплату", list: STEP_HINTS },
+      { k: "date", label: "Когда", type: "date", req: true, wide: true, quick: true }],
+    onDelete: cur ? () => save(() => patchStudent(s.id, () => ({ next: null })), "Шаг убран") : null,
+    onSubmit: v => save(() => patchStudent(s.id, () => ({ next: { text: v.text, date: v.date } })), `Шаг назначен на ${dueLabel(v.date)}`),
+  });
+}
+function studentForm(s, prefill = {}) {
+  const vals = s ? { ...s } : { stage: "new", cohortId: nextCohortId(), mentorId: myTeam()?.id || "", consent: false, ...prefill };
   openModal({
     title: s ? "Редактирование" : "Новый студент", wide: true, values: vals,
     fields: [
@@ -840,13 +1072,13 @@ function studentForm(s) {
       { section: "Обучение" }, { k: "stage", label: "Этап", type: "select", options: STAGES.map(x => [x[0], x[1]]) },
       { k: "cohortId", label: "Поток", type: "select", options: cohortOpts() }, { k: "mentorId", label: "Ментор", type: "select", options: teamOpts() },
       { k: "price", label: "Стоимость по договору, ₽", type: "number" }, { k: "lostReason", label: "Причина отказа", ph: "если выбыл" },
-      { section: "Источник" }, { k: "partnerId", label: "Партнёр", type: "select", options: partnerOpts(), help: "Подставится сам по промокоду или utm_source" },
+      { section: "Источник" }, { k: "partnerId", label: "Партнёр", type: "select", options: [["", "—"], ...D().partners.map(p => [p.id, p.name])], help: "Подставится сам по промокоду или utm_source" },
       { k: "promo", label: "Промокод" }, { k: "utmSource", label: "utm_source" }, { k: "utmCampaign", label: "utm_campaign" },
       { section: "Трудоустройство" }, { k: "jobCompany", label: "Компания" }, { k: "jobPosition", label: "Должность" },
       { k: "jobSalary", label: "Зарплата, ₽", type: "number" }, { k: "offerDate", label: "Дата оффера", type: "date" },
       { section: "" }, { k: "comment", label: "Комментарий", type: "textarea", wide: true },
     ],
-    onDelete: s ? () => save(() => delDoc("students", s.id), "Студент удалён").then(ok => { if (ok) { S.view = "board"; render(); } return ok; }) : null,
+    onDelete: s ? () => save(() => delDoc("students", s.id), "Студент удалён").then(ok => { if (ok) { S.openId = null; render(); } return ok; }) : null,
     onSubmit: v => saveStudent(s, v),
   });
 }
@@ -862,26 +1094,25 @@ async function saveStudent(s, v) {
     partnerId, promo: v.promo, utmSource: v.utmSource, utmCampaign: v.utmCampaign,
     jobCompany: v.jobCompany, jobPosition: v.jobPosition, jobSalary: v.jobSalary, offerDate: v.offerDate || null, comment: v.comment,
   };
-  if (!s || s.partnerId !== partnerId) doc.partnerShare = partnerId ? (partnerById(partnerId)?.share ?? 0) : 0;
+  if (!s || s.partnerId !== partnerId) doc.partnerShare = shareFor(partnerId);
   if (!s) {
     const id = newId("students"), at = new Date().toISOString();
-    const ok = await save(() => setDoc("students", id, { ...doc, stage: v.stage, stageAt: at, createdAt: at, history: [{ from: null, to: v.stage, at, by: S.myId }], payments: [], apps: [], notes: [] }), "Студент добавлен");
-    if (ok) { S.view = "student"; S.studentId = id; render(); }
+    const ok = await save(() => setDoc("students", id, { ...doc, stage: v.stage, stageAt: at, createdAt: at, history: [{ from: null, to: v.stage, at, by: S.myId }], next: v.stage === "new" ? { text: "Связаться", date: today() } : null, payments: [], apps: [], notes: [] }), "Студент добавлен");
+    if (ok) { S.openId = id; render(); }
     return ok;
   }
-  const cur = stu(s.id) || s;
-  return save(() => updDoc("students", s.id, v.stage !== cur.stage ? { ...doc, ...stageChange(cur, v.stage) } : doc), "Сохранено");
+  return save(() => patchStudent(s.id, cur => v.stage !== cur.stage ? { ...doc, ...stageChange(cur, v.stage) } : doc), "Сохранено");
 }
 function paymentForm(s, p) {
   openModal({
     title: p ? "Платёж" : "Новый платёж", values: p ? { ...p } : { due: today() },
     fields: [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }, { k: "due", label: "Срок оплаты", type: "date", req: true },
-      { k: "paid", label: "Дата оплаты", type: "date", help: "Пусто — ещё не оплачен" }, { k: "comment", label: "Комментарий", ph: "Например, «Рассрочка 1/3, СБП»", wide: true }],
-    onDelete: p ? () => save(() => updDoc("students", s.id, { payments: (stu(s.id).payments || []).filter(x => x.id !== p.id) }), "Платёж удалён") : null,
+      { k: "paid", label: "Дата оплаты", type: "date", help: "Пусто, если ещё не оплачен" }, { k: "comment", label: "Комментарий", ph: "Например, «Рассрочка 1/3, СБП»", wide: true }],
+    onDelete: p ? () => save(() => patchStudent(s.id, cur => ({ payments: (cur.payments || []).filter(x => x.id !== p.id) })), "Платёж удалён") : null,
     onSubmit: v => {
       if (!(v.amount > 0)) return "Сумма должна быть больше нуля";
-      const cur = stu(s.id).payments || [], item = { id: p?.id || newId("x"), amount: v.amount, due: v.due, paid: v.paid || null, comment: v.comment };
-      return save(() => updDoc("students", s.id, { payments: p ? cur.map(x => x.id === p.id ? item : x) : [...cur, item] }), "Сохранено");
+      const item = { id: p?.id || newId("x"), amount: v.amount, due: v.due, paid: v.paid || null, comment: v.comment };
+      return save(() => patchStudent(s.id, cur => { const list = cur.payments || []; return { payments: p ? list.map(x => x.id === p.id ? item : x) : [...list, item] }; }), "Сохранено");
     },
   });
 }
@@ -890,7 +1121,7 @@ function planForm(s) {
   openModal({
     title: "График рассрочки", values: { total: debt(s) || s.price || c?.price || null, parts: 3, first: today() },
     fields: [{ k: "total", label: "Общая сумма, ₽", type: "number", req: true }, { k: "parts", label: "Платежей", type: "number", req: true },
-      { k: "first", label: "Первый платёж", type: "date", req: true, help: "Следующие — раз в месяц" }],
+      { k: "first", label: "Первый платёж", type: "date", req: true, help: "Следующие идут раз в месяц" }],
     submit: "Создать платежи",
     onSubmit: v => {
       const n = Math.round(v.parts);
@@ -898,9 +1129,7 @@ function planForm(s) {
       if (!(n >= 1 && n <= 24)) return "Платежей должно быть от 1 до 24";
       const base = Math.floor(v.total / n), items = [];
       for (let i = 0; i < n; i++) items.push({ id: newId("x"), amount: i < n - 1 ? base : v.total - base * (n - 1), due: addMonths(v.first, i), paid: null, comment: `Рассрочка ${i + 1}/${n}` });
-      const patch = { payments: [...(stu(s.id).payments || []), ...items] };
-      if (!s.price) patch.price = v.total;
-      return save(() => updDoc("students", s.id, patch), `Создан график: ${n} ${plural(n, "платёж", "платежа", "платежей")}`);
+      return save(() => patchStudent(s.id, cur => { const patch = { payments: [...(cur.payments || []), ...items] }; if (!cur.price) patch.price = v.total; return patch; }), `Создан график: ${n} ${plural(n, "платёж", "платежа", "платежей")}`);
     },
   });
 }
@@ -911,24 +1140,27 @@ function appForm(s, a) {
       { k: "status", label: "Статус", type: "select", options: APP_ST }, { k: "salary", label: "Зарплата, ₽", type: "number" },
       { k: "date", label: "Дата отклика", type: "date" }, { k: "interview", label: "Собеседование", type: "datetime-local" },
       { k: "url", label: "Ссылка на вакансию", type: "url", wide: true }, { k: "notes", label: "Заметки", type: "textarea", wide: true }],
-    onDelete: a ? () => save(() => updDoc("students", s.id, { apps: (stu(s.id).apps || []).filter(x => x.id !== a.id) }), "Отклик удалён") : null,
+    onDelete: a ? () => save(() => patchStudent(s.id, cur => ({ apps: (cur.apps || []).filter(x => x.id !== a.id) })), "Отклик удалён") : null,
     onSubmit: v => {
-      const cur = stu(s.id), list = cur.apps || [], item = { id: a?.id || newId("x"), ...v };
-      const patch = { apps: a ? list.map(x => x.id === a.id ? item : x) : [...list, item] };
-      if (v.status === "accepted") {
-        Object.assign(patch, { jobCompany: v.company, jobPosition: v.position || cur.jobPosition || "", offerDate: cur.offerDate || today() });
-        if (v.salary) patch.jobSalary = v.salary;
-        if (SIDX[cur.stage] < SIDX.offer || cur.stage === "lost") Object.assign(patch, stageChange(cur, "offer"));
-      }
-      return save(() => updDoc("students", s.id, patch), v.status === "accepted" ? "Поздравляем с оффером!" : "Сохранено");
+      if (v.url && !/^https?:\/\//i.test(v.url)) return "Ссылка должна начинаться с http:// или https://";
+      const item = { id: a?.id || newId("x"), ...v };
+      return save(() => patchStudent(s.id, cur => {
+        const list = cur.apps || [], patch = { apps: a ? list.map(x => x.id === a.id ? item : x) : [...list, item] };
+        if (v.status === "accepted") {
+          Object.assign(patch, { jobCompany: v.company, jobPosition: v.position || cur.jobPosition || "", offerDate: cur.offerDate || today() });
+          if (v.salary) patch.jobSalary = v.salary;
+          if (SIDX[cur.stage] < SIDX.offer || cur.stage === "lost") Object.assign(patch, stageChange(cur, "offer"));
+        }
+        return patch;
+      }), v.status === "accepted" ? "Поздравляем с оффером!" : "Сохранено");
     },
   });
 }
 function lostForm(s) {
   openModal({
-    title: "Перевести в «Отказ / выбыл»", values: { reason: s.lostReason || "" }, submit: "Перевести",
-    fields: [{ k: "reason", label: "Причина", ph: "Дорого, не тянет по времени, пропал…", wide: true }],
-    onSubmit: v => { const cur = stu(s.id); return save(() => updDoc("students", s.id, cur.stage === "lost" ? { lostReason: v.reason } : stageChange(cur, "lost", { lostReason: v.reason })), "Этап: Отказ / выбыл"); },
+    title: `Отказ: ${s.name}`, values: { reason: s.lostReason || "" }, submit: "Перевести в «Отказ»",
+    fields: [{ k: "reason", label: "Причина", ph: "Дорого", wide: true, list: ["Дорого", "Не тянет по времени", "Передумал", "Не выходит на связь", "Выбрал другую школу"], help: "Одинаковые причины складываются в аналитике" }],
+    onSubmit: v => stu(s.id)?.stage === "lost" ? save(() => patchStudent(s.id, () => ({ lostReason: v.reason })), "Сохранено") : moveStage(s.id, "lost", { lostReason: v.reason, next: null }),
   });
 }
 function cohortForm(c) {
@@ -987,9 +1219,10 @@ function publishReport(p) {
 async function exportCsv() {
   const dl = await claude.use("downloads");
   if (!dl) return toast("Выгрузка недоступна в этом окне");
-  const q = v => { const s = String(v ?? ""); return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  const head = ["ФИО", "Телефон", "Telegram", "Email", "Город", "Этап", "Поток", "Ментор", "Партнёр", "Стоимость", "Оплачено", "Остаток", "Компания", "Зарплата", "Дата оффера", "Заявка"];
-  const rows = sortBy(filtered(), s => s.createdAt || "").map(s => [s.name, s.phone, s.telegram, s.email, s.city, SLABEL[s.stage], cohortName(s.cohortId), teamName(s.mentorId), partnerById(s.partnerId)?.name, s.price, paidSum(s), debt(s), s.jobCompany, s.jobSalary, fDate(s.offerDate), fDate(isoDay(s.createdAt))]);
+  // Значения, которые Excel принял бы за формулу, экранируем апострофом
+  const q = v => { let s = String(v ?? ""); if (/^[=@\t\r]/.test(s) || (/^[+\-]/.test(s) && !/^[+\-]?[\d\s()\-.,]+$/.test(s))) s = "'" + s; return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const head = ["ФИО", "Телефон", "Telegram", "Email", "Город", "Этап", "Следующий шаг", "Дата шага", "Поток", "Ментор", "Партнёр", "Стоимость", "Оплачено", "Остаток", "Компания", "Зарплата", "Дата оффера", "Заявка"];
+  const rows = sortBy(filtered(), s => s.createdAt || "").map(s => [s.name, s.phone, s.telegram, s.email, s.city, SLABEL[s.stage], hasStep(s) ? s.next.text : "", hasStep(s) ? fDate(s.next.date) : "", cohortName(s.cohortId), teamName(s.mentorId), partnerById(s.partnerId)?.name, s.price, paidSum(s), debt(s), s.jobCompany, s.jobSalary, s.offerDate ? fDate(s.offerDate) : "", fDate(isoDay(s.createdAt))]);
   const csv = "﻿" + [head, ...rows].map(r => r.map(q).join(";")).join("\r\n");
   try { await dl.save({ filename: `студенты-${today()}.csv`, data: csv }); toast("Файл сохранён"); }
   catch (e) { if (e?.code !== "declined") toast("Не удалось выгрузить файл"); }
@@ -1000,7 +1233,7 @@ async function exportBackup() {
   const dl = await claude.use("downloads");
   if (!dl) return toast("Выгрузка недоступна в этом окне");
   const data = {}; for (const c of COLS) data[c] = D()[c];
-  const backup = { format: "crm-menti-backup", version: 1, exportedAt: new Date().toISOString(), data };
+  const backup = { format: "crm-menti-backup", version: 2, exportedAt: new Date().toISOString(), data };
   try { await dl.save({ filename: `crm-menti-копия-${today()}.json`, data: JSON.stringify(backup, null, 1) }); toast("Резервная копия сохранена"); }
   catch (e) { if (e?.code !== "declined") toast("Не удалось сохранить копию"); }
 }
@@ -1010,7 +1243,7 @@ function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let
 async function loadDemo() {
   if (S.busy) return; S.busy = true; toast("Заполняю пример…");
   const r = rng(42), pick = a => a[Math.floor(r() * a.length)], int = (a, b) => a + Math.floor(r() * (b - a + 1));
-  const now = Date.now(), dAgo = n => dstr(new Date(now - n * 864e5)), tAgo = n => new Date(now - n * 864e5).toISOString();
+  const now = Date.now(), dAgo = n => daysAhead(-n), tAgo = n => new Date(now - n * 864e5).toISOString();
   const W = [];
   const c1 = newId("cohorts"), c2 = newId("cohorts"), c3 = newId("cohorts");
   W.push(["cohorts", c1, { name: "Поток 1", start: dAgo(150), end: dAgo(60), price: 90000, active: false, demo: true }]);
@@ -1026,6 +1259,7 @@ async function loadDemo() {
   const fem = new Set(["Анна", "Екатерина", "Мария", "Ольга", "Татьяна", "Юлия", "Ксения", "Наталья", "Елена"]);
   const L = ["Смирнов", "Кузнецов", "Попов", "Васильев", "Петров", "Соколов", "Михайлов", "Новиков", "Фёдоров", "Морозов", "Волков", "Лебедев", "Семёнов", "Егоров", "Павлов"];
   const CO = ["Первый Бит", "Рарус", "ИнфоСофт", "Софт-Сервис", "Интерсофт", "Компания «Сфера»"];
+  const STEP = { sales: ["Связаться", "Созвон", "Написать про оплату", "Отправить программу курса"], study: ["Проверить домашку", "Спросить, как дела", "Напомнить про итоговый проект"], job: ["Ревью резюме", "Узнать итог собеседования", "Подобрать вакансии"] };
   const weights = [6, 4, 3, 3, 7, 3, 5, 3, 3, 4], wsum = weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < 30; i++) {
     const first = pick(F), last = pick(L) + (fem.has(first) ? "а" : "");
@@ -1050,13 +1284,15 @@ async function loadDemo() {
     const salary = empl ? pick([70000, 80000, 90000, 100000, 120000]) : null, company = empl ? pick(CO) : "";
     if (empl) apps.push({ id: newId("x"), company, position: "Аналитик 1С", status: "accepted", salary, date: dAgo(Math.max(tday, 1)), interview: "", url: "", notes: "" });
     const notes = r() < .5 ? [{ id: newId("x"), text: pick(["Созвонились, мотивация высокая, хочет перейти из бухгалтерии.", "Сдал ДЗ по модулю 3, есть замечания по описанию бизнес-процесса.", "Пропустил два занятия, написать в понедельник.", "Резюме отправлено на ревью."]), at: tAgo(Math.max(tday - 1, 0)), by: null }] : [];
+    const active = !lost && stage !== "probation_passed";
+    const next = active && r() < .75 ? { text: pick(STEP[STAGES[si][2]]), date: daysAhead(int(-2, 6)) } : null;
     const p = src === p1 ? { id: p1, share: 40, promo: "BLOG1C", utm: "youtube" } : src === p2 ? { id: p2, share: 25, promo: "VKAT", utm: "telegram" } : null;
     W.push(["students", newId("students"), {
       name: `${last} ${first}`, phone: `+7 9${int(10, 99)} ${int(100, 999)}-${int(10, 99)}-${int(10, 99)}`, telegram: `@student${100 + i}`, email: "", city: pick(["Москва", "Казань", "Новосибирск", "Алматы", "Екатеринбург", "Минск"]), consent: true,
       stage, stageAt: hist[hist.length - 1].at, createdAt: hist[0].at, history: hist, lostReason: lost ? pick(["Дорого", "Не тянет по времени", "Передумал", "Не выходит на связь"]) : "",
       cohortId: cohort, mentorId: r() < .6 ? m1 : m2, price, partnerId: p?.id || null, partnerShare: p?.share || 0, promo: p?.promo || "", utmSource: p?.utm || "organic", utmCampaign: "",
       jobCompany: company, jobPosition: empl ? "Аналитик 1С" : "", jobSalary: salary, offerDate: empl ? dAgo(Math.max(tday, 1)) : null, comment: "",
-      payments, apps, notes, demo: true,
+      next, payments, apps, notes, demo: true,
     }]);
   }
   S.pending++; renderSync();
@@ -1064,7 +1300,7 @@ async function loadDemo() {
   for (const [c, id, d] of W) { try { await setDoc(c, id, d); } catch (e) { console.warn(e); ok = false; break; } }
   S.pending--; S.busy = false; renderSync();
   toast(ok ? "Пример загружен" : "Не всё удалось записать. Попробуйте ещё раз");
-  if (ok) { S.view = "dashboard"; render(); }
+  if (ok) { S.view = "today"; render(); }
 }
 async function clearDemo() {
   if (S.busy) return; S.busy = true; toast("Удаляю примеры…");
@@ -1072,33 +1308,61 @@ async function clearDemo() {
   try { for (const c of COLS) for (const x of D()[c].filter(x => x.demo)) await delDoc(c, x.id); toast("Примеры удалены"); }
   catch (e) { console.warn(e); toast("Не удалось удалить всё. Попробуйте ещё раз"); }
   S.pending--; S.busy = false; renderSync();
-  if (S.view === "student" || S.view === "partner") S.view = "dashboard";
+  S.openId = null; if (S.view === "partner") S.view = "partners";
   render();
 }
 
 // ---------- Уведомления ----------
-let toastT;
-function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
+let toastT, UNDO = null;
+function toast(msg, undo) {
+  const t = $("#toast"); UNDO = undo || null;
+  t.innerHTML = `<span>${esc(msg)}</span>${undo ? `<button data-act="undo">Отменить</button>` : ""}`;
+  t.hidden = false; clearTimeout(toastT);
+  toastT = setTimeout(() => { t.hidden = true; UNDO = null; }, undo ? 7000 : 2600);
+}
+
+// ---------- Поиск по всей базе ----------
+function searchResults(q) {
+  q = q.trim().toLowerCase(); if (!q) return [];
+  return D().students.filter(s => [s.name, s.phone, s.email, s.telegram].some(v => String(v || "").toLowerCase().includes(q))).slice(0, 8);
+}
+function renderSearch() {
+  const box = $("#gq-res"), res = searchResults($("#gq").value);
+  if (!$("#gq").value.trim()) { box.hidden = true; box.innerHTML = ""; return; }
+  box.innerHTML = res.length ? res.map((s, i) => `<button data-act="open" data-id="${esc(s.id)}" class="${i === 0 ? "on" : ""}"><span>${esc(s.name)}</span><span class="sub">${esc(SLABEL[s.stage])}</span></button>`).join("") : `<p class="empty">Никого не нашли</p>`;
+  box.hidden = false;
+}
+function closeSearch() { $("#gq").value = ""; $("#gq-res").hidden = true; }
 
 // ---------- События ----------
-function go(view) { S.view = view; try { localStorage.setItem("crm-menti-view", view); } catch (e) { } render(); window.scrollTo(0, 0); }
+function go(view) { S.view = view; S.openId = null; if (VIEWS.includes(view)) lsSet("crm-menti-view", view); render(); window.scrollTo(0, 0); }
+function openStudent(id) {
+  const was = S.openId; S.openId = id; S.histOpen = false; closeSearch(); render();
+  const el = $(".drawer"); if (el && !was) el.classList.add("enter");
+  $("#d-x")?.focus({ preventScroll: true });
+}
 const ACT = {
   nav: d => go(d.v),
-  open: d => { S.studentId = d.id; S.view = "student"; render(); window.scrollTo(0, 0); },
-  "student-new": () => studentForm(null),
+  open: d => openStudent(d.id),
+  "d-close": () => { S.openId = null; render(); },
+  pipe: d => { S.pipe = d.v; lsSet("crm-menti-pipe", d.v); render(); },
+  quick: d => quickForm(d.st || "new"),
   "student-edit": d => studentForm(stu(d.id)),
-  stage: d => moveStage(d.id, d.st),
-  lost: d => lostForm(stu(d.id)),
+  "step-edit": d => stepForm(stu(d.id)),
+  "step-done": d => stepDone(d.id),
+  "more-nostep": () => { S.moreNoStep = !S.moreNoStep; render(); },
+  qdate: d => { const el = document.getElementById(d.target); if (el) el.value = daysAhead(+d.days); },
+  copy: async d => { try { await navigator.clipboard.writeText(d.text); toast("Скопировано"); } catch (e) { toast(d.text); } },
   "pay-new": d => paymentForm(stu(d.id)),
   "pay-plan": d => planForm(stu(d.id)),
   "pay-edit": d => { const s = stu(d.id); paymentForm(s, (s.payments || []).find(p => p.id === d.pid)); },
-  "pay-done": d => { const s = stu(d.id); save(() => updDoc("students", s.id, { payments: (s.payments || []).map(p => p.id === d.pid ? { ...p, paid: today() } : p) }), "Платёж отмечен оплаченным"); },
+  "pay-done": d => payDone(d.id, d.pid),
   "app-new": d => appForm(stu(d.id)),
   "app-edit": d => { const s = stu(d.id); appForm(s, (s.apps || []).find(a => a.id === d.aid)); },
   "note-add": d => {
     const el = document.getElementById("note-" + d.id), text = el.value.trim(); if (!text) return el.focus();
-    const s = stu(d.id); el.value = "";
-    save(() => updDoc("students", d.id, { notes: [...(s.notes || []), { id: newId("x"), text, at: new Date().toISOString(), by: S.myId }] }), "Заметка добавлена").then(ok => { if (!ok) { const e2 = document.getElementById("note-" + d.id); if (e2) e2.value = text; } });
+    const note = { id: newId("x"), text, at: new Date().toISOString(), by: S.myId }; el.value = "";
+    save(() => patchStudent(d.id, cur => ({ notes: [...(cur.notes || []), note] })), "Заметка добавлена").then(ok => { if (!ok) { const e2 = document.getElementById("note-" + d.id); if (e2) e2.value = text; } });
   },
   paytab: d => { S.payTab = d.v; render(); },
   "partner-new": () => partnerForm(null),
@@ -1114,31 +1378,50 @@ const ACT = {
   "demo-load": () => loadDemo(),
   "demo-clear": (d, el) => { if (el.dataset.armed) return clearDemo(); el.dataset.armed = "1"; el.textContent = "Нажмите ещё раз, чтобы удалить"; },
   freset: () => { S.f = { q: "", cohort: "", mentor: "", partner: "", stage: "" }; render(); },
-  "toggle-lost": (d, el) => { S.showLost = el.checked; render(); },
   csv: () => exportCsv(),
   backup: () => exportBackup(),
+  undo: () => { const f = UNDO; UNDO = null; $("#toast").hidden = true; f && f(); },
   "m-close": () => closeModal(),
   "m-bg": (d, el, e) => { if (e.target === el) closeModal(); },
-  "m-delete": async (d, el) => { if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Нажмите ещё раз для удаления"; return; } const r = await MODAL?.onDelete?.(); if (r !== false) closeModal(); },
+  "m-link": () => { const l = MODAL?.link, v = collect(); closeModal(); l && l.go(v); },
+  "m-delete": async (d, el) => { if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Нажмите ещё раз"; return; } const r = await MODAL?.onDelete?.(); if (r !== false) closeModal(); },
 };
 document.addEventListener("click", e => {
+  if (!e.target.closest("#gsearch")) $("#gq-res").hidden = true;
+  const stop = e.target.closest("[data-stop]"); if (stop) return;
   const el = e.target.closest("[data-act]"); if (!el) return;
   if (el.dataset.act === "toggle-lost") return;
   const fn = ACT[el.dataset.act]; if (!fn) return;
-  if (el.tagName === "BUTTON" || el.tagName === "A") e.preventDefault();
+  if (el.tagName === "BUTTON") e.preventDefault();
   fn(el.dataset, el, e);
 });
 document.addEventListener("change", e => {
   const el = e.target;
   if (el.dataset.filter) { S.f[el.dataset.filter] = el.value; render(); }
-  if (el.dataset.act === "toggle-lost") ACT["toggle-lost"](el.dataset, el);
+  if (el.dataset.act === "toggle-lost") { S.showLost = el.checked; render(); }
+  if (el.dataset.move) {
+    const s = stu(el.dataset.move), to = el.value; if (!s || to === s.stage) return;
+    if (to === "lost") { el.value = s.stage; lostForm(s); } else moveStage(s.id, to).then(ok => { if (!ok) scheduleRender(); });
+  }
 });
 let qT;
-document.addEventListener("input", e => { if (e.target.id === "f-q") { S.f.q = e.target.value; clearTimeout(qT); qT = setTimeout(render, 180); } });
+document.addEventListener("input", e => {
+  if (e.target.id === "f-q") { S.f.q = e.target.value; clearTimeout(qT); qT = setTimeout(render, 180); }
+  if (e.target.id === "gq") renderSearch();
+});
+document.addEventListener("focusin", e => { if (e.target.id === "gq") renderSearch(); });
+document.addEventListener("toggle", e => { if (e.target.id === "d-hist") S.histOpen = e.target.open; }, true);
 document.addEventListener("submit", e => { if (e.target.id === "mform") { e.preventDefault(); submitModal(); } });
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape" && MODAL) closeModal();
-  if (e.key === "Enter" && e.target.classList?.contains("tile")) ACT.open(e.target.dataset);
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  if (e.key === "Escape") {
+    if (MODAL) closeModal();
+    else if (e.target.id === "gq") { closeSearch(); e.target.blur(); }
+    else if (S.openId) { S.openId = null; render(); }
+  }
+  if (e.key === "/" && !typing && !MODAL && !$("#gsearch").hidden) { e.preventDefault(); $("#gq").focus(); }
+  if (e.key === "Enter" && e.target.id === "gq") { e.preventDefault(); const first = $("#gq-res button"); if (first) openStudent(first.dataset.id); }
+  if ((e.key === "Enter" || e.key === " ") && e.target.classList?.contains("tile")) { e.preventDefault(); openStudent(e.target.dataset.id); }
   if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && e.target.id?.startsWith("note-")) { const b = e.target.parentElement.querySelector("[data-act=note-add]"); b && b.click(); }
 });
 // Перетаскивание карточек на доске
@@ -1185,5 +1468,7 @@ async function boot() {
   }
   S.status = "ready"; render();
 }
+let shownDay = today();
+setInterval(() => { if (today() !== shownDay) { shownDay = today(); scheduleRender(); } }, 60000);
 boot();
 </script>

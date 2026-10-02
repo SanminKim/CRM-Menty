@@ -267,6 +267,21 @@ class BackupImportTests(BaseCase):
         s = Student.objects.get(external_id="s1")
         self.assertEqual((s.cohort.name, s.partner.name, s.mentor.first_name), ("Поток 2", "Блог", "Ирина"))
 
+    def test_next_step_from_version_2(self):
+        data = sample_backup()
+        data["version"] = 2
+        data["data"]["students"][0]["next"] = {"text": "Узнать итог собеседования", "date": "2026-10-05"}
+        import_backup(data)
+        s = Student.objects.get(external_id="s1")
+        self.assertEqual((s.next_step, s.next_step_date.isoformat()), ("Узнать итог собеседования", "2026-10-05"))
+
+    def test_missing_or_null_next_step(self):
+        data = sample_backup()
+        data["data"]["students"][0]["next"] = None
+        import_backup(data)
+        s = Student.objects.get(external_id="s1")
+        self.assertEqual((s.next_step, s.next_step_date), ("", None))
+
     def test_with_demo(self):
         stats = import_backup(sample_backup(), with_demo=True)
         self.assertEqual(stats["students"]["created"], 2)

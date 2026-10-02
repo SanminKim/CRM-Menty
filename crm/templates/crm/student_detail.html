@@ -43,6 +43,7 @@
       <dt>Оплачено</dt><dd>{{ s.total_paid|money }}</dd>
       {% if s.debt %}<dt>Остаток</dt><dd class="warn-text">{{ s.debt|money }}</dd>{% endif %}
       {% if s.lost_reason %}<dt>Причина отказа</dt><dd>{{ s.lost_reason }}</dd>{% endif %}
+      {% if s.next_step %}<dt>Следующий шаг</dt><dd>{{ s.next_step }}{% if s.next_step_date %} · {{ s.next_step_date|date:"d.m.Y" }}{% endif %}</dd>{% endif %}
     </dl>
     <h2>Источник</h2>
     <dl>

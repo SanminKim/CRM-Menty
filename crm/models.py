@@ -173,6 +173,9 @@ class Student(models.Model):
     )
     offer_date = models.DateField("Дата оффера", null=True, blank=True)
 
+    next_step = models.CharField("Следующий шаг", max_length=255, blank=True)
+    next_step_date = models.DateField("Дата следующего шага", null=True, blank=True)
+
     comment = models.TextField("Комментарий", blank=True)
     created_at = models.DateTimeField("Создан", default=timezone.now)
     external_id = models.CharField(

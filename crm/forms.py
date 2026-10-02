@@ -39,13 +39,14 @@ class StudentForm(forms.ModelForm):
         model = Student
         fields = [
             "full_name", "phone", "telegram", "email", "city", "consent_pd",
-            "stage", "cohort", "mentor", "price", "lost_reason",
+            "stage", "cohort", "mentor", "price", "lost_reason", "next_step", "next_step_date",
             "partner", "utm_source", "utm_campaign", "promo_code",
             "job_company", "job_position", "job_salary", "offer_date",
             "comment",
         ]
         widgets = {
             "offer_date": DateInput(),
+            "next_step_date": DateInput(),
             "comment": forms.Textarea(attrs={"rows": 3}),
         }
 

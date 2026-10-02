@@ -19,7 +19,7 @@ from .models import (
 from .permissions import MENTOR_GROUP
 
 BACKUP_FORMAT = "crm-menti-backup"
-SUPPORTED_VERSIONS = (1,)
+SUPPORTED_VERSIONS = (1, 2)  # 2: у студента появился следующий шаг (next)
 
 
 class BackupError(ValueError):
@@ -168,6 +168,8 @@ def import_backup(raw, overwrite=False, with_demo=False):
             stats["warnings"].append(f"{row.get('name')}: неизвестный этап «{stage}», поставлен «Новая заявка»")
             stage = Stage.NEW
         created_at = _dt(row.get("createdAt")) or timezone.now()
+        step = row.get("next") if isinstance(row.get("next"), dict) else {}
+        step_date = _date(step.get("date")) if _text(step.get("text")) else None
         partner = partners.get(row.get("partnerId"))
         fields = dict(
             full_name=_text(row.get("name"), 200) or "Без имени",
@@ -184,6 +186,7 @@ def import_backup(raw, overwrite=False, with_demo=False):
             job_company=_text(row.get("jobCompany"), 200), job_position=_text(row.get("jobPosition"), 200),
             job_salary=_dec(row.get("jobSalary")), offer_date=_date(row.get("offerDate")),
             comment=_text(row.get("comment")), created_at=created_at,
+            next_step=_text(step.get("text"), 255) if step_date else "", next_step_date=step_date,
         )
         if existing:
             for name, value in fields.items():
