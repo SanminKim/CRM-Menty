@@ -135,6 +135,10 @@ docker compose exec -T web python manage.py import_backup /путь/к/копи�
    - После слияния в `main` код сам выкатывается на сервер (`.github/workflows/deploy.yml`), если в Settings → Secrets заданы `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_PATH`.
    - Рекомендуется защитить ветку `main`: Settings → Branches → Require pull request + Require status checks.
 
+## Разработка с Claude
+
+В репозитории настроен рабочий процесс для Claude Code: `CLAUDE.md` с правилами проекта и папка `.claude/` с агентами, навыками и командами из набора ECC. Порядок работы: план, тест, реализация, ревью, проверка, коммит. Что именно взято из ECC и почему — в `.claude/ECC.md`.
+
 ## Где что лежит
 
 ```
