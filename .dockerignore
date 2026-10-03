@@ -9,4 +9,5 @@ staticfiles
 backups
 .claude
 CLAUDE.md
-web
+e2e
+web/dev

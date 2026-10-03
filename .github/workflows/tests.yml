@@ -28,4 +28,11 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: python manage.py makemigrations --check --dry-run
-      - run: python manage.py test
+      - run: python manage.py test backend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Синтаксис страницы
+        run: |
+          node -e "new Function(require('fs').readFileSync('web/index.html','utf8').split('<script>')[1].split('</script>')[0])"
+          node --check web/server.js

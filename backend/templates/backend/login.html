@@ -1,0 +1,15 @@
+{% extends "backend/plain.html" %}
+{% block title %}Вход — CRM Менти{% endblock %}
+{% block body %}
+<form method="post" class="card" action="{% url 'login' %}">
+  {% csrf_token %}
+  <div class="brand"><span class="brand-mark">М</span><span>CRM Менти</span></div>
+  <h1>Вход</h1>
+  {% if locked %}<p class="error" role="alert">Слишком много неудачных попыток. Подождите 15 минут и попробуйте снова.</p>
+  {% elif form.errors %}<p class="error" role="alert">Неверный логин или пароль</p>{% endif %}
+  <label>Логин<input type="text" name="username" autocomplete="username" autofocus required></label>
+  <label>Пароль<input type="password" name="password" autocomplete="current-password" required></label>
+  <input type="hidden" name="next" value="{{ next }}">
+  <button>Войти</button>
+</form>
+{% endblock %}

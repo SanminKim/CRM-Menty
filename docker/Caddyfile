@@ -1,4 +1,13 @@
 {$DOMAIN} {
 	encode gzip
+	# Большие тела запросов принимает только загрузка резервной копии
+	@upload path /backup/import/
+	request_body @upload {
+		max_size 25MB
+	}
+	@rest not path /backup/import/
+	request_body @rest {
+		max_size 2MB
+	}
 	reverse_proxy web:8000
 }

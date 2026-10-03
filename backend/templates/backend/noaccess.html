@@ -1,0 +1,8 @@
+{% extends "backend/plain.html" %}
+{% block body %}
+<div class="card">
+  <h1>Доступ не настроен</h1>
+  <p>Для этой учётной записи не задана роль или вам сюда нельзя. Попросите администратора выдать доступ в настройках CRM.</p>
+  <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Выйти</button></form>
+</div>
+{% endblock %}

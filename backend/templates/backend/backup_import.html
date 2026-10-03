@@ -1,0 +1,16 @@
+{% extends "backend/plain.html" %}
+{% block title %}Загрузка резервной копии — CRM Менти{% endblock %}
+{% block body %}
+<form method="post" enctype="multipart/form-data" class="card wide">
+  {% csrf_token %}
+  <h1>Загрузка резервной копии</h1>
+  <p class="muted">Файл скачивается на странице CRM: Настройки → Резервная копия. Так переносятся данные из версии в Claude. Записи, которые уже есть на сервере, пропускаются.</p>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  {% if result %}<div class="ok" role="status"><p>Готово.</p><ul>{% for line in result %}<li>{{ line }}</li>{% endfor %}</ul></div>{% endif %}
+  <label>Файл копии (.json)<input type="file" name="file" accept=".json,application/json" required></label>
+  <label class="check"><input type="checkbox" name="overwrite"> Заменить записи, которые уже есть на сервере</label>
+  <label class="check"><input type="checkbox" name="with_demo"> Загрузить и примерные данные</label>
+  <button>Загрузить</button>
+  <a href="{% url 'home' %}">Вернуться в CRM</a>
+</form>
+{% endblock %}

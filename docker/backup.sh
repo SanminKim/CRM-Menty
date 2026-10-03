@@ -1,6 +1,7 @@
 #!/bin/sh
 # Ежедневный бэкап PostgreSQL. Хранит последние BACKUP_KEEP_DAYS дней в ./backups на сервере.
 set -e
+umask 077  # в копии персональные данные: файлы читает только владелец
 KEEP_DAYS="${BACKUP_KEEP_DAYS:-14}"
 mkdir -p /backups
 while true; do
