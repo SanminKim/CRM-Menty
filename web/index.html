@@ -481,11 +481,13 @@ const pad = n => String(n).padStart(2, "0");
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const today = () => dstr(new Date());
 const daysAhead = n => { const d = new Date(); d.setDate(d.getDate() + n); return dstr(d); };
-const fDate = s => s ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : "—";
-const fDay = s => s ? `${s.slice(8, 10)}.${s.slice(5, 7)}` : "";
-const fShort = s => s ? `${+s.slice(8, 10)} ${MON[+s.slice(5, 7) - 1]}` : "";
+// Даты приходят из базы строками: показываем их, только если это действительно дата
+const isDay = s => typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s);
+const fDate = s => isDay(s) ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : "—";
+const fDay = s => isDay(s) ? `${s.slice(8, 10)}.${s.slice(5, 7)}` : "";
+const fShort = s => isDay(s) ? `${+s.slice(8, 10)} ${MON[+s.slice(5, 7) - 1] || ""}` : "";
 const fDT = iso => { if (!iso) return ""; const d = new Date(iso); return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-const fLocalDT = s => s ? `${fShort(s.slice(0, 10))}, ${s.slice(11, 16)}` : "";
+const fLocalDT = s => isDay(s) && /^\d{2}:\d{2}/.test(s.slice(11)) ? `${fShort(s.slice(0, 10))}, ${s.slice(11, 16)}` : "";
 const isoDay = iso => iso ? dstr(new Date(iso)) : "";
 const daysSince = iso => iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 864e5)) : 0;
 const daysBetween = (a, b) => Math.round((new Date(b + "T12:00") - new Date(a + "T12:00")) / 864e5);
@@ -503,7 +505,8 @@ function dueLabel(date) {
 }
 function addMonths(s, n) { const [y, m, d] = s.split("-").map(Number); const first = new Date(y, m - 1 + n, 1); const last = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate(); first.setDate(Math.min(d, last)); return dstr(first); }
 const initials = name => String(name || "").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
-const mask = name => { const p = String(name || "").split(/\s+/).filter(Boolean); return p.length >= 2 ? `${p[1]} ${p[0][0]}.` : (p[0] || ""); };
+// «Иванов Пётр» → «Пётр И.». Если вместо имени записан контакт (заявка без имени), в отчёт партнёра он не попадает
+const mask = name => { const t = String(name || ""); if (/[@\d]/.test(t)) return "Без имени"; const p = t.split(/\s+/).filter(Boolean); return p.length >= 2 ? `${p[1]} ${p[0][0]}.` : (p[0] || ""); };
 const num = v => (v === null || v === undefined || v === "" || isNaN(v)) ? null : Number(v);
 const badge = st => `<span class="badge b-${SGROUP[st] || "sales"}">${esc(SLABEL[st] || st)}</span>`;
 const sortBy = (arr, f) => [...arr].sort((a, b) => { const x = f(a), y = f(b); return x < y ? -1 : x > y ? 1 : 0; });
@@ -602,13 +605,13 @@ function agenda(list) {
 }
 // События календаря за период: встречи и собеседования из откликов (их правят в карточке студента)
 function events(from, to) {
-  const f = S.f.mentor, me = myTeam(), okMentor = id => !f || (f === "me" ? !!me && id === me.id : id === f);
+  const f = S.f.mentor, me = myTeam(), okMentor = id => !f || (f === "me" ? !!me && id === me.id : f === "none" ? !teamName(id) : id === f);
   const out = [];
   for (const m of D().meetings) {
     if (!m.date || m.date < from || m.date > to) continue;
     const s = m.studentId ? stu(m.studentId) : null, mid = m.mentorId || s?.mentorId;
     if (m.studentId && !s) continue; // студент в корзине: его встречи вернутся вместе с ним
-    if (mid && !okMentor(mid)) continue;
+    if (f === "none" ? !!teamName(mid) : (mid && !okMentor(mid))) continue;
     out.push({ type: "m", date: m.date, time: m.time || "", title: m.title || "Встреча", kind: m.kind || "other", status: m.status || "planned", m, s });
   }
   for (const s of D().students) {
@@ -670,7 +673,7 @@ function filtered(keys = ["q", "cohort", "mentor", "partner", "stage"]) {
   return D().students.filter(s => {
     if (q && ![s.name, s.phone, s.email, s.telegram].some(v => String(v || "").toLowerCase().includes(q))) return false;
     if (on("cohort") && (f.cohort === "none" ? s.cohortId : (f.cohort && s.cohortId !== f.cohort))) return false;
-    if (on("mentor") && (f.mentor === "me" ? (!me || s.mentorId !== me.id) : (f.mentor && s.mentorId !== f.mentor))) return false;
+    if (on("mentor") && (f.mentor === "me" ? (!me || s.mentorId !== me.id) : f.mentor === "none" ? !!teamName(s.mentorId) : (f.mentor && s.mentorId !== f.mentor))) return false;
     if (on("partner") && (f.partner === "none" ? s.partnerId : (f.partner && s.partnerId !== f.partner))) return false;
     if (on("stage") && f.stage && s.stage !== f.stage) return false;
     return true;
@@ -679,7 +682,7 @@ function filtered(keys = ["q", "cohort", "mentor", "partner", "stage"]) {
 const opt = (v, l, cur) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(l)}</option>`;
 function mentorSelect() {
   if (!D().team.length || S.limited) return ""; // ментор на сервере и так видит только своих
-  return `<select id="f-mentor" data-filter="mentor" aria-label="Ментор">${opt("", "Все менторы", S.f.mentor)}${myTeam() ? opt("me", "Мои студенты", S.f.mentor) : ""}${D().team.map(m => opt(m.id, m.name, S.f.mentor)).join("")}</select>`;
+  return `<select id="f-mentor" data-filter="mentor" aria-label="Ментор">${opt("", "Все менторы", S.f.mentor)}${myTeam() ? opt("me", "Мои студенты", S.f.mentor) : ""}${D().team.map(m => opt(m.id, m.name, S.f.mentor)).join("")}${opt("none", "Без ментора", S.f.mentor)}</select>`;
 }
 function filtersHTML(keys, { lost = false } = {}) {
   const f = S.f, on = k => keys.includes(k), any = keys.some(k => f[k]);
@@ -727,7 +730,7 @@ function renderSync() {
 }
 function navHTML() {
   if (S.status !== "ready") return "";
-  if (S.mode === "partner") return `<button class="on">Отчёт</button>${S.server ? `<button data-act="logout">Выйти</button>` : ""}`;
+  if (S.mode === "partner") return `<button class="on">Отчёт</button>${S.server ? `<button data-act="password">Сменить пароль</button><button data-act="logout">Выйти</button>` : ""}`;
   const ag = agenda(D().students), late = ag.pays.filter(p => p.due < today()).length;
   const meetsToday = events(today(), today()).filter(e => e.status === "planned").length;
   const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи", late, true], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"]];
@@ -778,11 +781,18 @@ function todayView() {
   const sub = `${dateLine} · в продажах ${g("sales")} · учатся ${g("study")} · ищут работу ${g("job")}`;
   const noStep = S.moreNoStep ? ag.noStep : ag.noStep.slice(0, 6);
   const meets = [...unmarked(), ...events(t, daysAhead(7)).filter(e => e.status === "planned")];
+  // Заявки, за которые пока никто не отвечает: с сайта они приходят без ментора
+  const orphans = !S.limited && !S.readOnly && D().team.length > 0 && !S.f.mentor ? sortBy(D().students.filter(s => isActive(s) && !teamName(s.mentorId)), s => s.createdAt || "").reverse() : [];
   const dueBody = ag.due.length ? `<ul class="rows">${ag.due.map(stepRow).join("")}</ul>`
     : `<div class="allclear"><strong>На сегодня шагов нет</strong>${ag.noStep.length ? "Назначьте следующий шаг студентам из списка «Без следующего шага»." : "Все студенты под контролем."}</div>`;
   return headHTML("Сегодня", "", mentorSelect() + addBtn, sub) + demoBanner() + backupBanner() + `
   <div class="today">
     <div class="stack">
+      ${orphans.length ? panel("Без ментора", orphans.length, `<ul class="rows">${orphans.slice(0, 8).map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
+          <span class="who"><strong>${esc(s.name)}</strong><span>${s.source === "site" ? "заявка с сайта · " : ""}${fShort(isoDay(s.createdAt))}${partnerById(s.partnerId) ? " · " + esc(partnerById(s.partnerId).name) : ""}</span></span>
+          ${badge(s.stage)}<button class="btn small" data-act="assign" data-id="${esc(s.id)}">Назначить ментора</button></li>`).join("")}
+          ${orphans.length > 8 ? `<li><button class="link" data-act="list-nomentor">Показать всех: ${orphans.length}</button></li>` : ""}</ul>
+          ${S.server && S.isOwner && !myTeam() ? `<p class="hint pad">Чтобы ваши заявки сразу были закреплены за вами, <button class="link" data-act="nav" data-v="settings">добавьте себя в команду</button> в настройках.</p>` : ""}`) : ""}
       ${panel("Сделать", ag.due.length || "", dueBody)}
       ${ag.week.length ? panel("На неделе", ag.week.length, `<ul class="rows">${ag.week.map(stepRow).join("")}</ul>`) : ""}
     </div>
@@ -802,6 +812,18 @@ function todayView() {
 }
 function welcomeView() {
   if (S.limited) return `<div class="card welcome"><h1>У вас пока нет студентов</h1><p>Здесь появятся студенты, которых закрепит за вами администратор. Новую заявку можно добавить самому: она сразу будет вашей.</p><div class="actions">${addBtn}</div></div>`;
+  if (S.server) return `<div class="card welcome">
+    <h1>CRM готова к работе</h1>
+    <p>Здесь вы ведёте каждого человека от заявки до оффера. Экран «Сегодня» собирает всё, что нужно сделать: кому написать, чей платёж подошёл, какая встреча впереди.</p>
+    <ol>
+      <li><strong>Перенесите данные</strong>, если вели студентов в версии в Claude: там Настройки → «Скачать резервную копию», здесь — <a href="${esc(SRV.importUrl)}">загрузить копию</a>.</li>
+      <li>В <button class="link" data-act="nav" data-v="settings">настройках</button> добавьте себя в команду, заведите поток и партнёра-блогера.</li>
+      <li>Выдайте доступ менторам и блогеру: Настройки → Доступ.</li>
+      <li>Добавляйте заявки вручную, списком или подключите форму на сайте.</li>
+    </ol>
+    <div class="actions">${addBtn}<a class="btn" href="${esc(SRV.importUrl)}">Загрузить копию</a><button class="btn ghost" data-act="demo-load">Посмотреть на примере</button></div>
+    <p class="hint">Пример заполнит базу вымышленными студентами с пометкой «пример». Их можно удалить одной кнопкой.</p>
+  </div>`;
   return `<div class="card welcome">
     <h1>База пока пустая</h1>
     <p>Здесь вы ведёте каждого человека от заявки до оффера. У каждого студента есть следующий шаг с датой, а экран «Сегодня» собирает всё, что нужно сделать: кому написать, чей платёж подошёл, у кого собеседование.</p>
@@ -817,7 +839,7 @@ function welcomeView() {
 
 // ----- Аналитика -----
 function funnelHTML(rows) {
-  return `<div class="funnel">${rows.map(r => `<div class="funnel-row"><span class="funnel-label">${esc(r.label)}</span><span class="funnel-bar"><span style="width:${Math.max(0, Math.min(100, +r.pct || 0))}%"></span></span><span class="funnel-num">${esc(r.count)} <small>${esc(r.pct)}%</small></span></div>`).join("")}</div>`;
+  return `<div class="funnel">${rows.map(r => `<div class="funnel-row"><span class="funnel-label">${esc(SLABEL[r.key] || r.label)}</span><span class="funnel-bar"><span style="width:${Math.max(0, Math.min(100, +r.pct || 0))}%"></span></span><span class="funnel-num">${esc(r.count)} <small>${esc(r.pct)}%</small></span></div>`).join("")}</div>`;
 }
 function barPath(x, y, w, h, r) {
   r = Math.min(r, h, w / 2);
@@ -952,7 +974,7 @@ function tileHTML(s) {
     : isActive(s) ? `<span class="tile-step none">Нет следующего шага</span>` : "";
   return `<div class="tile${od || late ? " alert" : ""}" draggable="${S.readOnly ? "false" : "true"}" data-act="open" data-id="${esc(s.id)}" tabindex="0" role="button" aria-label="${esc(s.name)}">
     <strong>${esc(s.name)}</strong>${meta ? `<span class="tile-meta">${esc(meta)}</span>` : ""}${step}
-    <span class="tile-foot"><span>${daysSince(s.stageAt)} дн. на этапе</span>${SGROUP[s.stage] === "study" ? progHTML(progressOf(s)) : ""}${od ? `<span class="tag danger">просрочен платёж</span>` : ""}${s.demo ? `<span class="tag">пример</span>` : ""}${mentor ? `<span class="avatar" title="${esc(mentor)}">${esc(initials(mentor))}</span>` : ""}</span>
+    <span class="tile-foot"><span>${daysSince(s.stageAt)} дн. на этапе</span>${SGROUP[s.stage] === "study" ? progHTML(progressOf(s)) : ""}${od ? `<span class="tag danger">просрочен платёж</span>` : ""}${s.demo ? `<span class="tag">пример</span>` : ""}${!mentor && !S.limited && D().team.length && isActive(s) ? `<span class="tag warn">без ментора</span>` : ""}${mentor ? `<span class="avatar" title="${esc(mentor)}">${esc(initials(mentor))}</span>` : ""}</span>
     <select class="tile-move" data-move="${esc(s.id)}" data-stop aria-label="Сменить этап">${STAGES.map(x => opt(x[0], x[1], s.stage)).join("")}</select>
   </div>`;
 }
@@ -1013,7 +1035,7 @@ function cohortStats(c) {
 const cohortDates = c => `${c.start ? fDate(c.start) : "дата не задана"}${c.end ? " – " + fDate(c.end) : ""}`;
 function cohortsView() {
   const cohorts = sortBy(D().cohorts, c => c.start || "").reverse(), none = D().students.filter(s => !s.cohortId).length;
-  return headHTML("Потоки", "", S.limited ? "" : `<button class="btn primary" data-act="cohort-new">+ Поток</button>`) +
+  return headHTML("Потоки", "", S.limited ? "" : `<button class="btn primary" data-act="cohort-new">+ Поток</button>`, S.limited ? "Цифры по вашим студентам" : "") +
     (cohorts.length ? `<div class="cgrid">${cohorts.map(c => { const st = cohortStats(c); return `<button class="ccard" data-act="cohort-open" data-id="${esc(c.id)}">
       <h2>${esc(c.name)}${c.active === false ? `<span class="tag">завершён</span>` : ""}</h2>
       <span class="sub">${cohortDates(c)}${c.price ? " · " + money(c.price) : ""}</span>
@@ -1029,7 +1051,7 @@ function cohortView() {
   if (!c) return headHTML("Поток не найден", `<button class="back" data-act="nav" data-v="cohorts">← Потоки</button>`);
   const st = cohortStats(c), list = sortBy(S.showLost ? st.list : st.act, s => SIDX[s.stage] * 1e3 - (progressOf(s)?.pct || 0));
   return headHTML(esc(c.name) + (c.active === false ? ` <span class="tag">завершён</span>` : ""), `<button class="back" data-act="nav" data-v="cohorts">← Потоки</button>`,
-    S.limited ? "" : `<button class="btn" data-act="cohort-edit" data-id="${esc(c.id)}">Изменить поток</button>`, `${cohortDates(c)}${c.price ? " · " + money(c.price) : ""} · ${st.mods.length ? `${st.mods.length} ${plural(st.mods.length, "модуль", "модуля", "модулей")}` : "программа не задана"}`) + `
+    S.limited ? "" : `<button class="btn" data-act="cohort-edit" data-id="${esc(c.id)}">Изменить поток</button>`, `${cohortDates(c)}${c.price ? " · " + money(c.price) : ""} · ${st.mods.length ? `${st.mods.length} ${plural(st.mods.length, "модуль", "модуля", "модулей")}` : "программа не задана"}${S.limited ? " · показаны только ваши студенты" : ""}`) + `
   <section class="kpis">
     <div class="kpi"><span class="kpi-label">Студентов</span><span class="kpi-value">${st.studying.length}</span><span class="kpi-sub">заявок: ${st.leads} · выбыло: ${st.list.length - st.act.length}</span></div>
     <div class="kpi"><span class="kpi-label">Средний прогресс</span><span class="kpi-value">${st.avg !== null ? st.avg + "%" : "—"}</span></div>
@@ -1104,7 +1126,7 @@ function drawerHTML(s) {
   const result = s.jobCompany ? `${esc(s.jobCompany)}${s.jobPosition ? ", " + esc(s.jobPosition) : ""}${s.jobSalary ? " · " + money(s.jobSalary) : ""}${s.offerDate ? " · " + fDate(s.offerDate) : ""}` : "";
   return `<div class="scrim" data-act="d-close"></div>
   <aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(s.name)}">
-    <header class="d-head"><h2>${esc(s.name)}${s.demo ? ` <span class="tag">пример</span>` : ""}</h2>
+    <header class="d-head"><h2>${esc(s.name)}${s.demo ? ` <span class="tag">пример</span>` : ""}${s.source === "site" ? ` <span class="tag">с сайта</span>` : ""}</h2>
       <button class="btn small" data-act="student-edit" data-id="${esc(s.id)}">Изменить</button>
       <button class="x" id="d-x" data-act="d-close" aria-label="Закрыть">×</button></header>
     <div class="d-body" id="d-body">
@@ -1114,7 +1136,7 @@ function drawerHTML(s) {
       ${contacts ? `<div class="chips">${contacts}</div>` : ""}
       <dl class="facts">
         <dt>Поток</dt><dd>${esc(cohortName(s.cohortId) || "—")}</dd>
-        <dt>Ментор</dt><dd>${esc(teamName(s.mentorId) || "—")}</dd>
+        <dt>Ментор</dt><dd>${teamName(s.mentorId) ? esc(teamName(s.mentorId)) : `<span class="warn-text">не назначен</span>`}${!S.limited && !S.readOnly && D().team.length ? ` <button class="link" data-act="assign" data-id="${esc(s.id)}">${teamName(s.mentorId) ? "сменить" : "назначить"}</button>` : ""}</dd>
         <dt>Источник</dt><dd>${p ? `${esc(p.name)} <span class="sub">доля ${esc(s.partnerShare ?? p.share)}%</span>` : esc(s.utmSource || "—")}${s.promo ? ` <span class="sub">промокод ${esc(s.promo)}</span>` : ""}</dd>
         ${d ? `<dt>Остаток</dt><dd class="warn-text">${money(d)}</dd>` : ""}
         ${dd("Город", esc(s.city))}
@@ -1175,9 +1197,12 @@ function partnerView() {
   const p = partnerById(S.partnerId);
   if (!p) return headHTML("Партнёр не найден", `<button class="back" data-act="nav" data-v="partners">← Партнёры</button>`);
   const st = partnerStats(p), rep = D().reports.find(r => r.id === p.id);
-  const sub = `Доля ${esc(p.share ?? 0)}% от фактических оплат${p.promo ? ` · промокод ${esc(p.promo)}` : ""}${p.utm ? ` · utm_source ${esc(p.utm)}` : ""}. ${rep ? `Отчёт для партнёра обновлён ${fDT(rep.updatedAt)}.` : "Отчёт для партнёра ещё не публиковался."}`;
+  const acc = S.accounts.find(a => a.role === "partner" && a.linkId === p.id);
+  const repNote = S.server ? (acc ? `У партнёра есть вход (${esc(acc.username)}): он видит эти цифры без контактов студентов.` : "У партнёра пока нет входа в CRM.")
+    : rep ? `Отчёт для партнёра обновлён ${fDT(rep.updatedAt)}.` : "Отчёт для партнёра ещё не публиковался.";
+  const sub = `Доля ${esc(p.share ?? 0)}% от фактических оплат${p.promo ? ` · промокод ${esc(p.promo)}` : ""}${p.utm ? ` · utm_source ${esc(p.utm)}` : ""}. ${repNote}`;
   return headHTML(esc(p.name), `<button class="back" data-act="nav" data-v="partners">← Партнёры</button>`,
-    `<button class="btn" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button><button class="btn primary" data-act="report-publish" data-id="${esc(p.id)}">${rep ? "Обновить отчёт сейчас" : "Опубликовать отчёт для партнёра"}</button>`, sub) + `
+    `<button class="btn" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button>${S.server ? (acc ? "" : `<button class="btn primary" data-act="account-new" data-partner="${esc(p.id)}">Выдать партнёру доступ</button>`) : `<button class="btn primary" data-act="report-publish" data-id="${esc(p.id)}">${rep ? "Обновить отчёт сейчас" : "Опубликовать отчёт для партнёра"}</button>`}`, sub) + `
   ${kpisPartner(st)}
   <div class="grid-2">
     ${panel("Воронка по трафику партнёра", "", `<div class="pad">${funnelHTML(st.funnel)}</div>`)}
@@ -1187,7 +1212,7 @@ function partnerView() {
     <thead><tr><th>Студент</th><th>Этап</th><th>Заявка</th><th class="num">Оплатил</th><th class="num">Доля партнёра</th></tr></thead>
     <tbody>${st.rows.map(r => `<tr class="click" data-act="open" data-id="${esc(r.s.id)}"><td><strong>${esc(r.s.name)}</strong></td><td>${badge(r.s.stage)}</td><td class="muted">${fDate(isoDay(r.s.createdAt))}</td><td class="num">${money(r.paid)}</td><td class="num">${money(r.share)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">Заявок от партнёра пока нет</td></tr>`}</tbody>
   </table></div>
-  <p class="hint" style="margin-top:12px">Партнёр видит только опубликованный отчёт: цифры, воронку и сокращённые имена («Иван П.») без контактов. После первой публикации отчёт обновляется сам, когда меняются оплаты, этапы или выплаты.</p>`;
+  <p class="hint" style="margin-top:12px">${S.server ? "Партнёр входит под своим логином и видит только отчёт: цифры, воронку и сокращённые имена («Иван П.») без контактов. Отчёт всегда актуален: сервер пересчитывает его при каждом изменении оплат, этапов и выплат." : "Партнёр видит только опубликованный отчёт: цифры, воронку и сокращённые имена («Иван П.») без контактов. После первой публикации отчёт обновляется сам, когда меняются оплаты, этапы или выплаты."}</p>`;
 }
 
 // ----- Отчёт для партнёра (режим просмотра) -----
@@ -1213,7 +1238,8 @@ function reportView() {
 function accountPanel() {
   const me = S.me || {}, link = myTeam();
   return panel("Учётная запись", "", `<ul class="rows"><li><span class="who"><strong>${esc(me.name || me.username)}</strong><span>${esc(ROLEL[me.role] || "")}${link ? " · в команде: " + esc(link.name) : ""}</span></span>
-    <span class="acts"><a class="btn small" href="${esc(SRV.passwordUrl)}">Сменить пароль</a><button class="btn small ghost" data-act="logout">Выйти</button></span></li></ul>`);
+    <span class="acts"><a class="btn small" href="${esc(SRV.passwordUrl)}">Сменить пароль</a><button class="btn small ghost" data-act="logout">Выйти</button></span></li>
+    ${S.isOwner && !link ? `<li><span class="who"><strong class="warn-text">Вас нет в команде</strong><span>Без этого нет фильтра «Мои студенты», и вас нельзя назначить ментором</span></span><button class="btn small" data-act="self-team">Добавить себя в команду</button></li>` : ""}</ul>`);
 }
 function accessPanel() {
   const linkName = a => a.role === "partner" ? partnerById(a.linkId)?.name : teamName(a.linkId);
@@ -1239,7 +1265,7 @@ function settingsView() {
       <li><span class="warn-text">Не включайте доступ по публичной ссылке: пока он включён, приглашённые редакторы теряют право на изменения.</span></li>
     </ul>`)}
   ${trashPanel()}
-  ${panel("Резервная копия", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, встречи, команда, партнёры и выплаты. Этот же файл загружается в версию для своего сервера при переезде.</p>
+  ${panel("Резервная копия", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, встречи, команда, партнёры и выплаты. ${S.server ? "Сервер каждую ночь сохраняет копию сам, но она лежит на том же сервере. Раз в неделю скачивайте файл к себе: из него база восстанавливается на любом сервере." : "Этот же файл загружается в версию для своего сервера при переезде."}</p>
     <div class="actions"><button class="btn" data-act="backup">Скачать резервную копию</button>${S.server ? `<a class="btn" href="${esc(SRV.importUrl)}">Загрузить копию</a>` : ""}</div>
     <p class="hint" style="margin-top:8px">В файле есть контакты студентов. Храните его там, куда нет доступа посторонним.</p></div>`)}
   ${panel("Пример данных", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вымышленные студенты, потоки и партнёры с пометкой «пример», чтобы посмотреть, как всё работает. Ваши настоящие записи не затрагиваются.</p>
@@ -1548,6 +1574,16 @@ function quickForm(stage = "new") {
     },
   });
 }
+function assignForm(s) {
+  openModal({
+    title: `Ментор: ${s.name}`, submit: "Назначить", values: { mentorId: teamName(s.mentorId) ? s.mentorId : (myTeam()?.id || "") },
+    fields: [{ k: "mentorId", label: "Кто ведёт студента", type: "select", wide: true, options: teamOpts(), help: S.server ? "Ментор увидит студента у себя сразу после назначения" : "" }],
+    onSubmit: v => {
+      if ((v.mentorId || null) === (teamName(s.mentorId) ? s.mentorId : null)) return v.mentorId ? true : "Выберите ментора";
+      return save(() => patchStudent(s.id, () => ({ mentorId: v.mentorId || null })), v.mentorId ? `Ментор: ${teamName(v.mentorId)}` : "Ментор снят");
+    },
+  });
+}
 function stepForm(s, after = false) {
   const cur = after ? null : (hasStep(s) ? s.next : null);
   openModal({
@@ -1799,30 +1835,59 @@ function teamForm(m) {
     onSubmit: v => { const id = m?.id || newId("team"); return save(() => setDoc("team", id, { ...(m || {}), name: v.name, id: undefined }), "Сохранено"); },
   });
 }
+// Владелец добавляет себя в команду одной кнопкой: появляется «Мои студенты», а заявки по умолчанию назначаются ему
+async function selfTeam() {
+  const mine = S.accounts.find(a => a.me); if (!mine) return toast("Не удалось найти вашу учётную запись. Обновите страницу");
+  const id = newId("team"), name = S.me.name || S.me.username;
+  if (!(await save(() => setDoc("team", id, { name })))) return;
+  try { await SRV.accounts.update(mine.id, { linkId: id }); }
+  catch (e) {
+    if (e?.code !== "unavailable") await delDoc("team", id).catch(() => { }); // сервер отказал: запись в команде не оставляем
+    return toast(e?.message || "Не удалось связать учётную запись. Попробуйте ещё раз");
+  }
+  location.reload();
+}
 async function loadAccounts() {
   if (!SRV || !S.isOwner) return;
   try { S.accounts = await SRV.accounts.list(); scheduleRender(); } catch (e) { console.warn(e); }
 }
-function accountForm(a) {
+function accountForm(a, prefill = {}) {
   const taken = id => S.accounts.some(x => x.linkId === id && x.id !== a?.id && (x.role === "partner") === false);
   const free = D().team.filter(m => !taken(m.id)).map(m => [m.id, m.name]);
+  const NEW = "__new";
   openModal({
     title: a ? "Доступ" : "Новый доступ", wide: true, submit: a ? "Сохранить" : "Выдать доступ",
-    values: a ? { ...a, teamId: a.role === "partner" ? "" : a.linkId, partnerId: a.role === "partner" ? a.linkId : "" } : { role: "mentor", active: true, teamId: "", partnerId: "" },
+    values: a ? { ...a, teamId: a.role === "partner" ? "" : a.linkId, partnerId: a.role === "partner" ? a.linkId : "" }
+      : { role: prefill.partnerId ? "partner" : "mentor", active: true, teamId: NEW, partnerId: prefill.partnerId || "", name: prefill.partnerId ? (partnerById(prefill.partnerId)?.name || "") : "" },
     fields: [{ k: "username", label: "Логин", req: true, ph: "irina", auto: "off" }, { k: "name", label: "Имя", ph: "Ирина Котова" },
       { k: "role", label: "Роль", type: "select", options: ROLES },
-      { k: "teamId", label: "Кто это в команде", type: "select", options: [["", "—"], ...free], help: "Для ментора обязательно: он увидит студентов этого человека" },
+      { k: "teamId", label: "Кто это в команде", type: "select", options: [[NEW, "Новый участник (по имени выше)"], ...free, ...(a && a.role !== "partner" && a.linkId && !free.some(x => x[0] === a.linkId) ? [[a.linkId, "(запись в команде удалена)"]] : []), ["", "— не в команде —"]], help: "Ментор увидит студентов этого человека" },
       { k: "partnerId", label: "Партнёр", type: "select", options: partnerOpts(), help: "Для роли «Партнёр»: чей отчёт он увидит" },
       { k: "password", label: a ? "Новый пароль" : "Пароль", type: "password", auto: "new-password", help: a ? "Оставьте пустым, чтобы не менять" : "Не короче 10 символов, не только цифры" },
       ...(a ? [{ k: "active", label: "Может входить", type: "checkbox" }] : [])],
     extra: `<p class="hint">Передайте человеку логин и пароль лично. После входа он может сменить пароль в настройках.</p>`,
     onSubmit: async v => {
+      let madeTeam = null;
       const data = { username: v.username, name: v.name, role: v.role, linkId: v.role === "partner" ? v.partnerId : v.teamId };
       if (v.password) data.password = v.password;
       if (a) data.active = !!v.active;
       if (!a && !v.password) return "Задайте пароль";
+      if (v.role === "partner" && !v.partnerId) return "Выберите партнёра, чей отчёт увидит этот человек";
+      if (v.role !== "partner" && v.teamId === NEW) {
+        // Запись в команде заводится здесь же, чтобы не ходить в два раздела
+        if (!v.name) return "Укажите имя: под ним человек появится в команде";
+        const same = D().team.find(m => String(m.name || "").trim().toLowerCase() === v.name.toLowerCase() && !taken(m.id));
+        data.linkId = same ? same.id : newId("team");
+        if (!same && !(await save(() => setDoc("team", data.linkId, { name: v.name })))) return false;
+        if (!same) madeTeam = data.linkId;
+      }
       try { a ? await SRV.accounts.update(a.id, data) : await SRV.accounts.create(data); }
-      catch (e) { return e?.message || (e?.code === "permission_denied" ? "На это действие у вас нет прав" : "Не удалось сохранить. Попробуйте ещё раз"); }
+      catch (e) {
+        // Доступ не выдан (например, слабый пароль): только что заведённую запись в команде убираем, чтобы не оставить «пустого» участника
+        // При обрыве связи не трогаем: сервер мог успеть создать учётную запись
+        if (madeTeam && e?.code !== "unavailable") { await delDoc("team", madeTeam).catch(() => { }); madeTeam = null; }
+        return e?.message || (e?.code === "permission_denied" ? "На это действие у вас нет прав" : "Не удалось сохранить. Попробуйте ещё раз");
+      }
       toast(a ? "Доступ изменён" : "Доступ выдан"); loadAccounts();
       return true;
     },
@@ -1867,7 +1932,7 @@ function publishReport(p) { save(() => setDoc("reports", p.id, reportDoc(p)), "�
 const stable = o => JSON.stringify(o, (k, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(x => [x, v[x]])) : v);
 const reportBody = d => { const { updatedAt, id, ...rest } = d; return stable(clean(rest)); };
 let repT;
-function scheduleReports() { clearTimeout(repT); repT = setTimeout(refreshReports, 2500); }
+function scheduleReports() { if (S.server) return; clearTimeout(repT); repT = setTimeout(refreshReports, 2500); } // на сервере отчёты пересчитывает сам сервер
 function refreshReports() {
   if (S.readOnly || S.limited || S.mode !== "staff" || !S.loaded.reports || !S.loaded.students || !S.loaded.payouts || !S.loaded.partners) return;
   for (const r of D().reports) {
@@ -2041,8 +2106,12 @@ const ACT = {
   "meet-edit": d => { const m = meetById(d.id); if (m) meetingForm(m); },
   "meet-mark": d => meetMark(d.id, d.st),
   "trash-restore": d => restoreStudent(d.id),
+  assign: d => { const s = stu(d.id); if (s) assignForm(s); },
+  "list-nomentor": () => { S.f = { q: "", cohort: "", mentor: "none", partner: "", stage: "" }; go("students"); },
+  password: () => { if (SRV) location.href = SRV.passwordUrl; },
+  "self-team": () => selfTeam(),
   logout: () => SRV && SRV.logout(),
-  "account-new": () => accountForm(null),
+  "account-new": d => accountForm(null, d.partner ? { partnerId: d.partner } : {}),
   "account-edit": d => { const a = S.accounts.find(x => String(x.id) === d.id); if (a) accountForm(a); },
   "trash-purge": (d, el) => { if (el.dataset.armed) return purgeStudent(d.id); el.dataset.armed = "1"; el.textContent = "Точно удалить?"; },
   bulk: d => bulkForm(d.kind),
@@ -2178,8 +2247,6 @@ async function boot() {
       if (c === "students") { S.trash = docs.filter(x => x.deletedAt); D()[c] = docs.filter(x => !x.deletedAt); }
       else D()[c] = docs;
       S.loaded[c] = true; scheduleRender();
-      // На сервере правки менторов тоже меняют цифры партнёра: отчёт пересчитывает открытая страница администратора
-      if (S.server && S.isOwner && (c === "students" || c === "payouts" || c === "partners")) scheduleReports();
     }, err => {
       console.warn(c, err); S.loaded[c] = true;
       if (err && err.code === "revoked") S.status = "revoked";

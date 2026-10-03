@@ -11,6 +11,7 @@ import re
 
 from django.db import DataError, transaction
 
+from . import reports
 from .models import COLLECTIONS, Account, Doc, State, Tombstone
 
 ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
@@ -287,10 +288,16 @@ def write(access, collection, doc_id, data, partial):
     if doc is None:
         doc = Doc(collection=collection, doc_id=doc_id)
         Tombstone.objects.filter(collection=collection, doc_id=doc_id).delete()
+    if collection == "reports":
+        # Отчёт партнёра считает сервер: то, что прислала страница, служит только просьбой открыть отчёт
+        new = reports.compute(doc_id)
+        if new is None:
+            raise Invalid("Партнёр не найден")
     doc.data, doc.rev, doc.updated_by = new, rev, access.user
     _save(doc)
     if collection == "students" and old is not None and old.get("mentorId") != new.get("mentorId"):
         _touch_meetings(doc_id, rev)
+    _refresh_reports(collection, rev, old, new)
     visible = access.visible(doc)
     return rev, present(doc, visible, _team_links()) if visible is not None else None
 
@@ -308,9 +315,21 @@ def delete(access, collection, doc_id):
         return st.rev  # удалять нечего: ревизия не меняется
     access.check_write(collection, doc.data, None)
     rev = _next_rev()
+    old = doc.data
     doc.delete()
     Tombstone.objects.create(collection=collection, doc_id=doc_id, rev=rev)
+    _refresh_reports(collection, rev, old, None)
     return rev
+
+
+def _refresh_reports(collection, rev, old, new):
+    """После изменения студента, выплаты или партнёра пересчитываются отчёты тех партнёров, кого оно касается."""
+    if collection not in reports.SOURCES:
+        return
+    if collection == "partners":
+        return reports.refresh(rev)  # сменилась доля или название: проще пересчитать всё
+    ids = [(data or {}).get("partnerId") for data in (old, new)]
+    reports.refresh(rev, only={x for x in ids if isinstance(x, str)})
 
 
 def _save(doc):
@@ -329,10 +348,12 @@ def system_write(collection, doc_id, data):
     Tombstone.objects.filter(collection=collection, doc_id=doc_id).delete()
     doc = Doc.objects.filter(collection=collection, doc_id=doc_id).first() or Doc(collection=collection, doc_id=doc_id)
     old_mentor = doc.data.get("mentorId") if doc.pk else None
+    old = doc.data if doc.pk else None
     doc.data, doc.rev, doc.updated_by = _clean(collection, data), rev, None
     _save(doc)
     if collection == "students" and doc.data.get("mentorId") != old_mentor:
         _touch_meetings(doc_id, rev)
+    _refresh_reports(collection, rev, old, doc.data)
     return rev
 
 

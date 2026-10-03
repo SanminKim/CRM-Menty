@@ -11,7 +11,7 @@ from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_http_methods
 
-from . import store
+from . import reports, store
 from .models import Account, Doc
 
 User = get_user_model()
@@ -151,6 +151,9 @@ def _apply_account(user, data, creating):
         user.set_password(password)
     user.save()
     Account.objects.update_or_create(user=user, defaults={"role": role, "link_id": link_id})
+    if role == Account.Role.PARTNER:
+        # Партнёру не нужно ждать, пока отчёт «опубликуют»: он появляется вместе с доступом
+        reports.refresh(store.lock().rev, only={link_id})
 
 
 @require_http_methods(["GET", "POST"])

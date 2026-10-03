@@ -338,6 +338,159 @@ class PageTests(BaseCase):
         self.assertEqual(self.client.get("/backup/import/").status_code, 200)
 
 
+class ReportTests(BaseCase):
+    def report(self, doc_id="p1"):
+        return Doc.objects.get(collection="reports", doc_id=doc_id).data
+
+    def publish(self):
+        self.login("admin")
+        self.assertEqual(self.send("put", "reports", "p1", {"revenue": 999999, "rows": [{"name": "Подделка"}]}).status_code, 200)
+
+    def test_server_computes_report_and_ignores_what_page_sent(self):
+        store.system_write("students", "s1", student(
+            "t1", name="Иванов Пётр Сергеевич", partnerId="p1", partnerShare=30, stage="offer", phone="+7 900 000-00-01",
+            createdAt="2026-08-01T09:00:00.000Z",
+            history=[{"to": "new"}, {"to": "studying"}, {"to": "offer"}],
+            payments=[{"id": "a", "amount": 50000, "paid": "2026-08-05"}, {"id": "b", "amount": "33333", "paid": "2026-09-05"},
+                      {"id": "c", "amount": 10000, "paid": None}]))
+        store.system_write("students", "s3", student("t2", name="Удалённая Анна", partnerId="p1", partnerShare=40,
+                                                     deletedAt="2026-09-01T00:00:00Z", payments=[{"amount": 1000, "paid": "2026-08-01"}]))
+        store.system_write("students", "s4", student("t2", name="Одноимённый", partnerId="p1", stage="lost",
+                                                     createdAt="2026-09-01T09:00:00.000Z", history=[{"to": "new"}, {"to": "contacted"}, {"to": "lost"}]))
+        self.publish()
+        r = self.report()
+        self.assertEqual((r["name"], r["share"], r["promo"], r["leads"], r["paidStudents"], r["conv"], r["employed"]),
+                         ("Блог", 40, "BLOG", 2, 1, 50, 1))
+        self.assertEqual((r["revenue"], r["accrued"], r["paidOut"], r["balance"]), (83333, 24999.9, 5000, 19999.9))
+        self.assertEqual(r["rows"], [
+            {"name": "Одноимённый", "stage": "lost", "date": "2026-09-01", "paid": 0, "share": 0},
+            {"name": "Пётр И.", "stage": "offer", "date": "2026-08-01", "paid": 83333, "share": 24999.9}])
+        self.assertEqual([(f["key"], f["count"], f["pct"]) for f in r["funnel"]][:2], [("new", 2, 100), ("contacted", 2, 100)])
+        self.assertEqual([f["count"] for f in r["funnel"]], [2, 2, 1, 1, 1, 1, 1, 1, 0])
+        self.assertEqual(r["payouts"], [{"date": "", "amount": 5000, "comment": ""}])
+        dumped = json.dumps(r, ensure_ascii=False)
+        for secret in ("+7 900", "Сергеевич", "Удалённая", "Подделка", "999999", "карта 0000"):
+            self.assertNotIn(secret, dumped)
+
+    def test_mentor_edit_refreshes_partner_report(self):
+        self.publish()
+        before = self.report()
+        self.login("blogger")
+        first = self.sync()
+        self.login("mentor")
+        self.send("patch", "students", "s1", {"payments": [{"id": "a", "amount": 20000, "paid": "2026-10-01"}]})
+        after = self.report()
+        self.assertEqual((before["revenue"], after["revenue"], after["accrued"]), (0, 20000, 8000))
+        self.login("blogger")
+        later = self.sync(since=first["rev"], epoch=first["epoch"])
+        self.assertEqual(self.ids(later, "reports"), ["p1"])  # партнёр получает свежий отчёт сам
+        self.assertEqual(later["docs"]["reports"][0]["data"]["revenue"], 20000)
+
+    def test_payout_and_partner_changes_refresh_report(self):
+        self.publish()
+        self.send("put", "payouts", "po2", {"partnerId": "p1", "amount": 700, "date": "2026-10-02", "comment": "Октябрь"})
+        self.assertEqual(self.report()["paidOut"], 5700)
+        self.send("delete", "payouts", "po2")
+        self.assertEqual(self.report()["paidOut"], 5000)
+        self.send("patch", "partners", "p1", {"name": "Блог 2.0"})
+        self.assertEqual(self.report()["name"], "Блог 2.0")
+
+    def test_unrelated_edit_keeps_report_untouched(self):
+        self.publish()
+        rev = Doc.objects.get(collection="reports", doc_id="p1").rev
+        self.send("patch", "students", "s2", {"city": "Тверь"})          # студент без партнёра
+        self.send("patch", "students", "s1", {"city": "Казань"})         # цифры не меняются
+        self.assertEqual(Doc.objects.get(collection="reports", doc_id="p1").rev, rev)
+
+    def test_only_admin_writes_reports(self):
+        self.publish()
+        for who in ("mentor", "blogger"):
+            self.login(who)
+            for method in ("put", "patch", "delete"):
+                self.assertEqual(self.send(method, "reports", "p1", {"revenue": 1}).status_code, 403, (who, method))
+        self.assertEqual(self.report()["revenue"], 0)
+
+    def test_broken_student_data_never_breaks_the_report(self):
+        self.publish()
+        self.login("mentor")
+        weird = [
+            {"payments": "не список", "history": [{"to": ["x"]}, {"to": {}}, "мусор"], "stage": ["x"]},
+            {"payments": [{"amount": 10 ** 400, "paid": "2026-01-01"}, {"amount": 1e308, "paid": "x"}, {"amount": "1_000", "paid": "x"},
+                          {"amount": ["x"], "paid": "x"}, "мусор", {"amount": "12.5", "paid": "2026-01-02"}]},
+            {"createdAt": {"a": 1}, "name": ["Список"], "stage": "<b>x"},
+            {"name": "+7 900 123-45-67"}, {"name": "lead@example.com"},
+        ]
+        for patch in weird:
+            self.assertEqual(self.send("patch", "students", "s1", patch).status_code, 200, patch)
+        r = self.report()
+        self.assertEqual((r["revenue"], r["rows"][0]["stage"], r["rows"][0]["date"]), (12.5, "", ""))
+        self.assertEqual(r["rows"][0]["name"], "Без имени")  # контакт вместо имени партнёру не показываем
+        self.assertEqual(self.send("put", "students", "n9", student("t1", partnerId=[], name="Список вместо партнёра")).status_code, 200)
+
+    def test_same_order_and_sums_as_the_page(self):
+        from backend import reports
+        shares = [9999.9, 3703.5, 233.1, 30000.3]
+        students = [{"partnerId": "p", "name": f"Студент {'АБВГ'[i]}", "createdAt": "2026-09-01T10:00:00.000Z", "partnerShare": 100,
+                     "payments": [{"amount": v, "paid": "2026-09-02"}]} for i, v in enumerate(shares)]
+        payouts = [{"partnerId": "p", "amount": 1, "date": "2026-09-01", "comment": "первая"},
+                   {"partnerId": "p", "amount": 2, "date": "2026-09-01", "comment": "вторая"}]
+        r = reports.build("p", {"name": "Канал", "share": "40"}, students, payouts)
+        expected = 0
+        for v in reversed(shares):  # страница складывает по порядку строк, от новых к старым
+            expected += v
+        self.assertEqual(r["accrued"], expected)
+        self.assertEqual([x["comment"] for x in r["payouts"]], ["вторая", "первая"])  # при равных датах — обратный порядок записей
+        self.assertEqual([x["name"] for x in r["rows"]], ["Г С.", "В С.", "Б С.", "А С."])
+        self.assertEqual(r["share"], 40)
+
+    def test_moving_and_trashing_students_updates_both_reports(self):
+        store.system_write("partners", "p2", {"name": "Другой", "share": 10})
+        self.publish()
+        self.send("put", "reports", "p2", {})
+        self.send("patch", "students", "s1", {"payments": [{"amount": 1000, "paid": "2026-10-01"}]})
+        self.assertEqual((self.report("p1")["revenue"], self.report("p2")["revenue"]), (1000, 0))
+        self.send("patch", "students", "s1", {"partnerId": "p2"})
+        self.assertEqual((self.report("p1")["revenue"], self.report("p2")["revenue"]), (0, 1000))
+        self.send("patch", "students", "s1", {"deletedAt": "2026-10-03T00:00:00Z"})
+        self.assertEqual(self.report("p2")["leads"], 0)
+        self.send("patch", "students", "s1", {"deletedAt": None})
+        self.assertEqual(self.report("p2")["leads"], 1)
+
+    def test_report_follows_partner_account_and_partner_removal(self):
+        Doc.objects.filter(collection="reports").delete()
+        self.login("admin")
+        self.send("patch", "students", "s1", {"city": "Тверь"})  # у blogger есть доступ к p1, а отчёта нет: он создаётся
+        self.assertEqual(self.report("p1")["leads"], 1)
+        self.send("delete", "partners", "p1")
+        self.assertFalse(Doc.objects.filter(collection="reports", doc_id="p1").exists())
+        self.assertTrue(Tombstone.objects.filter(collection="reports", doc_id="p1").exists())
+
+    def test_stage_list_matches_the_page(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings
+        from backend import reports
+        page = (Path(settings.BASE_DIR) / "web" / "index.html").read_text(encoding="utf-8")
+        block = page.split("const STAGES = [", 1)[1].split("];", 1)[0]
+        on_page = tuple(re.findall(r'\["([a-z_]+)", "([^"]+)", "[a-z]+"\]', block))
+        self.assertEqual(on_page, reports.STAGES)
+
+    def test_report_for_unknown_partner_is_rejected(self):
+        self.login("admin")
+        self.assertEqual(self.send("put", "reports", "nope", {}).status_code, 400)
+
+    def test_partner_account_gets_report_at_once(self):
+        store.system_write("partners", "p9", {"name": "Новый канал", "share": 20})
+        self.login("admin")
+        res = self.client.post("/api/accounts/", data=json.dumps({
+            "username": "newblog", "role": "partner", "linkId": "p9", "password": "dlinnyi-parol-2026"}), content_type="application/json")
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(self.report("p9")["name"], "Новый канал")
+        self.client.logout()
+        self.assertTrue(self.client.login(username="newblog", password="dlinnyi-parol-2026"))
+        self.assertEqual(self.ids(self.sync(), "reports"), ["p9"])
+
+
 @override_settings(LEAD_WEBHOOK_TOKEN="secret-token-0123456789")
 class LeadTests(BaseCase):
     def setUp(self):

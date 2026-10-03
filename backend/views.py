@@ -18,6 +18,11 @@ from . import store
 from .backup import BackupError, import_backup, summary_lines
 
 WEB_DIR = Path(settings.BASE_DIR) / "web"
+ICON = (
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32"
+    "' height='32' rx='7' fill='%23ffd21f'/%3E%3Ctext x='16' y='23' font-family='Arial,sans-serif' font-size='19' font-weight"
+    "='700' text-anchor='middle' fill='%231b1a17'%3E%D0%9C%3C/text%3E%3C/svg%3E"
+)
 _page = {"key": None, "html": "", "csp": ""}
 CSP_PAGE = (
     "default-src 'self'; script-src {hashes}; "
@@ -40,6 +45,7 @@ def build_page():
             '<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
             '<meta name="robots" content="noindex, nofollow">\n'
+            f'<link rel="icon" href="{ICON}">\n'
             f"<script>{shim_js}</script>\n</head>\n<body>\n{page}\n</body>\n</html>\n"
         )
         # Браузер выполнит только эти два скрипта: вставленный в страницу чужой скрипт не запустится
