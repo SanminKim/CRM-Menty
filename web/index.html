@@ -268,8 +268,23 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .d-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px 12px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
 .d-head h2 { font-size: 18px; font-weight: 650; letter-spacing: -.01em; min-width: 0; overflow-wrap: anywhere; flex: 1; }
 .d-body { overflow-y: auto; padding: 16px 20px calc(28px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 14px; flex: 1; }
+.path { list-style: none; display: flex; gap: 3px; margin: 0; padding: 0; }
+.path li { flex: 1; height: 6px; border-radius: 99px; background: var(--surface-2); color: var(--g-sales); }
+.path li.g-study { color: var(--g-study); }
+.path li.g-job { color: var(--g-job); }
+.path li.done { background: currentColor; opacity: .45; }
+.path li.cur { background: currentColor; height: 10px; margin-top: -2px; }
+.path-legend { display: flex; gap: 3px; font-size: 12px; color: var(--muted); margin-top: -8px; }
+.path-legend span { flex: 4; min-width: 0; }
+.path-legend span.on { color: var(--text); font-weight: 600; }
+.path-legend .pl-study { flex: 2; }
+.path-legend .pl-job { flex: 3; }
 .d-stage { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.d-stage select { width: auto; font-weight: 600; }
+.d-other { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.goal { background: var(--brand-soft); border-radius: var(--radius); padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
+.goal span { color: var(--muted); font-size: 12px; }
+.done-note { color: var(--muted); margin: 0 0 4px; }
+.d-stage select { width: auto; }
 .stepbox { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
 .stepbox .body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .stepbox .body span { color: var(--muted); font-size: 13px; }
@@ -843,8 +858,8 @@ function todayView() {
   <div class="today">
     <div class="stack">
       ${orphans.length ? panel("Без ментора", orphans.length, `<ul class="rows">${orphans.slice(0, 8).map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
-          <span class="who"><strong>${esc(s.name)}</strong><span>${s.source === "site" ? "заявка с сайта · " : s.source === "telegram" ? "заявка из Telegram · " : ""}${fShort(isoDay(s.createdAt))}${partnerById(s.partnerId) ? " · " + esc(partnerById(s.partnerId).name) : ""}</span></span>
-          ${badge(s.stage)}<button class="btn small" data-act="assign" data-id="${esc(s.id)}">Назначить ментора</button></li>`).join("")}
+          <span class="who"><strong>${esc(s.name)}</strong><span>${s.source === "site" ? "заявка с сайта · " : s.source === "telegram" ? "заявка из Telegram · " : ""}${fShort(isoDay(s.createdAt))}${partnerById(s.partnerId) ? " · " + esc(partnerById(s.partnerId).name) : ""}</span>${s.comment ? `<span>${esc(s.comment)}</span>` : ""}</span>
+          ${badge(s.stage)}<span class="acts">${tgUser(s) ? `<a class="btn small ghost" data-stop href="https://t.me/${esc(tgUser(s))}" target="_blank" rel="noopener">Написать</a>` : ""}${myTeam() || (S.server && S.isOwner) ? `<button class="btn small primary" data-act="take" data-id="${esc(s.id)}">Взять себе</button>` : ""}<button class="btn small" data-act="assign" data-id="${esc(s.id)}">Назначить ментора</button></span></li>`).join("")}
           ${orphans.length > 8 ? `<li><button class="link" data-act="list-nomentor">Показать всех: ${orphans.length}</button></li>` : ""}</ul>
           ${S.server && S.isOwner && !myTeam() ? `<p class="hint pad">Чтобы ваши заявки сразу были закреплены за вами, <button class="link" data-act="nav" data-v="settings">добавьте себя в команду</button> в настройках.</p>` : ""}`) : ""}
       ${panel("Сделать", ag.due.length || "", dueBody)}
@@ -1159,13 +1174,113 @@ function noteSection(s) {
     ${notes.length ? `<ul class="feed">${notes.map(n => `<li class="${n.kind === "step" || n.kind === "meet" ? "auto" : ""}"><div class="feed-head"><strong>${esc(n.by ? personName(n.by) : "Команда")}</strong><span class="muted">${fDT(n.at)}</span></div><p class="pre">${esc(n.text)}</p></li>`).join("")}</ul>` : ""}
   </div></section>`;
 }
+// ----- Путь студента: «Дальше» спрашивает только то, что нужно следующему этапу, и ставит следующий шаг -----
+const PATH = STAGES.filter(x => x[0] !== "lost").map(x => x[0]);
+const nextStage = s => { const i = PATH.indexOf(s.stage); return i >= 0 && i < PATH.length - 1 ? PATH[i + 1] : null; };
+const NEXT_STEP = {
+  contacted: ["Договориться о созвоне", 1], waiting_payment: ["Проверить оплату", 2], studying: ["Узнать, как прошло первое занятие", 7],
+  final_project: ["Проверить итоговый проект", 7], job_search: ["Ревью резюме", 2], offer: ["Узнать, как проходит испытательный срок", 30],
+};
+const tgUser = s => { const u = s.telegram ? String(s.telegram).replace(/^@/, "") : ""; return /^[A-Za-z0-9_]{3,}$/.test(u) ? u : ""; };
+const firstUnpaid = s => sortBy((s.payments || []).filter(x => !x.paid), x => x.due || "")[0] || null;
+function pathHTML(s) {
+  const i = PATH.indexOf(s.stage); if (i < 0) return "";
+  const g = SGROUP[s.stage], leg = (k, l) => `<span class="pl-${k}${g === k ? " on" : ""}">${l}</span>`;
+  return `<ol class="path" role="img" aria-label="Этап ${i + 1} из ${PATH.length}: ${esc(SLABEL[s.stage])}">${PATH.map((k, n) => `<li class="g-${SGROUP[k]}${n < i ? " done" : n === i ? " cur" : ""}" title="${esc(SLABEL[k])}"></li>`).join("")}</ol>
+      <div class="path-legend" aria-hidden="true">${leg("sales", "Продажи")}${leg("study", "Обучение")}${leg("job", "Работа")}</div>`;
+}
+function advanceForm(s) {
+  const to = nextStage(s); if (!to) return;
+  const def = NEXT_STEP[to], c = D().cohorts.find(x => x.id === s.cohortId), unpaid = firstUnpaid(s);
+  const own = {
+    contacted: [{ k: "note", label: "О чём договорились", type: "textarea", wide: true, rows: 2, ph: "Хочет перейти в аналитики, готов начать в ноябре", help: "Попадёт в заметки" }],
+    call: [{ k: "mdate", label: "Дата созвона", type: "date", req: true, quick: true }, { k: "mtime", label: "Время", type: "time", help: "Встреча появится в календаре" }],
+    waiting_payment: [{ k: "price", label: "Стоимость, ₽", type: "number", req: true, wide: !!unpaid },
+      ...(unpaid ? [] : [{ k: "parts", label: "Платежей", type: "number", help: "1 — оплата целиком" }, { k: "first", label: "Срок первого платежа", type: "date", wide: true, quick: true, help: "Следующие идут раз в месяц" }])],
+    studying: [...(unpaid ? [{ k: "paid", label: `Платёж получен: ${payText(unpaid)}`, type: "checkbox" }] : []),
+      { k: "cohortId", label: "Поток", type: "select", options: cohortOpts() }, ...(S.limited ? [] : [{ k: "mentorId", label: "Ментор", type: "select", options: teamOpts() }])],
+    offer: [{ k: "jobCompany", label: "Компания", req: true }, { k: "jobPosition", label: "Должность" }, { k: "jobSalary", label: "Зарплата, ₽", type: "number" }, { k: "offerDate", label: "Дата оффера", type: "date" }],
+  }[to] || [];
+  const stepFields = def ? [{ section: "Следующий шаг" }, { k: "text", label: "Что сделать", req: true, wide: true, list: STEP_HINTS }, { k: "date", label: "Когда", type: "date", req: true, wide: true, quick: true }] : [];
+  openModal({
+    title: `${s.name}: ${SLABEL[to]}`, submit: `Перевести в «${SLABEL[to]}»`,
+    values: { text: def?.[0], date: daysAhead(def?.[1] || 0), mdate: daysAhead(1), mtime: "12:00", price: s.price || c?.price || null, parts: 1, first: daysAhead(2), paid: true,
+      cohortId: s.cohortId || "", mentorId: teamName(s.mentorId) ? s.mentorId : (myTeam()?.id || ""), jobCompany: s.jobCompany || "", jobPosition: s.jobPosition || "", jobSalary: s.jobSalary ?? null, offerDate: s.offerDate || today() },
+    fields: [...own, ...stepFields],
+    extra: to === "call" ? `<p class="hint">Следующим шагом станет «Созвон» в этот день.</p>` : to === "probation_passed" ? `<p class="done-note">Путь пройден. Студент уйдёт из списков активных, карточка останется в разделе «Студенты».</p>` : "",
+    onSubmit: v => {
+      if (to === "call" && !isDay(v.mdate)) return "Укажите дату созвона";
+      if (to === "call" && v.mtime && !/^\d{2}:\d{2}$/.test(v.mtime)) return "Время укажите в виде 15:30";
+      if (to === "waiting_payment") { v.price = Math.round(v.price); if (!(v.price > 0)) return "Укажите стоимость в рублях"; }
+      if (to === "waiting_payment" && !unpaid && !(Math.round(v.parts) >= 1 && Math.round(v.parts) <= 24)) return "Платежей должно быть от 1 до 24";
+      if (to === "waiting_payment" && !unpaid && !isDay(v.first)) return "Укажите срок первого платежа";
+      if (def && !isDay(v.date)) return "Укажите дату следующего шага";
+      return advance(s.id, to, v);
+    },
+  });
+}
+// Переход с отменой: «Отменить» убирает только то, что создал этот переход
+async function advance(id, to, v) {
+  const s = stu(id); if (!s || s.stage === to) return false;
+  let made = null, meetFailed = false;
+  const ok = await save(async () => {
+    made = null;
+    await patchStudent(id, cur => {
+      if (cur.stage === to) return null;
+      const p = stageChange(cur, to), m = { at: p.stageAt, pays: [], logs: [], note: null, paidId: null, meet: null, keys: [], prev: { stage: cur.stage, stageAt: cur.stageAt ?? null, next: cur.next ?? null } }, log = [];
+      // Прежние значения берём из свежей записи: «Отменить» не должно затирать чужую правку
+      const set = (k, val) => { if ((cur[k] ?? null) !== (val ?? null)) { m.prev[k] = cur[k] ?? null; p[k] = val; m.keys.push(k); } };
+      p.next = to === "call" ? { text: "Созвон", date: v.mdate } : v.text ? { text: v.text, date: v.date } : null;
+      if (to === "contacted" && v.note) { m.note = newId("x"); p.notes = [...(cur.notes || []), { id: m.note, text: v.note, at: p.stageAt, by: S.myId }]; }
+      if (to === "waiting_payment") {
+        if ((cur.price ?? null) !== v.price) { set("price", v.price); log.push(logItem(`Стоимость: ${money(v.price)}`)); }
+        if (!firstUnpaid(cur)) {
+          const n = Math.round(v.parts) || 1, first = isDay(v.first) ? v.first : today(), base = Math.floor(v.price / n), items = [];
+          for (let i = 0; i < n; i++) items.push({ id: newId("x"), amount: i < n - 1 ? base : v.price - base * (n - 1), due: addMonths(first, i), paid: null, comment: n > 1 ? `Рассрочка ${i + 1}/${n}` : "Оплата" });
+          p.payments = [...(cur.payments || []), ...items]; m.pays = items.map(x => x.id);
+          log.push(logItem(n > 1 ? `Создана рассрочка: ${n} ${plural(n, "платёж", "платежа", "платежей")} на ${money(v.price)}, первый ${fDate(first)}` : `Создан платёж: ${payText(items[0])}`));
+        }
+      }
+      if (to === "studying") {
+        const pay = v.paid ? firstUnpaid(cur) : null;
+        if (pay) { p.payments = (cur.payments || []).map(x => x.id === pay.id ? { ...x, paid: today() } : x); m.paidId = pay.id; log.push(logItem(`Платёж отмечен оплаченным: ${payText(pay)}`)); }
+        set("cohortId", v.cohortId || null);
+        if (!S.limited) set("mentorId", v.mentorId || null);
+      }
+      if (to === "offer") { set("jobCompany", v.jobCompany); set("jobPosition", v.jobPosition || ""); set("jobSalary", v.jobSalary ?? null); set("offerDate", v.offerDate || today()); }
+      if (log.length) { p.log = [...(cur.log || []), ...log].slice(-LOG_MAX); m.logs = log.map(l => l.id); }
+      made = m; return p;
+    });
+    if (made && to === "call") {
+      const mid = newId("meetings");
+      // Этап уже сменён: сбой встречи не должен лишать человека кнопки «Отменить»
+      try { await setDoc("meetings", mid, { title: "Созвон-знакомство", date: v.mdate, time: v.mtime || "", kind: "call", duration: 30, studentId: id, cohortId: null,
+        mentorId: (teamName(s.mentorId) ? s.mentorId : myTeam()?.id) || null, link: "", notes: "", status: "planned", createdAt: new Date().toISOString(), by: S.myId }); made.meet = mid; }
+      catch (e) { meetFailed = true; }
+    }
+  });
+  if (!ok || !made) return ok;
+  const m = made;
+  toast(`${mask(s.name) || s.name}: ${SLABEL[to]}${meetFailed ? ". Встречу создать не удалось, добавьте её в календаре" : ""}`, () => save(async () => {
+    await patchStudent(id, cur => {
+      const prev = m.prev, back = { stage: prev.stage, stageAt: prev.stageAt, next: prev.next, history: (cur.history || []).filter(h => !(h.at === m.at && h.to === to)) };
+      for (const k of m.keys) back[k] = prev[k];
+      if (m.note) back.notes = (cur.notes || []).filter(n => n.id !== m.note);
+      if (m.pays.length || m.paidId) back.payments = (cur.payments || []).filter(x => !m.pays.includes(x.id)).map(x => x.id === m.paidId ? { ...x, paid: null } : x);
+      if (m.logs.length) back.log = (cur.log || []).filter(l => !m.logs.includes(l.id));
+      return back;
+    });
+    if (m.meet && meetById(m.meet)) await delDoc("meetings", m.meet);
+  }, "Этап возвращён"));
+  return ok;
+}
 function drawerHTML(s) {
   const p = partnerById(s.partnerId), d = debt(s), late = stepLate(s);
   const hist = sortBy(s.history || [], h => h.at).reverse();
   const dd = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
   const tg = s.telegram ? String(s.telegram).replace(/^@/, "") : "";
   const contacts = [
-    s.telegram && /^[A-Za-z0-9_]{3,}$/.test(tg) ? `<a class="chip" href="https://t.me/${esc(tg)}" target="_blank" rel="noopener">${esc(s.telegram)} <small>Telegram</small></a>` : s.telegram ? `<button class="chip" data-act="copy" data-text="${esc(s.telegram)}">${esc(s.telegram)} <small>копировать</small></button>` : "",
+    tgUser(s) ? `<a class="chip" href="https://t.me/${esc(tg)}" target="_blank" rel="noopener">${esc(s.telegram)} <small>Telegram</small></a>` : s.telegram ? `<button class="chip" data-act="copy" data-text="${esc(s.telegram)}">${esc(s.telegram)} <small>копировать</small></button>` : "",
     s.phone ? `<button class="chip" data-act="copy" data-text="${esc(s.phone)}">${esc(s.phone)} <small>копировать</small></button>` : "",
     s.email ? `<button class="chip" data-act="copy" data-text="${esc(s.email)}">${esc(s.email)} <small>копировать</small></button>` : "",
   ].filter(Boolean).join("");
@@ -1174,6 +1289,8 @@ function drawerHTML(s) {
         <div class="body"><strong>${esc(s.next.text)}</strong><span>${dueLabel(s.next.date)}${late ? " · просрочено" : ""}</span></div>
         <button class="btn small ghost" data-act="step-edit" data-id="${esc(s.id)}">Изменить</button></div>`
     : isActive(s) ? `<div class="stepbox none"><div class="body"><strong>Следующий шаг не назначен</strong></div><button class="btn small" data-act="step-edit" data-id="${esc(s.id)}">Назначить</button></div>` : "";
+  // На продажах слова человека из заявки стоят наверху: с них начинается разговор
+  const goal = SGROUP[s.stage] === "sales" && s.comment ? `<div class="goal"><span>Что написал в заявке</span><p class="pre">${esc(s.comment)}</p></div>` : "";
   // Порядок разделов зависит от этапа: на продажах важнее заметки, на обучении — платежи, на поиске работы — отклики
   const order = { sales: [noteSection, meetSection, paySection], study: [progSection, meetSection, paySection, noteSection, appSection], job: [appSection, meetSection, noteSection, paySection, progSection], closed: [noteSection, paySection, appSection, meetSection, progSection] }[SGROUP[s.stage]];
   const log = sortBy(s.log || [], l => l.at).reverse();
@@ -1184,9 +1301,12 @@ function drawerHTML(s) {
       <button class="btn small" data-act="student-edit" data-id="${esc(s.id)}">Изменить</button>
       <button class="x" id="d-x" data-act="d-close" aria-label="Закрыть">×</button></header>
     <div class="d-body" id="d-body">
-      <div class="d-stage"><select id="d-stage" data-move="${esc(s.id)}" aria-label="Этап">${STAGES.map(x => opt(x[0], x[1], s.stage)).join("")}</select>
+      ${pathHTML(s)}
+      <div class="d-stage">${nextStage(s) && !S.readOnly ? `<button class="btn primary" id="d-next" data-act="advance" data-id="${esc(s.id)}">Дальше: ${esc(SLABEL[nextStage(s)])} →</button>` : ""}
+        <label class="d-other">Этап<select id="d-stage" data-move="${esc(s.id)}">${STAGES.map(x => opt(x[0], x[1], s.stage)).join("")}</select></label>
         <span class="muted">${days(daysSince(s.stageAt))} на этапе · заявка от ${fShort(isoDay(s.createdAt))}</span></div>
       ${step}
+      ${goal}
       ${contacts ? `<div class="chips">${contacts}</div>` : ""}
       <dl class="facts">
         <dt>Поток</dt><dd>${esc(cohortName(s.cohortId) || "—")}</dd>
@@ -1196,7 +1316,7 @@ function drawerHTML(s) {
         ${dd("Город", esc(s.city))}
         ${s.consent ? "" : `<dt>Согласие на ПД</dt><dd class="warn-text">не получено</dd>`}
         ${dd("Причина отказа", esc(s.lostReason))}${dd("Оффер", result)}
-        ${dd("Комментарий", s.comment ? `<span class="pre">${esc(s.comment)}</span>` : "")}
+        ${dd("Комментарий", s.comment && !goal ? `<span class="pre">${esc(s.comment)}</span>` : "")}
       </dl>
       ${order.map(f => f(s)).join("")}
       <details id="d-hist"${S.histOpen ? " open" : ""}><summary>История этапов: ${hist.length}</summary>
@@ -1916,7 +2036,8 @@ function teamForm(m) {
   });
 }
 // Владелец добавляет себя в команду одной кнопкой: появляется «Мои студенты», а заявки по умолчанию назначаются ему
-async function selfTeam() {
+// after — что сделать от имени новой записи в команде до перезагрузки страницы (например, взять заявку себе)
+async function selfTeam(after) {
   const mine = S.accounts.find(a => a.me); if (!mine) return toast("Не удалось найти вашу учётную запись. Обновите страницу");
   const id = newId("team"), name = S.me.name || S.me.username;
   if (!(await save(() => setDoc("team", id, { name })))) return;
@@ -1925,6 +2046,7 @@ async function selfTeam() {
     if (e?.code !== "unavailable") await delDoc("team", id).catch(() => { }); // сервер отказал: запись в команде не оставляем
     return toast(e?.message || "Не удалось связать учётную запись. Попробуйте ещё раз");
   }
+  if (after) await after(id);
   location.reload();
 }
 async function loadAccounts() {
@@ -2213,6 +2335,12 @@ const ACT = {
   "student-edit": d => studentForm(stu(d.id)),
   "step-edit": d => stepForm(stu(d.id)),
   "step-done": d => stepDone(d.id),
+  advance: d => { const x = stu(d.id); if (x) advanceForm(x); },
+  take: async d => {
+    if (S.taking) return; S.taking = true;
+    const mine = async tid => { let taken = false; const ok = await save(() => patchStudent(d.id, cur => teamName(cur.mentorId) ? null : (taken = true, { mentorId: tid }))); if (ok) toast(taken ? "Заявка закреплена за вами" : "Эту заявку уже взял другой ментор"); };
+    try { if (myTeam()) await mine(myTeam().id); else if (S.server && S.isOwner) await selfTeam(mine); } finally { S.taking = false; }
+  },
   "more-nostep": () => { S.moreNoStep = !S.moreNoStep; render(); },
   qdate: d => { const el = document.getElementById(d.target); if (el) el.value = daysAhead(+d.days); },
   copy: d => copyText(d.text, "Скопировано"),
