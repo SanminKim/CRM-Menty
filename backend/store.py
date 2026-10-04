@@ -3,9 +3,8 @@
 Правила доступа:
 - администратор читает и пишет всё;
 - ментор читает и правит только своих студентов и связанные с ними встречи, читает потоки, команду
-  и названия партнёров; из выплат видит только свои, из ставок менторов — только свою;
-  выплаты партнёрам, отчёты и доли партнёров ему недоступны;
-- партнёр читает только отчёт по своему трафику.
+  и названия партнёров; выплаты, расходы и условия направлений ему недоступны;
+- ментор и партнёр читают отчёт о своих начислениях и выплатах, каждый только свой.
 """
 import json
 import re
@@ -18,7 +17,7 @@ from .models import COLLECTIONS, Account, Doc, State, Tombstone
 ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
 MAX_DEPTH = 12
 MAX_DOC_BYTES = 512 * 1024
-MENTOR_READ = ("students", "cohorts", "team", "partners", "meetings", "config", "payouts")
+MENTOR_READ = ("students", "cohorts", "team", "partners", "meetings", "config")
 # Ментору нужны название и доля партнёра (она фиксируется в заявке), но не его контакты и реквизиты
 PARTNER_PUBLIC_FIELDS = ("name", "promo", "utm", "share", "active", "demo")
 
@@ -94,8 +93,6 @@ class Access:
             return False
         if collection == "students":
             return bool(self.link_id) and data.get("mentorId") == self.link_id
-        if collection == "payouts":
-            return bool(self.link_id) and data.get("mentorId") == self.link_id  # только выплаты самому ментору
         if collection == "meetings":
             if data.get("studentId"):
                 return self._owns_student(data["studentId"]) or (
@@ -105,17 +102,21 @@ class Access:
 
     def visible(self, doc):
         """Документ в том виде, в каком его можно показать пользователю, или None."""
+        if doc.collection == "reports" and not self.is_admin:
+            # Каждый видит только свой отчёт: в нём нет ни чужих ставок, ни чужих выплат. Вид отчёта сверяется с ролью:
+            # если у ментора и партнёра совпали идентификаторы, чужой отчёт не откроется
+            kind = {Account.Role.PARTNER: "partner", Account.Role.MENTOR: "mentor"}.get(self.role)
+            mine = bool(kind) and bool(self.link_id) and doc.doc_id == self.link_id and doc.data.get("kind", "partner") == kind  # у отчётов прежнего вида поля kind нет
+            return dict(doc.data) if mine else None
         if self.role == Account.Role.PARTNER:
-            if doc.collection == "reports" and self.link_id and doc.doc_id == self.link_id:
-                return dict(doc.data)
             return None
         if not self.can_read(doc.collection, doc.data):
             return None
         data = dict(doc.data)
         if doc.collection == "partners" and not self.is_admin:
             data = {k: v for k, v in data.items() if k in PARTNER_PUBLIC_FIELDS}
-        if doc.collection == "team" and not self.is_admin and doc.doc_id != self.link_id:
-            data.pop("share", None)  # чужую ставку ментор не видит
+        if doc.collection == "team" and not self.is_admin:
+            data.pop("share", None)  # ставка из прежней схемы расчёта: менторам она не нужна
         return data
 
     def check_write(self, collection, old, new):
@@ -196,11 +197,13 @@ def snapshot(access, since=None, epoch=None):
     docs = Doc.objects.all() if full else Doc.objects.filter(rev__gt=since)
     # Об исчезнувших записях сообщаем только в тех коллекциях, которые роль вообще может читать.
     # Партнёру — только про его собственный отчёт: чужие идентификаторы ему знать незачем.
-    readable = COLLECTIONS if access.is_admin else MENTOR_READ if access.is_mentor else ("reports",)
+    readable = COLLECTIONS if access.is_admin else (*MENTOR_READ, "reports") if access.is_mentor else ("reports",)
     is_partner = access.role == Account.Role.PARTNER
 
     def may_hear(collection, doc_id):
-        return collection in readable and (not is_partner or doc_id == access.link_id)
+        if collection == "reports" and not access.is_admin:
+            return doc_id == access.link_id  # об исчезновении чужого отчёта не сообщаем
+        return collection in readable and not is_partner
     changed, removed = {}, {}
     for doc in docs.order_by("collection", "doc_id"):
         data = access.visible(doc)
@@ -294,10 +297,10 @@ def write(access, collection, doc_id, data, partial):
         doc = Doc(collection=collection, doc_id=doc_id)
         Tombstone.objects.filter(collection=collection, doc_id=doc_id).delete()
     if collection == "reports":
-        # Отчёт партнёра считает сервер: то, что прислала страница, служит только просьбой открыть отчёт
+        # Отчёт считает сервер: то, что прислала страница, служит только просьбой открыть отчёт
         new = reports.compute(doc_id)
         if new is None:
-            raise Invalid("Партнёр не найден")
+            raise Invalid("Партнёр или ментор не найден")
     doc.data, doc.rev, doc.updated_by = new, rev, access.user
     _save(doc)
     if collection == "students" and old is not None and old.get("mentorId") != new.get("mentorId"):
@@ -339,13 +342,16 @@ def _tell_mentor(team_id, name, by_user):
 
 
 def _refresh_reports(collection, rev, old, new):
-    """После изменения студента, выплаты или партнёра пересчитываются отчёты тех партнёров, кого оно касается."""
+    """После изменения оплат, расходов, выплат, условий или состава сторон отчёты пересчитываются.
+
+    Выручка направления общая для всех его сторон, поэтому пересчитываются все отчёты; неизменившиеся не перезаписываются.
+    """
     if collection not in reports.SOURCES:
         return
-    if collection == "partners":
-        return reports.refresh(rev)  # сменилась доля или название: проще пересчитать всё
-    ids = [(data or {}).get("partnerId") for data in (old, new)]
-    reports.refresh(rev, only={x for x in ids if isinstance(x, str)})
+    if collection == "students" and old is not None and new is not None \
+            and all(old.get(key) == new.get(key) for key in reports.STUDENT_FIELDS):
+        return  # заметка, шаг или контакт: цифры отчётов от этого не меняются
+    reports.refresh(rev)
 
 
 def _save(doc):

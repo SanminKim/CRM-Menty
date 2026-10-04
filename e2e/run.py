@@ -215,7 +215,7 @@ try:
       check("import created leads", len(studs()) == n1 + 3 and len(imp) == 3 and petr["phone"] == "+7 911 000-00-01" and petr["telegram"] == "@import_petr" and petr["partnerShare"] == 40 and petr["next"]["text"] == "Связаться" and imp[-1]["email"] == "solo@example.com" and any(v["name"] == "Импортова, Анна" and v["telegram"] == "@import_anna" for v in imp), (len(studs()) - n1, petr))
       # финансы
       pg.click(".nav >> text=Аналитика"); pg.click(".tabs >> text=Финансы"); pg.wait_for_selector(".chart"); pg.wait_for_timeout(200)
-      check("finance chart and tables", pg.locator(".chart path").count() >= 3 and pg.locator("text=Остаётся школе").count() >= 1 and pg.locator(".kpi").count() == 6)
+      check("finance chart and tables", pg.locator(".chart path").count() >= 3 and pg.locator("text=Куда идёт чистая выручка").count() >= 1 and pg.locator(".kpi").count() == 4)
       pg.locator(".chart g").nth(5).hover(); pg.wait_for_timeout(150)
       check("chart tooltip", pg.locator("#tip").is_visible() and "Получено" in pg.inner_text("#tip"), pg.inner_text("#tip"))
       fin = pg.evaluate("(() => { const f = finance(D().students); return { total: f.total, sumMonths: f.months.reduce((a, m) => a + m.got, 0), src: f.sources.reduce((a, r) => a + r.revenue, 0), coh: f.cohorts.reduce((a, r) => a + r.revenue, 0), exp: f.expected, overdue: f.overdue }; })()")
@@ -239,7 +239,7 @@ try:
       pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(200); shot(pg, "s9_settings.png", full_page=True)
       pg.click("[data-act=backup]"); pg.wait_for_timeout(300)
       bk = json.loads(pg.evaluate("window.__saved.data")); open(Path(tmp) / "backup.json", "w", encoding="utf-8").write(json.dumps(bk, ensure_ascii=False))
-      check("backup v5 with next, modules, progress, meetings", bk["version"] == 5 and len(bk["data"]["meetings"]) >= 8 and any(c.get("modules") for c in bk["data"]["cohorts"]) and any(s.get("progress") for s in bk["data"]["students"]) and any(s.get("next") for s in bk["data"]["students"]))
+      check("backup v6 with next, modules, progress, meetings, directions", bk["version"] == 6 and len(bk["data"]["directions"]) == 1 and len(bk["data"]["expenses"]) >= 2 and len(bk["data"]["meetings"]) >= 8 and any(c.get("modules") for c in bk["data"]["cohorts"]) and any(s.get("progress") for s in bk["data"]["students"]) and any(s.get("next") for s in bk["data"]["students"]))
       pg.click(".nav >> text=Сегодня"); pg.wait_for_timeout(300)
       # --- календарь встреч ---
       meets = lambda: {k: v for k, v in store().items() if k.startswith("meetings/")}
@@ -354,8 +354,9 @@ try:
       pg.click("[data-act=account-new]"); pg.wait_for_selector("#mform"); pg.fill("#m-username", "oleg"); pg.fill("#m-name", "Олег Новый"); pg.fill("#m-password", PASSWORD); pg.click("#m-submit")
       pg.wait_for_function("() => S.accounts.some(a => a.username === 'oleg')", timeout=10000)
       check("mentor and team entry created in one step", pg.evaluate("D().team.some(m => m.name === 'Олег Новый' && S.accounts.some(a => a.username === 'oleg' && a.linkId === m.id))"))
-      parity = pg.evaluate(f"(() => {{ const p = partnerById({json.dumps(rid)}), a = reportDoc(p), b = D().reports.find(r => r.id === p.id); const pick = d => JSON.stringify([d.name, d.share, d.promo, d.leads, d.paidStudents, d.conv, d.employed, d.revenue, d.accrued, d.paidOut, d.balance, d.rows, d.payouts, d.funnel.map(f => [f.label, f.count, f.pct])]); return pick(a) === pick(b) ? 'same' : pick(a) + ' VS ' + pick(b); }})()")
-      check("server report equals page calculation", parity == "same", parity[:600])
+      pkeys = "['kind', 'name', 'promo', 'leads', 'paidStudents', 'conv', 'employed', 'revenue', 'months', 'accrued', 'paidOut', 'balance', 'payouts', 'rows']"
+      parity = pg.evaluate(f"(() => {{ SETTLED = null; const a = partyReport('partner', {json.dumps(rid)}), b = D().reports.find(r => r.id === {json.dumps(rid)}); const pick = d => JSON.stringify([...{pkeys}.map(k => d[k]), d.funnel.map(f => [f.label, f.count, f.pct])]); return pick(a) === pick(b) ? 'same' : pick(a) + ' | ' + pick(b); }})()")
+      check("server report equals page calculation", parity == "same", parity[:900])
       shot(pg, "s22_settings_server.png", full_page=True)
       # ментор: только свои студенты, без партнёров и финансов
       mn_ctx = b.new_context(viewport={"width": 1440, "height": 900}); mn_ctx.add_init_script(INIT)
@@ -363,10 +364,12 @@ try:
       login(mn, "irina"); mn.wait_for_selector(".today", timeout=10000); mn.wait_for_timeout(400); shot(mn, "s23_mentor_today.png", full_page=True)
       seen = mn.evaluate("({ n: D().students.length, own: D().students.every(s => s.mentorId === myTeam().id), payouts: D().payouts.length, reports: D().reports.length, limited: S.limited, contacts: D().partners.some(p => 'contacts' in p) })")
       check("mentor sees only own students", seen["n"] == mentor_team["n"] and seen["own"] and seen["limited"], (seen, mentor_team))
-      check("mentor has no payouts, reports, partner contacts", seen["payouts"] == 0 and seen["reports"] == 0 and not seen["contacts"], seen)
+      check("mentor has no payouts, only own report, no partner contacts", seen["payouts"] == 0 and seen["reports"] == 1 and not seen["contacts"], seen)
       check("mentor menu has no partners", mn.locator(".nav >> text=Партнёры").count() == 0)
-      mn.click(".nav >> text=Выплаты"); mn.wait_for_selector("#pay-month")
-      check("mentor sees own payouts only", mn.locator("#pay-mentors").count() == 0 and mn.locator("#pay-partners").count() == 0 and mn.locator(".kpi").count() >= 3 and all(v.get("mentorId") == mn.evaluate("myTeam().id") for k, v in mn.evaluate("window.__store").items() if k.startswith("payouts/")))
+      mn.click(".nav >> text=Выплаты"); mn.wait_for_selector(".kpi")
+      mkeys = list(mn.evaluate("window.__store").keys())
+      check("mentor sees only own accruals", mn.locator("#pay-parties").count() == 0 and mn.locator("#pay-dirs").count() == 0 and mn.locator(".kpi").count() == 4 and "Начисления по месяцам" in mn.text_content("#main")
+            and not any(k.startswith(("payouts/", "directions/", "expenses/")) for k in mkeys) and [k for k in mkeys if k.startswith("reports/")] == ["reports/" + mn.evaluate("myTeam().id")], [k for k in mkeys if not k.startswith(("students/", "meetings/"))])
       mn.click(".nav >> text=Аналитика"); mn.wait_for_timeout(200); check("mentor has no finance tab", mn.locator(".tabs >> text=Финансы").count() == 0 and mn.locator(".kpi").count() == 6)
       mn.click(".nav >> text=Настройки"); mn.wait_for_timeout(200); check("mentor settings: account only", mn.locator(".panel").count() <= 2 and mn.locator("text=Сменить пароль").count() == 1 and mn.locator("text=Резервная копия").count() == 0)
       foreign = pg.evaluate(f"D().students.find(s => s.mentorId !== {json.dumps(mentor_team['id'])}).id")
@@ -421,32 +424,53 @@ try:
       pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(300)
       check("owner is prompted to join the team", pg.locator("text=Вас нет в команде").count() == 1 and pg.evaluate("!myTeam()"))
       pg.click("[data-act=self-team]"); pg.wait_for_function("() => typeof S !== 'undefined' && S.status === 'ready' && S.loaded.team && !!myTeam()", timeout=15000)
-      # распределение дохода и выплаты менторам
-      pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(200); pg.click("[data-act=split-edit]"); pg.wait_for_selector("#mform")
-      pg.fill("#m-mentorShare", "30"); pg.select_option("#m-mentorBase", "afterPartner"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(300)
-      check("split settings saved", pg.evaluate("window.__store")["config/main"]["split"] == {"mentorShare": 30, "mentorBase": "afterPartner"}, pg.evaluate("window.__store")["config/main"])
-      calc = pg.evaluate("(() => { const s = { partnerId: D().partners.find(p => p.share === 40).id, partnerShare: 40, mentorId: D().team[0].id }; return splitOf(s, 100000); })()")
-      check("split: partner 40%, mentor 30% of the rest, school keeps the remainder", calc == {"partner": 40000, "mentor": 18000, "school": 42000}, calc)
-      tm = pg.evaluate("(() => { const by = {}; for (const s of D().students) if (s.mentorId && paidSum(s) > 0) by[s.mentorId] = 1; return teamById(Object.keys(by)[0]); })()")
-      pg.locator(".rows li", has_text=tm["name"]).locator("[data-act=team-edit]").first.click(); pg.wait_for_selector("#mform"); pg.fill("#m-share", "50"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(300)
-      check("own rate of a mentor is saved", pg.evaluate("window.__store")["team/" + tm["id"]]["share"] == 50 and pg.evaluate(f"mentorRate(teamById({json.dumps(tm['id'])}))") == 50)
+      # направления: чистая выручка, доли сторон, расходы, выплаты
+      mon = pg.evaluate("today().slice(0, 7)")
+      pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(200)
+      check("settings list the demo direction with its terms", "Аналитик 1С с нуля" in pg.locator(".panel", has_text="Направления").first.inner_text() and "вам 40%" in pg.locator(".panel", has_text="Направления").first.inner_text())
+      dm = pg.evaluate("(() => { const d = D().directions[0]; return { id: d.id, parties: termsFor(d, today().slice(0, 7)) }; })()")
+      cell = lambda m=None: pg.evaluate(f"(() => {{ SETTLED = null; const c = settle().find(c => c.directionId === {json.dumps(dm['id'])} && c.month === {json.dumps(m or mon)}); return c ? {{ received: c.received, expenses: c.expenses, net: c.net, owner: c.owner, parties: c.parties }} : null; }})()")
+      c0 = cell()
+      check("net revenue = received - expenses, everyone gets a share of it", c0 and abs(c0["net"] - (c0["received"] - c0["expenses"])) < 0.01 and c0["expenses"] > 0
+            and all(abs(x["accrued"] - round(c0["net"] * x["share"]) / 100) < 0.01 for x in c0["parties"]) and abs(c0["owner"] + sum(x["accrued"] for x in c0["parties"]) - c0["net"]) < 0.01, c0)
       pg.click(".nav >> text=Выплаты"); pg.wait_for_selector("#pay-month")
-      st0 = pg.evaluate(f"(() => {{ const st = mentorStats(teamById({json.dumps(tm['id'])}), today().slice(0, 7)); return {{ accrued: st.accrued, balance: st.balance }}; }})()")
-      check("mentor accrual is positive and equals balance before payouts", st0["accrued"] > 0 and st0["balance"] == st0["accrued"], st0)
-      row = pg.locator("#pay-mentors tbody tr", has_text=tm["name"])
-      check("payouts table shows the rate", "50%" in row.inner_text(), row.inner_text())
-      row.locator("[data-act=mpayout]").click(); pg.wait_for_selector("#mform"); pg.fill("#m-amount", "1000"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(300)
-      st1 = pg.evaluate(f"mentorStats(teamById({json.dumps(tm['id'])}), today().slice(0, 7)).balance")
+      check("payouts page: direction panel, parties and expenses", pg.locator("#pay-dirs .panel").count() >= 1 and pg.locator("#pay-parties tbody tr").count() == 3 and pg.locator("#pay-expenses li").count() >= 1 and pg.locator(".kpi").count() == 5)
+      pg.click(".page-head [data-act=expense-new]"); pg.wait_for_selector("#mform"); pg.fill("#m-amount", "10000"); pg.fill("#m-comment", "Непредвиденный расход"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(400)
+      c1 = cell()
+      check("an unforeseen expense lowers net revenue and every share", abs(c0["net"] - c1["net"] - 10000) < 0.01 and all(abs(a["accrued"] - b["accrued"] - 100 * a["share"]) < 0.01 for a, b in zip(c0["parties"], c1["parties"])) and abs(c0["owner"] - c1["owner"] - 4000) < 0.01, (c0, c1))
+      tm = pg.evaluate(f"(() => {{ const x = {json.dumps(dm['parties'])}.find(x => x.kind === 'mentor'); return {{ id: x.id, name: teamById(x.id).name, share: x.share }}; }})()")
+      bal0 = pg.evaluate(f"partyStats('mentor', {json.dumps(tm['id'])}).balance")
+      row = pg.locator("#pay-parties tbody tr", has_text=tm["name"])
+      row.locator("[data-act=payout-new]").click(); pg.wait_for_selector("#mform"); pg.fill("#m-amount", "1000"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(400)
       mp = [v for k, v in pg.evaluate("window.__store").items() if k.startswith("payouts/") and v.get("mentorId") == tm["id"]]
-      check("mentor payout recorded and balance reduced", len(mp) == 1 and mp[0]["amount"] == 1000 and "partnerId" not in mp[0] and abs(st0["balance"] - st1 - 1000) < 0.01, (mp, st0, st1))
-      check("payouts page: summary and partners block", pg.locator(".kpi").count() >= 4 and pg.locator("#pay-partners tbody tr").count() >= 1)
+      check("mentor payout recorded and balance reduced", len(mp) == 1 and mp[0]["amount"] == 1000 and "partnerId" not in mp[0] and abs(bal0 - pg.evaluate(f"(SETTLED = null, partyStats('mentor', {json.dumps(tm['id'])}).balance)") - 1000) < 0.01, mp)
+      row.click(); pg.wait_for_timeout(200); check("party details: months and payouts", pg.locator(".panel", has_text=tm["name"] + ": начисления").count() == 1 and pg.locator(".panel", has_text=tm["name"] + ": выплаты").locator("[data-act=payout-del]").count() == 1)
       shot(pg, "s27_payouts.png", full_page=True)
-      pg.click(".nav >> text=Аналитика"); pg.click(".tabs >> text=Финансы"); pg.wait_for_selector("#chart-split"); check("finance: split chart", pg.locator("#chart-split .s3").count() >= 0 and pg.locator("#chart-split .s1").count() >= 1)
+      # новые условия действуют с выбранного месяца и не трогают прошлое
+      old = pg.evaluate(f"(() => {{ SETTLED = null; const c = settle().find(c => c.directionId === {json.dumps(dm['id'])} && c.month < {json.dumps(mon)} && c.received > 0); return c ? {{ month: c.month, parties: c.parties }} : null; }})()")
+      pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(200); pg.locator(".panel", has_text="Направления").first.locator("[data-act=direction-edit]").first.click(); pg.wait_for_selector("#mform")
+      bl = next(x for x in dm["parties"] if x["kind"] == "partner")
+      pg.fill("#m-p_" + bl["id"], "95"); check("form warns when shares exceed 100%", "больше 100%" in pg.inner_text("#m-own"), pg.inner_text("#m-own"))
+      pg.click("#m-submit"); pg.wait_for_timeout(200); check("shares above 100% are rejected", pg.locator("#mform").count() == 1 and "больше 100%" in pg.inner_text("#m-err"))
+      pg.fill("#m-p_" + bl["id"], "50"); check("form shows what is left to the owner", "Вам остаётся: 20%" in pg.inner_text("#m-own"), pg.inner_text("#m-own"))
+      pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(400)
+      c2, o2 = cell(), cell(old["month"]) if old else None
+      share = lambda c: next(x["share"] for x in c["parties"] if x["kind"] == "partner")
+      check("new terms apply from this month, past months keep the old ones", share(c2) == 50 and old is not None and share(o2) == 30 and o2["parties"] == old["parties"], (c2["parties"], old))
+      # сервер считает те же отчёты, что и страница
+      same = "(() => { const pick = (d, k) => JSON.stringify(k.map(x => x === 'funnel' ? d.funnel.map(f => [f.label, f.count, f.pct]) : d[x])); SETTLED = null;" \
+             f" const a = partyReport('partner', {json.dumps(rid)}), b = D().reports.find(r => r.id === {json.dumps(rid)});" \
+             " const pk = ['kind', 'name', 'promo', 'leads', 'paidStudents', 'conv', 'employed', 'revenue', 'funnel', 'months', 'accrued', 'paidOut', 'balance', 'payouts', 'rows'];" \
+             " const mid = S.accounts.find(x => x.role === 'mentor' && x.linkId).linkId, c = partyReport('mentor', mid), e = D().reports.find(r => r.id === mid);" \
+             " const mk = ['kind', 'name', 'months', 'accrued', 'paidOut', 'balance', 'payouts'];" \
+             " return !!b && !!e && pick(a, pk) === pick(b, pk) && pick(c, mk) === pick(e, mk) && a.months.length + c.months.length > 1; })()"
+      try: pg.wait_for_function("() => " + same, timeout=15000); par = True
+      except Exception: par = False
+      check("server reports for the blogger and the mentor equal the page calculation", par, pg.evaluate(f"JSON.stringify([partyReport('partner', {json.dumps(rid)}).months.slice(0, 2), (D().reports.find(r => r.id === {json.dumps(rid)}) || {{}}).months])")[:900] if not par else "")
+      pg.click(".nav >> text=Аналитика"); pg.click(".tabs >> text=Финансы"); pg.wait_for_selector("#chart-split"); check("finance: net revenue split chart", pg.locator("#chart-split .s1").count() >= 1 and pg.locator("#chart-split .s3").count() >= 1)
       shot(pg, "s28_finance.png", full_page=True)
       pg.click(".tabs >> text=Воронка и этапы"); pg.wait_for_selector("#chart-leads"); check("analytics: leads by month and mentors table", pg.locator("#chart-leads rect, #chart-leads path").count() > 0 and pg.locator("#an-mentors tbody tr").count() >= 1)
       shot(pg, "s29_analytics.png", full_page=True)
-      parity2 = pg.evaluate(f"(() => {{ const p = partnerById({json.dumps(rid)}), a = reportDoc(p), b = D().reports.find(r => r.id === p.id); return a.balance === b.balance && a.accrued === b.accrued; }})()")
-      check("mentor payouts do not change the partner report", parity2)
       # тема и раскладка настроек
       pg.click(".nav >> text=Настройки"); pg.wait_for_selector(".cols2")
       tops = pg.evaluate("[...document.querySelectorAll('.cols2 > .stack')].map(e => Math.round(e.getBoundingClientRect().top))")
@@ -495,8 +519,9 @@ try:
       # партнёр
       pctx = b.new_context(viewport={"width": 1440, "height": 900}); pctx.add_init_script(INIT)
       pp = pctx.new_page(); pp.on("pageerror", lambda e: errs.append("PARTNER " + str(e)))
-      login(pp, "blogger"); pp.wait_for_selector("text=Отчёт по трафику", timeout=10000); pp.wait_for_timeout(200)
+      login(pp, "blogger"); pp.wait_for_selector("text=Начисления по месяцам", timeout=10000); pp.wait_for_timeout(200)
       check("partner can change password", pp.locator(".nav >> text=Сменить пароль").count() == 1)
+      check("partner sees accruals by month", "Начисления по месяцам" in pp.text_content("#main") and pp.locator(".kpi").count() >= 6)
       check("partner store has only own report", list(pp.evaluate("window.__store").keys()) == ["reports/" + rid], list(pp.evaluate("window.__store").keys())[:5])
       check("partner: no search, no drawer, no contacts, no calendar", pp.locator("#gsearch").is_hidden() and pp.locator("text=Календарь").count() == 0 and "Тестовая встреча" not in pp.inner_text("body") and "+7 9" not in pp.inner_text("body") and "@student" not in pp.inner_text("body"))
       shot(pp, "s10_blogger.png", full_page=True)

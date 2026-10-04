@@ -7,7 +7,8 @@
 from django.conf import settings
 from django.db import models
 
-COLLECTIONS = ("students", "cohorts", "partners", "payouts", "team", "reports", "meetings", "config")
+COLLECTIONS = ("students", "cohorts", "partners", "payouts", "team", "reports", "meetings", "config",
+               "directions", "expenses")
 
 
 class State(models.Model):

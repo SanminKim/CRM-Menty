@@ -77,7 +77,7 @@ class AccessTests(BaseCase):
         self.assertTrue(data["full"])
         self.assertEqual(self.ids(data, "students"), ["s1", "s2"])
         self.assertEqual(self.ids(data, "payouts"), ["po1"])
-        self.assertEqual(self.ids(data, "reports"), ["p1", "p2"])
+        self.assertEqual(self.ids(data, "reports"), ["p1", "p2", "t1", "t2"])   # отчёты блогера и менторов с доступом
 
     def test_mentor_sees_only_own_students_and_no_money_of_school(self):
         self.login("mentor")
@@ -85,7 +85,7 @@ class AccessTests(BaseCase):
         self.assertEqual(self.ids(data, "students"), ["s1"])
         self.assertEqual(self.ids(data, "meetings"), ["m1", "m3", "m4"])  # встречи своих студентов и занятие группы
         self.assertNotIn("payouts", data["docs"])
-        self.assertNotIn("reports", data["docs"])
+        self.assertEqual(self.ids(data, "reports"), ["t1"])                # из отчётов — только свой
         partner = data["docs"]["partners"][0]["data"]
         self.assertEqual(partner["name"], "Блог")
         self.assertNotIn("contacts", partner)
@@ -101,34 +101,52 @@ class AccessTests(BaseCase):
         self.assertEqual(self.client.get("/api/profiles/", {"ids": f"u{self.mentor.pk}"}).json(), {})
         self.assertEqual(self.client.get("/api/accounts/").status_code, 403)
 
-    def test_mentor_sees_own_payouts_and_own_share_only(self):
+    def test_mentor_reads_only_own_report_and_no_money_collections(self):
+        store.system_write("directions", "d1", {"name": "Аналитик 1С", "terms": [{"from": "2000-01", "parties": [
+            {"kind": "partner", "id": "p1", "share": 40}, {"kind": "mentor", "id": "t1", "share": 30}, {"kind": "mentor", "id": "t2", "share": 5}]}]})
+        store.system_write("expenses", "e1", {"directionId": "d1", "date": "2026-10-01", "amount": 500})
         store.system_write("payouts", "mp1", {"mentorId": "t1", "amount": 9000, "date": "2026-01-10"})
         store.system_write("payouts", "mp2", {"mentorId": "t2", "amount": 7000, "date": "2026-01-10"})
-        store.system_write("team", "t1", {"name": "Ирина Котова", "share": 35})
-        store.system_write("team", "t2", {"name": "Алексей Дёмин", "share": 20})
         self.login("mentor")
         data = self.sync()
-        self.assertEqual(self.ids(data, "payouts"), ["mp1"])              # ни чужих выплат, ни выплат партнёрам
-        team = {d["id"]: d["data"] for d in data["docs"]["team"]}
-        self.assertEqual(team["t1"]["share"], 35)
-        self.assertNotIn("share", team["t2"])                              # чужая ставка не видна
-        self.assertEqual(team["t2"]["name"], "Алексей Дёмин")
-        for method, doc_id, body in (("put", "mp9", {"mentorId": "t1", "amount": 1}), ("patch", "mp1", {"amount": 1}), ("delete", "mp1", None)):
-            self.assertEqual(self.send(method, "payouts", doc_id, body).status_code, 403)   # выплаты записывает только администратор
-        self.assertEqual(self.send("patch", "team", "t1", {"share": 90}).status_code, 403)
-        self.assertEqual(self.send("patch", "config", "main", {"split": {"mentorShare": 90}}).status_code, 403)
+        self.assertEqual(self.ids(data, "reports"), ["t1"])                # свой отчёт, без отчётов партнёра и другого ментора
+        for collection in ("payouts", "directions", "expenses"):
+            self.assertNotIn(collection, data["docs"])                      # условия сторон и расходы ментору не отдаются
+        report = data["docs"]["reports"][0]["data"]
+        self.assertEqual((report["kind"], report["paidOut"]), ("mentor", 9000))
+        self.assertNotIn("7000", json.dumps(report))
+        for collection, doc_id, body in (("payouts", "mp9", {"mentorId": "t1", "amount": 1}), ("directions", "d1", {"name": "x"}),
+                                         ("expenses", "e9", {"amount": 1}), ("reports", "t1", {}), ("reports", "t2", {})):
+            for method in ("put", "patch", "delete"):
+                self.assertEqual(self.send(method, collection, doc_id, body).status_code, 403, (collection, method))
+        self.login("other")
+        self.assertEqual(self.ids(self.sync(), "reports"), ["t2"])
         self.login("blogger")
-        self.assertNotIn("payouts", self.sync()["docs"])
-        self.assertNotIn("team", self.sync()["docs"])
+        data = self.sync()
+        self.assertEqual(list(data["docs"]), ["reports"])
+        self.assertEqual(self.ids(data, "reports"), ["p1"])
 
-    def test_mentor_hears_about_a_payout_added_later(self):
+    def test_same_id_for_mentor_and_partner_does_not_open_the_wrong_report(self):
+        store.system_write("team", "p1", {"name": "Двойник", "share": 77})   # запись команды с тем же id, что у партнёра
+        twin = User.objects.create_user("twin", password="pass-12345-x")
+        Account.objects.create(user=twin, role="mentor", link_id="p1")
+        store.system_write("students", "s78", student("p1"))
+        self.assertEqual(Doc.objects.get(collection="reports", doc_id="p1").data["kind"], "partner")
+        self.login("twin")
+        data = self.sync()
+        self.assertNotIn("reports", data["docs"])                           # отчёт партнёра ментору не отдаётся
+        self.assertNotIn("share", [d["data"] for d in data["docs"]["team"] if d["id"] == "p1"][0])
+
+    def test_mentor_hears_only_about_own_report(self):
         self.login("mentor")
-        rev = self.sync()["rev"]
-        epoch = self.sync()["epoch"]
-        store.system_write("payouts", "mp3", {"mentorId": "t1", "amount": 100})
-        store.system_write("payouts", "mp4", {"mentorId": "t2", "amount": 100})
-        later = self.sync(since=rev, epoch=epoch)
-        self.assertEqual(self.ids(later, "payouts"), ["mp3"])
+        first = self.sync()
+        store.system_write("payouts", "mp3", {"mentorId": "t1", "amount": 100, "date": "2026-02-01"})
+        store.system_write("payouts", "mp4", {"mentorId": "t2", "amount": 100, "date": "2026-02-01"})
+        store.system_write("payouts", "po7", {"partnerId": "p1", "amount": 100, "date": "2026-02-01"})
+        later = self.sync(since=first["rev"], epoch=first["epoch"])
+        self.assertEqual(self.ids(later, "reports"), ["t1"])
+        self.assertEqual(later["docs"]["reports"][0]["data"]["paidOut"], 100)
+        self.assertEqual(later.get("removed"), {})                          # ни чужих выплат, ни чужих отчётов в списке исчезнувших
 
     def test_mentor_cannot_touch_other_students(self):
         self.login("mentor")
@@ -220,6 +238,7 @@ class StoreTests(BaseCase):
         self.assertNotIn("id", Doc.objects.get(doc_id="s9").data)
 
     def test_incremental_sync(self):
+        store.system_write("students", "s76", student("t1"))                # отчёты пересчитаны: дальше меняется только то, что трогает тест
         self.login("admin")
         first = self.sync()
         same = self.sync(since=first["rev"], epoch=first["epoch"])
@@ -247,6 +266,7 @@ class StoreTests(BaseCase):
         self.assertEqual(self.ids(self.sync(), "students"), ["s1", "s2"])
 
     def test_incremental_sync_does_not_leak_ids_to_partner(self):
+        store.system_write("students", "s76", student("t1"))                # отчёты пересчитаны заранее
         self.login("blogger")
         first = self.sync()
         store.system_write("students", "s77", student("t1"))
@@ -368,128 +388,186 @@ class PageTests(BaseCase):
 
 
 class ReportTests(BaseCase):
+    """Чистая выручка направления за месяц = оплаты студентов минус расходы; каждая сторона получает от неё свой процент."""
+
+    def setUp(self):
+        store.system_write("directions", "d1", {"name": "Аналитик 1С", "terms": [
+            {"from": "2000-01", "parties": [{"kind": "partner", "id": "p1", "share": 40}, {"kind": "mentor", "id": "t1", "share": 30}]}]})
+        store.system_write("cohorts", "c1", {"name": "Поток 2", "start": "2020-01-01", "active": True, "directionId": "d1"})
+        self.login("admin")
+
     def report(self, doc_id="p1"):
         return Doc.objects.get(collection="reports", doc_id=doc_id).data
 
-    def publish(self):
-        self.login("admin")
-        self.assertEqual(self.send("put", "reports", "p1", {"revenue": 999999, "rows": [{"name": "Подделка"}]}).status_code, 200)
+    def pay(self, doc_id, *payments, **extra):
+        store.system_write("students", doc_id, student("t1", cohortId="c1", payments=[
+            {"id": f"x{i}", "amount": amount, "paid": paid} for i, (amount, paid) in enumerate(payments)], **extra))
 
-    def test_server_computes_report_and_ignores_what_page_sent(self):
-        store.system_write("students", "s1", student(
-            "t1", name="Иванов Пётр Сергеевич", partnerId="p1", partnerShare=30, stage="offer", phone="+7 900 000-00-01",
-            createdAt="2026-08-01T09:00:00.000Z",
-            history=[{"to": "new"}, {"to": "studying"}, {"to": "offer"}],
-            payments=[{"id": "a", "amount": 50000, "paid": "2026-08-05"}, {"id": "b", "amount": "33333", "paid": "2026-09-05"},
-                      {"id": "c", "amount": 10000, "paid": None}]))
-        store.system_write("students", "s3", student("t2", name="Удалённая Анна", partnerId="p1", partnerShare=40,
+    def test_everyone_gets_a_share_of_net_revenue(self):
+        self.pay("s1", (100000, "2026-10-03"), (50000, "2026-10-20"), (70000, None), partnerId="p1")
+        self.pay("s2", (30000, "2026-10-05"))                                # пришёл не от блогера: в выручку направления входит
+        store.system_write("expenses", "e1", {"directionId": "d1", "date": "2026-10-10", "amount": 20000, "comment": "Реклама"})
+        store.system_write("expenses", "e2", {"directionId": "d1", "date": "2026-10-15", "amount": "10000"})
+        blogger, mentor = self.report("p1"), self.report("t1")
+        row = {"month": "2026-10", "directionId": "d1", "direction": "Аналитик 1С", "received": 180000, "expenses": 30000, "net": 150000}
+        self.assertEqual(blogger["months"], [{**row, "share": 40, "accrued": 60000}])
+        self.assertEqual(mentor["months"], [{**row, "share": 30, "accrued": 45000}])
+        self.assertEqual((blogger["kind"], blogger["accrued"], blogger["paidOut"], blogger["balance"]), ("partner", 60000, 5000, 55000))
+        self.assertEqual((mentor["kind"], mentor["name"], mentor["accrued"], mentor["balance"]), ("mentor", "Ирина Котова", 45000, 45000))
+
+    def test_an_unforeseen_expense_lowers_everyones_share_and_can_be_removed(self):
+        self.pay("s1", (100000, "2026-10-03"))
+        self.assertEqual((self.report("p1")["accrued"], self.report("t1")["accrued"]), (40000, 30000))
+        self.assertEqual(self.send("put", "expenses", "e1", {"directionId": "d1", "date": "2026-10-28", "amount": 25000, "comment": "Возврат оборудования"}).status_code, 200)
+        self.assertEqual((self.report("p1")["accrued"], self.report("t1")["accrued"]), (30000, 22500))
+        self.send("delete", "expenses", "e1")
+        self.assertEqual((self.report("p1")["accrued"], self.report("t1")["accrued"]), (40000, 30000))
+
+    def test_month_with_more_expenses_than_income_gives_negative_accrual(self):
+        self.pay("s1", (100000, "2026-09-03"))
+        store.system_write("expenses", "e1", {"directionId": "d1", "date": "2026-10-02", "amount": 10000})
+        r = self.report("p1")
+        self.assertEqual([(m["month"], m["net"], m["accrued"]) for m in r["months"]], [("2026-10", -10000, -4000), ("2026-09", 100000, 40000)])
+        self.assertEqual(r["accrued"], 36000)                                # убыток месяца уменьшает общий остаток
+
+    def test_new_terms_apply_from_their_month_and_keep_the_past(self):
+        self.pay("s1", (100000, "2026-09-03"), (100000, "2026-10-03"), (100000, "2026-11-03"))
+        self.send("patch", "directions", "d1", {"terms": [
+            {"from": "2000-01", "parties": [{"kind": "partner", "id": "p1", "share": 40}, {"kind": "mentor", "id": "t1", "share": 30}]},
+            {"from": "2026-10", "parties": [{"kind": "partner", "id": "p1", "share": 50}]}]})   # с октября ментора в составе нет
+        self.assertEqual([(m["month"], m["share"], m["accrued"]) for m in self.report("p1")["months"]],
+                         [("2026-11", 50, 50000), ("2026-10", 50, 50000), ("2026-09", 40, 40000)])
+        self.assertEqual([(m["month"], m["accrued"]) for m in self.report("t1")["months"]], [("2026-09", 30000)])
+
+    def test_each_direction_has_its_own_parties(self):
+        store.system_write("directions", "d2", {"name": "Собеседования", "terms": [{"from": "2000-01", "parties": [{"kind": "mentor", "id": "t2", "share": 60}]}]})
+        store.system_write("cohorts", "c2", {"name": "Интенсив", "directionId": "d2"})
+        self.pay("s1", (100000, "2026-10-03"))
+        store.system_write("students", "s2", student("t2", cohortId="c2", payments=[{"amount": 20000, "paid": "2026-10-04"}]))
+        store.system_write("students", "s5", student("t2", payments=[{"amount": 7777, "paid": "2026-10-04"}]))   # без потока: ни в одно направление не входит
+        self.assertEqual([(m["direction"], m["net"], m["accrued"]) for m in self.report("t2")["months"]], [("Собеседования", 20000, 12000)])
+        self.assertEqual([(m["direction"], m["net"]) for m in self.report("p1")["months"]], [("Аналитик 1С", 100000)])
+
+    def test_partner_report_keeps_traffic_numbers_without_contacts(self):
+        self.pay("s1", (50000, "2026-08-05"), ("33333", "2026-09-05"), (10000, None), name="Иванов Пётр Сергеевич", partnerId="p1",
+                 stage="offer", phone="+7 900 000-00-01", createdAt="2026-08-01T09:00:00.000Z", history=[{"to": "new"}, {"to": "studying"}, {"to": "offer"}])
+        store.system_write("students", "s3", student("t2", name="Удалённая Анна", partnerId="p1", cohortId="c1",
                                                      deletedAt="2026-09-01T00:00:00Z", payments=[{"amount": 1000, "paid": "2026-08-01"}]))
         store.system_write("students", "s4", student("t2", name="Одноимённый", partnerId="p1", stage="lost",
                                                      createdAt="2026-09-01T09:00:00.000Z", history=[{"to": "new"}, {"to": "contacted"}, {"to": "lost"}]))
-        self.publish()
+        self.assertEqual(self.send("put", "reports", "p1", {"revenue": 777777, "rows": [{"name": "Подделка"}]}).status_code, 200)
         r = self.report()
-        self.assertEqual((r["name"], r["share"], r["promo"], r["leads"], r["paidStudents"], r["conv"], r["employed"]),
-                         ("Блог", 40, "BLOG", 2, 1, 50, 1))
-        self.assertEqual((r["revenue"], r["accrued"], r["paidOut"], r["balance"]), (83333, 24999.9, 5000, 19999.9))
-        self.assertEqual(r["rows"], [
-            {"name": "Одноимённый", "stage": "lost", "date": "2026-09-01", "paid": 0, "share": 0},
-            {"name": "Пётр И.", "stage": "offer", "date": "2026-08-01", "paid": 83333, "share": 24999.9}])
-        self.assertEqual([(f["key"], f["count"], f["pct"]) for f in r["funnel"]][:2], [("new", 2, 100), ("contacted", 2, 100)])
+        self.assertEqual((r["name"], r["promo"], r["leads"], r["paidStudents"], r["conv"], r["employed"], r["revenue"]), ("Блог", "BLOG", 2, 1, 50, 1, 83333))
+        self.assertEqual(r["rows"], [{"name": "Одноимённый", "stage": "lost", "date": "2026-09-01", "paid": 0},
+                                     {"name": "Пётр И.", "stage": "offer", "date": "2026-08-01", "paid": 83333}])
         self.assertEqual([f["count"] for f in r["funnel"]], [2, 2, 1, 1, 1, 1, 1, 1, 0])
+        self.assertEqual([(m["month"], m["received"], m["accrued"]) for m in r["months"]], [("2026-09", 33333, 13333.2), ("2026-08", 50000, 20000)])
         self.assertEqual(r["payouts"], [{"date": "", "amount": 5000, "comment": ""}])
         dumped = json.dumps(r, ensure_ascii=False)
-        for secret in ("+7 900", "Сергеевич", "Удалённая", "Подделка", "999999", "карта 0000"):
+        for secret in ("+7 900", "Сергеевич", "Удалённая", "Подделка", "777777", "карта 0000"):
             self.assertNotIn(secret, dumped)
 
-    def test_mentor_edit_refreshes_partner_report(self):
-        self.publish()
-        before = self.report()
+    def test_mentor_edit_refreshes_reports_and_partner_gets_them_by_sync(self):
+        store.system_write("students", "s1", student("t1", cohortId="c1", partnerId="p1", partnerShare=40))
         self.login("blogger")
         first = self.sync()
         self.login("mentor")
         self.send("patch", "students", "s1", {"payments": [{"id": "a", "amount": 20000, "paid": "2026-10-01"}]})
-        after = self.report()
-        self.assertEqual((before["revenue"], after["revenue"], after["accrued"]), (0, 20000, 8000))
+        self.assertEqual((self.report("p1")["accrued"], self.report("t1")["accrued"]), (8000, 6000))
         self.login("blogger")
         later = self.sync(since=first["rev"], epoch=first["epoch"])
-        self.assertEqual(self.ids(later, "reports"), ["p1"])  # партнёр получает свежий отчёт сам
-        self.assertEqual(later["docs"]["reports"][0]["data"]["revenue"], 20000)
+        self.assertEqual(self.ids(later, "reports"), ["p1"])
+        self.assertEqual(later["docs"]["reports"][0]["data"]["accrued"], 8000)
 
-    def test_payout_and_partner_changes_refresh_report(self):
-        self.publish()
+    def test_payouts_and_names_refresh_reports(self):
         self.send("put", "payouts", "po2", {"partnerId": "p1", "amount": 700, "date": "2026-10-02", "comment": "Октябрь"})
-        self.assertEqual(self.report()["paidOut"], 5700)
+        self.send("put", "payouts", "mp1", {"mentorId": "t1", "amount": 300, "date": "2026-10-02"})
+        self.assertEqual((self.report("p1")["paidOut"], self.report("t1")["paidOut"]), (5700, 300))
+        self.assertEqual(self.report("p1")["payouts"][0], {"date": "2026-10-02", "amount": 700, "comment": "Октябрь"})
         self.send("delete", "payouts", "po2")
-        self.assertEqual(self.report()["paidOut"], 5000)
+        self.assertEqual(self.report("p1")["paidOut"], 5000)
         self.send("patch", "partners", "p1", {"name": "Блог 2.0"})
-        self.assertEqual(self.report()["name"], "Блог 2.0")
+        self.send("patch", "team", "t1", {"name": "Ирина К."})
+        self.assertEqual((self.report("p1")["name"], self.report("t1")["name"]), ("Блог 2.0", "Ирина К."))
 
     def test_unrelated_edit_keeps_report_untouched(self):
-        self.publish()
+        self.pay("s1", (1000, "2026-10-01"), partnerId="p1")
         rev = Doc.objects.get(collection="reports", doc_id="p1").rev
-        self.send("patch", "students", "s2", {"city": "Тверь"})          # студент без партнёра
-        self.send("patch", "students", "s1", {"city": "Казань"})         # цифры не меняются
+        self.send("patch", "students", "s2", {"city": "Тверь"})
+        self.send("patch", "students", "s1", {"city": "Казань"})
         self.assertEqual(Doc.objects.get(collection="reports", doc_id="p1").rev, rev)
 
     def test_only_admin_writes_reports(self):
-        self.publish()
+        self.send("put", "reports", "p1", {})
         for who in ("mentor", "blogger"):
             self.login(who)
             for method in ("put", "patch", "delete"):
                 self.assertEqual(self.send(method, "reports", "p1", {"revenue": 1}).status_code, 403, (who, method))
         self.assertEqual(self.report()["revenue"], 0)
 
-    def test_broken_student_data_never_breaks_the_report(self):
-        self.publish()
+    def test_broken_data_never_breaks_the_reports(self):
+        store.system_write("students", "s1", student("t1", cohortId="c1", partnerId="p1", partnerShare=40))
         self.login("mentor")
         weird = [
             {"payments": "не список", "history": [{"to": ["x"]}, {"to": {}}, "мусор"], "stage": ["x"]},
             {"payments": [{"amount": 10 ** 400, "paid": "2026-01-01"}, {"amount": 1e308, "paid": "x"}, {"amount": "1_000", "paid": "x"},
-                          {"amount": ["x"], "paid": "x"}, "мусор", {"amount": "12.5", "paid": "2026-01-02"}]},
-            {"createdAt": {"a": 1}, "name": ["Список"], "stage": "<b>x"},
+                          {"amount": ["x"], "paid": "x"}, "мусор", {"amount": "12.5", "paid": "2026-01-02"}, {"amount": 5, "paid": ["2026-01-03"]}]},
+            {"createdAt": {"a": 1}, "name": ["Список"], "stage": "<b>x", "cohortId": ["c1"]}, {"cohortId": "c1"},
             {"name": "+7 900 123-45-67"}, {"name": "lead@example.com"},
         ]
         for patch in weird:
             self.assertEqual(self.send("patch", "students", "s1", patch).status_code, 200, patch)
+        self.login("admin")
+        for body in ({"terms": "x"}, {"terms": [{"from": 5}, "мусор", {"from": "2026-13x", "parties": 1}, {"from": "2020-01", "parties": [
+                {"kind": "partner", "id": "p1", "share": "сорок"}, {"kind": "partner", "id": "p1", "share": 40}, {"kind": "owner", "id": "p1", "share": 9},
+                {"kind": "mentor", "id": ["t1"], "share": 5}, {"kind": "mentor", "id": "t1", "share": 1e9}, "мусор"]}]}):
+            self.assertEqual(self.send("patch", "directions", "d1", body).status_code, 200, body)
+        for body in ({"directionId": ["d1"], "date": "2026-01-05", "amount": 2.5}, {"directionId": "d1", "date": 5, "amount": 1}, {"directionId": "d1", "date": "2026-01-06", "amount": "мусор"}):
+            self.assertEqual(self.send("put", "expenses", f"e{len(str(body))}", body).status_code, 200, body)
         r = self.report()
-        self.assertEqual((r["revenue"], r["rows"][0]["stage"], r["rows"][0]["date"]), (12.5, "", ""))
-        self.assertEqual(r["rows"][0]["name"], "Без имени")  # контакт вместо имени партнёру не показываем
+        self.assertEqual((r["revenue"], r["rows"][0]["stage"], r["rows"][0]["date"], r["rows"][0]["name"]), (17.5, "", "", "Без имени"))
+        self.assertEqual([(m["received"], m["share"], m["accrued"]) for m in r["months"]], [(12.5, 0, 0)])   # повтор стороны не считается дважды
+        self.assertEqual([(m["share"], m["accrued"]) for m in self.report("t1")["months"]], [(100, 12.5)])   # ставка не выходит за 100%
         self.assertEqual(self.send("put", "students", "n9", student("t1", partnerId=[], name="Список вместо партнёра")).status_code, 200)
 
     def test_same_order_and_sums_as_the_page(self):
         from backend import reports
-        shares = [9999.9, 3703.5, 233.1, 30000.3]
-        students = [{"partnerId": "p", "name": f"Студент {'АБВГ'[i]}", "createdAt": "2026-09-01T10:00:00.000Z", "partnerShare": 100,
-                     "payments": [{"amount": v, "paid": "2026-09-02"}]} for i, v in enumerate(shares)]
-        payouts = [{"partnerId": "p", "amount": 1, "date": "2026-09-01", "comment": "первая"},
-                   {"partnerId": "p", "amount": 2, "date": "2026-09-01", "comment": "вторая"}]
-        r = reports.build("p", {"name": "Канал", "share": "40"}, students, payouts)
+        amounts = [9999.9, 3703.5, 233.1, 30000.3]
+        students = {f"s{i}": {"partnerId": "p", "cohortId": "c", "name": f"Студент {'АБВГ'[i]}", "createdAt": "2026-09-01T10:00:00.000Z",
+                              "payments": [{"amount": v, "paid": f"2026-0{6 + i}-02"}]} for i, v in enumerate(amounts)}
+        data = {"students": students, "cohorts": {"c": {"directionId": "d"}}, "partners": {"p": {"name": "Канал"}}, "team": {},
+                "directions": {"d": {"name": "Курс", "terms": [{"from": "2000-01", "parties": [{"kind": "partner", "id": "p", "share": 33}]}]}},
+                "expenses": {}, "payouts": {"a": {"partnerId": "p", "amount": 1, "date": "2026-09-01", "comment": "первая"},
+                                            "b": {"partnerId": "p", "amount": 2, "date": "2026-09-01", "comment": "вторая"}}}
+        r = reports.build("p", data)
         expected = 0
-        for v in reversed(shares):  # страница складывает по порядку строк, от новых к старым
-            expected += v
+        for v in reversed(amounts):  # страница складывает начисления по порядку строк: от новых месяцев к старым
+            expected += reports._round(v * 33) / 100
         self.assertEqual(r["accrued"], expected)
         self.assertEqual([x["comment"] for x in r["payouts"]], ["вторая", "первая"])  # при равных датах — обратный порядок записей
         self.assertEqual([x["name"] for x in r["rows"]], ["Г С.", "В С.", "Б С.", "А С."])
-        self.assertEqual(r["share"], 40)
 
-    def test_moving_and_trashing_students_updates_both_reports(self):
-        store.system_write("partners", "p2", {"name": "Другой", "share": 10})
-        self.publish()
+    def test_moving_and_trashing_students_updates_reports(self):
+        store.system_write("partners", "p2", {"name": "Другой"})
         self.send("put", "reports", "p2", {})
-        self.send("patch", "students", "s1", {"payments": [{"amount": 1000, "paid": "2026-10-01"}]})
-        self.assertEqual((self.report("p1")["revenue"], self.report("p2")["revenue"]), (1000, 0))
+        self.pay("s1", (1000, "2026-10-01"), partnerId="p1")
+        self.assertEqual((self.report("p1")["revenue"], self.report("p2")["revenue"], self.report("p1")["accrued"]), (1000, 0, 400))
         self.send("patch", "students", "s1", {"partnerId": "p2"})
         self.assertEqual((self.report("p1")["revenue"], self.report("p2")["revenue"]), (0, 1000))
+        self.assertEqual(self.report("p1")["accrued"], 400)                 # доля считается от выручки направления, а не от своих студентов
         self.send("patch", "students", "s1", {"deletedAt": "2026-10-03T00:00:00Z"})
-        self.assertEqual(self.report("p2")["leads"], 0)
+        self.assertEqual((self.report("p2")["leads"], self.report("p1")["accrued"]), (0, 0))
         self.send("patch", "students", "s1", {"deletedAt": None})
-        self.assertEqual(self.report("p2")["leads"], 1)
+        self.assertEqual((self.report("p2")["leads"], self.report("p1")["accrued"]), (1, 400))
+        self.send("patch", "cohorts", "c1", {"directionId": None})          # поток вывели из направления
+        self.assertEqual(self.report("p1")["accrued"], 0)
 
-    def test_report_follows_partner_account_and_partner_removal(self):
+    def test_report_follows_accounts_and_removal(self):
         Doc.objects.filter(collection="reports").delete()
-        self.login("admin")
-        self.send("patch", "students", "s1", {"city": "Тверь"})  # у blogger есть доступ к p1, а отчёта нет: он создаётся
-        self.assertEqual(self.report("p1")["leads"], 1)
+        self.send("patch", "students", "s1", {"city": "Тверь"})  # правка, от которой цифры не зависят, пересчёта не вызывает
+        self.assertFalse(Doc.objects.filter(collection="reports").exists())
+        self.send("patch", "students", "s1", {"stage": "contacted"})  # у blogger и менторов есть доступ, а отчётов нет: они создаются
+        self.assertEqual(sorted(Doc.objects.filter(collection="reports").values_list("doc_id", flat=True)), ["p1", "t1", "t2"])
         self.send("delete", "partners", "p1")
         self.assertFalse(Doc.objects.filter(collection="reports", doc_id="p1").exists())
         self.assertTrue(Tombstone.objects.filter(collection="reports", doc_id="p1").exists())
@@ -504,17 +582,17 @@ class ReportTests(BaseCase):
         on_page = tuple(re.findall(r'\["([a-z_]+)", "([^"]+)", "[a-z]+"\]', block))
         self.assertEqual(on_page, reports.STAGES)
 
-    def test_report_for_unknown_partner_is_rejected(self):
-        self.login("admin")
+    def test_report_for_unknown_party_is_rejected(self):
         self.assertEqual(self.send("put", "reports", "nope", {}).status_code, 400)
 
-    def test_partner_account_gets_report_at_once(self):
-        store.system_write("partners", "p9", {"name": "Новый канал", "share": 20})
-        self.login("admin")
-        res = self.client.post("/api/accounts/", data=json.dumps({
-            "username": "newblog", "role": "partner", "linkId": "p9", "password": "dlinnyi-parol-2026"}), content_type="application/json")
-        self.assertEqual(res.status_code, 201)
-        self.assertEqual(self.report("p9")["name"], "Новый канал")
+    def test_new_accounts_get_reports_at_once(self):
+        store.system_write("partners", "p9", {"name": "Новый канал"})
+        store.system_write("team", "t9", {"name": "Новый Ментор"})
+        for username, role, link in (("newblog", "partner", "p9"), ("newmentor", "mentor", "t9")):
+            res = self.client.post("/api/accounts/", data=json.dumps({
+                "username": username, "role": role, "linkId": link, "password": "dlinnyi-parol-2026"}), content_type="application/json")
+            self.assertEqual(res.status_code, 201)
+        self.assertEqual((self.report("p9")["name"], self.report("t9")["name"]), ("Новый канал", "Новый Ментор"))
         self.client.logout()
         self.assertTrue(self.client.login(username="newblog", password="dlinnyi-parol-2026"))
         self.assertEqual(self.ids(self.sync(), "reports"), ["p9"])
@@ -868,24 +946,21 @@ def sample_backup():
 
 
 class BackupImportTests(BaseCase):
-    def test_import_restores_split_settings(self):
+    def test_import_restores_directions_and_expenses(self):
         raw = sample_backup()
-        raw["version"] = 5
-        raw["data"]["settings"] = {"split": {"mentorShare": 25, "mentorBase": "afterPartner", "лишнее": 1}}
-        store.system_write("config", "main", {"lastBackupAt": "2026-01-01"})
+        raw["version"] = 6
+        raw["data"]["directions"] = [{"id": "bd1", "name": "Аналитик 1С", "terms": [{"from": "2000-01", "parties": [{"kind": "partner", "id": "bp1", "share": 40}]}]}]
+        raw["data"]["expenses"] = [{"id": "be1", "directionId": "bd1", "date": "2026-08-10", "amount": 10000, "comment": "Реклама"}]
+        raw["data"]["cohorts"][0]["directionId"] = "bd1"
+        raw["data"]["directions"][0]["demo"] = True                         # пример направления нужен настоящему потоку: загружается
+        raw["data"]["directions"].append({"id": "bd2", "name": "Ненужный пример", "demo": True})
         import_backup(raw)
-        cfg = Doc.objects.get(collection="config", doc_id="main").data
-        self.assertEqual(cfg["split"], {"mentorShare": 25, "mentorBase": "afterPartner"})
-        self.assertEqual(cfg["lastBackupAt"], "2026-01-01")                  # остальные настройки не затёрты
-        raw["data"]["settings"] = {"split": {"mentorShare": 90, "mentorBase": "full"}}
-        import_backup(raw)
-        self.assertEqual(Doc.objects.get(collection="config", doc_id="main").data["split"]["mentorShare"], 25)  # без overwrite не меняется
-        import_backup(raw, overwrite=True)
-        self.assertEqual(Doc.objects.get(collection="config", doc_id="main").data["split"]["mentorShare"], 90)
-        for bad in ({"split": {"mentorShare": 500}}, {"split": "x"}, "x", {"split": {"mentorShare": True}}):
-            raw["data"]["settings"] = bad
-            import_backup(raw, overwrite=True)
-        self.assertEqual(Doc.objects.get(collection="config", doc_id="main").data["split"]["mentorShare"], 90)  # мусор пропускается
+        self.assertEqual(Doc.objects.get(collection="directions", doc_id="bd1").data["terms"][0]["parties"][0]["share"], 40)
+        self.assertFalse(Doc.objects.filter(collection="directions", doc_id="bd2").exists())
+        self.assertEqual(Doc.objects.get(collection="expenses", doc_id="be1").data["amount"], 10000)
+        from backend import reports
+        report = reports.build("bp1", reports.load())
+        self.assertEqual([(m["received"], m["expenses"], m["accrued"]) for m in report["months"]], [(50000, 10000, 16000)])
 
     def test_import_keeps_mentor_payouts(self):
         raw = sample_backup()

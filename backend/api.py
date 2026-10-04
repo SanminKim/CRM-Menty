@@ -170,8 +170,8 @@ def _apply_account(user, data, creating):
     Account.objects.update_or_create(user=user, defaults={"role": role, "link_id": link_id})
     if not user.is_active or role == Account.Role.PARTNER:
         telegram.unlink(user)  # отключённому сотруднику и партнёру уведомления о заявках не идут и не вернутся сами
-    if role == Account.Role.PARTNER:
-        # Партнёру не нужно ждать, пока отчёт «опубликуют»: он появляется вместе с доступом
+    if role in (Account.Role.PARTNER, Account.Role.MENTOR) and link_id:
+        # Отчёт о начислениях появляется вместе с доступом
         reports.refresh(store.lock().rev, only={link_id})
 
 

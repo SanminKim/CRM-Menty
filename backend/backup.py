@@ -11,10 +11,10 @@ from . import store
 from .models import Doc
 
 BACKUP_FORMAT = "crm-menti-backup"
-SUPPORTED_VERSIONS = (1, 2, 3, 4, 5)  # с версии 5 в копии есть настройки распределения дохода
-SECTIONS = ("cohorts", "team", "partners", "students", "payouts", "meetings")
+SUPPORTED_VERSIONS = (1, 2, 3, 4, 5, 6)  # с версии 6 в копии есть направления и расходы
+SECTIONS = ("directions", "cohorts", "team", "partners", "students", "payouts", "meetings", "expenses")
 LABELS = {"cohorts": "Потоки", "team": "Команда", "partners": "Партнёры", "students": "Студенты",
-          "payouts": "Выплаты", "meetings": "Встречи"}
+          "payouts": "Выплаты", "meetings": "Встречи", "directions": "Направления", "expenses": "Расходы"}
 
 
 class BackupError(ValueError):
@@ -57,6 +57,9 @@ def import_backup(raw, overwrite=False, with_demo=False):
     def refs(key):
         return {r.get(key) for r in students if isinstance(r.get(key), str)}
     used = {"cohorts": refs("cohortId"), "team": refs("mentorId"), "partners": refs("partnerId")}
+    # Направление нужно, если на него ссылается поток, который будет загружен
+    used["directions"] = {r.get("directionId") for r in _rows(data, "cohorts")
+                          if isinstance(r.get("directionId"), str) and (with_demo or not r.get("demo") or r["id"] in used["cohorts"])}
     kept = {"students": {r["id"] for r in students}}
     existing = {(d.collection, d.doc_id) for d in Doc.objects.only("collection", "doc_id")}
     for section in SECTIONS:
@@ -85,24 +88,7 @@ def import_backup(raw, overwrite=False, with_demo=False):
             else:
                 stats[section]["created"] += 1
             store.system_write(section, doc_id, row)
-    _import_split(data.get("settings"), overwrite)
     return stats
-
-
-def _import_split(settings, overwrite):
-    """Правило распределения дохода из копии. Существующее правило заменяется только при overwrite."""
-    split = settings.get("split") if isinstance(settings, dict) else None
-    if not isinstance(split, dict):
-        return
-    share, base = split.get("mentorShare"), split.get("mentorBase")
-    if isinstance(share, bool) or not isinstance(share, (int, float)) or not 0 <= share <= 100:
-        return
-    current = Doc.objects.filter(collection="config", doc_id="main").first()
-    config = dict(current.data) if current else {}
-    if "split" in config and not overwrite:
-        return
-    config["split"] = {"mentorShare": share, "mentorBase": "afterPartner" if base == "afterPartner" else "full"}
-    store.system_write("config", "main", config)
 
 
 def summary_lines(stats):

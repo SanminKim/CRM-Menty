@@ -237,7 +237,7 @@ td.clip { white-space: nowrap; max-width: 170px; overflow: hidden; text-overflow
 .funnel-row.head { color: var(--muted); font-size: 12px; }
 .funnel-row.head span { text-align: right; }
 .funnel-step { text-align: right; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
-.rule { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.eq { margin: 0; }
 .funnel-label { font-size: 13px; }
 .funnel-bar { height: 8px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
 .funnel-bar > span { display: block; height: 100%; background: var(--brand); border-radius: 99px; min-width: 2px; }
@@ -524,7 +524,7 @@ const PIPES = [["sales", "Продажи"], ["study", "Обучение"], ["job
 const EMPLOYED = ["offer", "probation_passed"];
 const APP_ST = [["applied", "Отклик"], ["hr", "Скрининг HR"], ["test", "Тестовое"], ["interview", "Собеседование"], ["offer", "Оффер"], ["accepted", "Оффер принят"], ["rejected", "Отказ"]];
 const APPL = Object.fromEntries(APP_ST);
-const COLS = ["students", "cohorts", "partners", "payouts", "team", "reports", "meetings"];
+const COLS = ["students", "cohorts", "partners", "payouts", "team", "reports", "meetings", "directions", "expenses"];
 const VIEWS = ["today", "calendar", "board", "students", "cohorts", "payments", "payouts", "analytics", "partners", "settings"];
 const STEP_HINTS = ["Связаться", "Созвон", "Написать про оплату", "Проверить домашку", "Ревью резюме", "Узнать итог собеседования", "Спросить, как дела"];
 const MEET_KINDS = [["call", "Созвон"], ["lesson", "Занятие"], ["consult", "Консультация"], ["other", "Другое"]];
@@ -590,7 +590,7 @@ applyTheme();
 const S = {
   status: "loading", mode: "staff", db: null, user: null, myId: null, isOwner: false, canWrite: null, readOnly: false,
   server: false, limited: false, offline: false, me: null, accounts: [],
-  data: { students: [], cohorts: [], partners: [], payouts: [], team: [], reports: [], meetings: [] }, loaded: {}, trash: [],
+  data: { students: [], cohorts: [], partners: [], payouts: [], team: [], reports: [], meetings: [], directions: [], expenses: [] }, loaded: {}, trash: [],
   view: "today", openId: null, partnerId: null, cohortId: null, reportId: null, pipe: "sales", anTab: "funnel", sel: new Set(), visible: [],
   f: { q: "", cohort: "", mentor: "", partner: "", stage: "" }, showLost: false, payTab: "overdue",
   config: {}, moreNoStep: false, histOpen: false, logOpen: false, sort: null, cal: { ym: today().slice(0, 7), day: today() }, pending: 0, names: {}, drag: null, busy: false,
@@ -618,7 +618,7 @@ function personName(uid) {
 }
 
 // ---------- Расчёты ----------
-const paidSum = s => sum((s.payments || []).filter(p => p.paid), p => p.amount);
+const paidSum = s => (Array.isArray(s.payments) ? s.payments : []).reduce((a, x) => a + (x && typeof x === "object" && x.paid ? nnum(x.amount) : 0), 0);
 const debt = s => s.price ? Math.max(s.price - paidSum(s), 0) : null;
 const overdue = s => (s.payments || []).filter(p => !p.paid && p.due < today());
 const isActive = s => s.stage !== "lost" && s.stage !== "probation_passed";
@@ -697,7 +697,6 @@ function events(from, to) {
   return sortBy(out, e => e.date + (e.time || "99"));
 }
 const unmarked = () => events("0000-00-00", daysAhead(-1)).filter(e => e.type === "m" && e.status === "planned");
-const shareOf = s => { const p = partnerById(s.partnerId); return p ? Math.round(paidSum(s) * (s.partnerShare ?? p.share ?? 0)) / 100 : 0; };
 // Деньги: получено и ожидается по месяцам, сравнение источников и потоков
 function finance(list) {
   const t = today(), now = new Date(), months = [];
@@ -709,8 +708,8 @@ function finance(list) {
   for (const p of open) if (p.due >= t) { const m = byKey[p.due.slice(0, 7)]; if (m) m.exp += +p.amount || 0; }
   const payers = list.filter(s => paidSum(s) > 0).length, total = sum(paid, p => p.amount);
   const group = (rows, name) => {
-    const pay = rows.filter(s => paidSum(s) > 0).length, rev = sum(rows, paidSum), cost = sum(rows, shareOf);
-    return { name, leads: rows.length, payers: pay, conv: pct(pay, rows.length), revenue: rev, cost, net: rev - cost,
+    const pay = rows.filter(s => paidSum(s) > 0).length, rev = sum(rows, paidSum);
+    return { name, leads: rows.length, payers: pay, conv: pct(pay, rows.length), revenue: rev,
       expected: sum(rows.filter(s => s.stage !== "lost").flatMap(s => (s.payments || []).filter(p => !p.paid && p.due >= t)), p => p.amount),
       employed: rows.filter(s => EMPLOYED.includes(s.stage)).length };
   };
@@ -719,49 +718,95 @@ function finance(list) {
   return {
     months, total, month: byKey[t.slice(0, 7)].got, payers, avg: payers ? total / payers : null,
     expected: sum(open.filter(p => p.due >= t), p => p.amount), overdue: sum(open.filter(p => p.due < t), p => p.amount),
-    cost: sum(list, shareOf), mentors: r2(sum(paidPays(list), x => x.mentor)), sources, cohorts,
+    sources, cohorts,
     // Что не поместилось в окно графика: старые оплаты и дальние платежи
     before: sum(paid.filter(p => p.paid.slice(0, 7) < months[0].key), p => p.amount),
     after: sum(open.filter(p => p.due.slice(0, 7) > months[months.length - 1].key), p => p.amount),
   };
 }
-// ----- Распределение дохода: из каждого полученного платежа часть идёт партнёру, часть ментору, остальное школе -----
-const SPLIT_DEFAULT = 30;
-const clampPct = v => Math.min(Math.max(+v, 0), 100);
-const noNum = v => v === null || v === undefined || v === "" || isNaN(+v);
-const splitCfg = () => { const c = S.config.split || {}; return { mentorShare: noNum(c.mentorShare) ? SPLIT_DEFAULT : clampPct(c.mentorShare), mentorBase: c.mentorBase === "afterPartner" ? "afterPartner" : "full" }; };
+// ----- Деньги по направлениям -----
+// Чистая выручка направления за месяц = оплаты его студентов минус расходы. Каждая сторона из условий направления
+// получает от неё свой процент, остальное остаётся владельцу. Тот же расчёт делает сервер (backend/reports.py):
+// меняя одно, меняйте другое.
+let SETTLED = null;
+const nnum = v => { const t = typeof v; if (t === "boolean") return v ? 1 : 0; if (t !== "number" && t !== "string") return 0; if (t === "string" && !/^[ \t\n\r\f\v]*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?[ \t\n\r\f\v]*$/.test(v)) return 0; const x = +v; return Math.abs(x) < 1e15 ? x : 0; };
+const dayOf = v => typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : "";
+const textOf = (v, n) => typeof v === "string" ? v.slice(0, n) : "";
+const isObj = v => !!v && typeof v === "object" && !Array.isArray(v);
 const teamById = id => D().team.find(m => m.id === id);
-// Своя ставка ментора или общая. Чужую ставку сервер ментору не отдаёт, но чужих студентов он и не считает
-const mentorRate = m => !m ? 0 : noNum(m.share) ? splitCfg().mentorShare : clampPct(m.share);
-const r2 = v => Math.round(v * 100) / 100;
-function splitOf(s, amount) {
-  const p = partnerById(s.partnerId), a = +amount || 0;
-  // Доли не выходят за сумму платежа: школа не уходит в минус при слишком больших ставках
-  const partner = p ? Math.min(Math.max(r2(a * (+(s.partnerShare ?? p.share ?? 0) || 0) / 100), 0), Math.max(a, 0)) : 0;
-  const mentor = Math.min(Math.max(r2((splitCfg().mentorBase === "afterPartner" ? a - partner : a) * mentorRate(teamById(s.mentorId)) / 100), 0), Math.max(a - partner, 0));
-  return { partner, mentor, school: r2(a - partner - mentor) };
+const dirById = id => D().directions.find(d => d.id === id);
+const directionOf = s => { const c = typeof s.cohortId === "string" ? D().cohorts.find(x => x.id === s.cohortId) : null; return c && typeof c.directionId === "string" && dirById(c.directionId) ? c.directionId : ""; };
+const validTerms = d => (Array.isArray(d.terms) ? d.terms : []).filter(t => isObj(t) && typeof t.from === "string" && /^\d{4}-\d{2}$/.test(t.from));
+// Стороны и ставки в этом месяце: последние условия, начавшие действовать не позже месяца; до первых условий — первые
+function termsFor(dir, month) {
+  let best = null, first = null;
+  for (const t of validTerms(dir)) {
+    if (!first || t.from < first.from) first = t;
+    if (t.from <= month && (!best || t.from > best.from)) best = t;
+  }
+  const term = best || first, out = [], seen = new Set();
+  for (const x of term && Array.isArray(term.parties) ? term.parties : []) {
+    if (!isObj(x) || (x.kind !== "partner" && x.kind !== "mentor") || typeof x.id !== "string" || seen.has(x.kind + ":" + x.id)) continue;
+    seen.add(x.kind + ":" + x.id);
+    out.push({ kind: x.kind, id: x.id, share: Math.min(Math.max(nnum(x.share), 0), 100) });
+  }
+  return out;
 }
-const paidPays = list => list.flatMap(s => (s.payments || []).filter(x => x.paid).map(x => ({ s, pay: x, amount: +x.amount || 0, month: String(x.paid).slice(0, 7), ...splitOf(s, x.amount) })));
+// Расчёт по месяцам и направлениям, от новых месяцев к старым
+function settle() {
+  if (SETTLED) return SETTLED;
+  const cells = new Map();
+  const cell = (month, dirId) => { const k = month + "|" + dirId; if (!cells.has(k)) cells.set(k, { month, directionId: dirId, received: 0, expenses: 0 }); return cells.get(k); };
+  for (const st of sortBy(D().students, x => x.id)) {
+    const dirId = directionOf(st);
+    for (const x of Array.isArray(st.payments) ? st.payments : []) { if (!isObj(x)) continue; const day = dayOf(x.paid); if (day) cell(day.slice(0, 7), dirId).received += nnum(x.amount); }
+  }
+  for (const e of sortBy(D().expenses, x => x.id)) {
+    const day = dayOf(e.date); if (!day) continue;
+    cell(day.slice(0, 7), typeof e.directionId === "string" && dirById(e.directionId) ? e.directionId : "").expenses += nnum(e.amount);
+  }
+  const out = [...cells.values()].sort((a, b) => a.month > b.month ? -1 : a.month < b.month ? 1 : a.directionId < b.directionId ? -1 : a.directionId > b.directionId ? 1 : 0);
+  for (const c of out) {
+    c.net = c.received - c.expenses;
+    c.parties = (c.directionId ? termsFor(dirById(c.directionId), c.month) : []).map(x => ({ ...x, accrued: Math.round(c.net * x.share) / 100 }));
+    c.owner = c.net - sum(c.parties, x => x.accrued);
+  }
+  return SETTLED = out;
+}
+// Начисления стороны по месяцам, выплаты и остаток
+function partyStats(kind, id) {
+  const months = [];
+  for (const c of settle()) for (const x of c.parties) if (x.kind === kind && x.id === id) months.push({ month: c.month, directionId: c.directionId, direction: textOf(dirById(c.directionId)?.name, 200), received: c.received, expenses: c.expenses, net: c.net, share: x.share, accrued: x.accrued });
+  const key = kind === "partner" ? "partnerId" : "mentorId";
+  const payouts = sortBy(sortBy(D().payouts, x => x.id).filter(x => x[key] === id), x => String(x.date || "")).reverse();
+  const accrued = months.reduce((a, m) => a + m.accrued, 0), paidOut = payouts.reduce((a, x) => a + nnum(x.amount), 0);
+  return { months, payouts, accrued, paidOut, balance: accrued - paidOut };
+}
+const partyName = x => x.kind === "partner" ? (partnerById(x.id)?.name || "Партнёр удалён") : (teamById(x.id)?.name || "Ментор удалён");
+// Отчёт стороны в том виде, в каком его хранит сервер
+function partyReport(kind, id) {
+  const st = partyStats(kind, id);
+  const money = { months: st.months, accrued: st.accrued, paidOut: st.paidOut, balance: st.balance, payouts: st.payouts.map(x => ({ date: dayOf(x.date), amount: nnum(x.amount), comment: textOf(x.comment, 300) })) };
+  if (kind === "mentor") return { kind, mentorId: id, name: textOf(teamById(id)?.name, 200), ...money, updatedAt: new Date().toISOString() };
+  const p = partnerById(id), t = partnerStats(p);
+  const doc = {
+    kind, partnerId: id, name: textOf(p.name, 200), promo: textOf(p.promo, 100), leads: t.leads, paidStudents: t.paidStudents, conv: t.conv, employed: t.employed, revenue: t.revenue, funnel: t.funnel, ...money,
+    rows: t.rows.map(r => ({ name: mask(r.s.name), stage: typeof r.s.stage === "string" && r.s.stage in SIDX ? r.s.stage : "", date: dayOf(r.s.createdAt), paid: r.paid })), updatedAt: new Date().toISOString(),
+  };
+  if (p.demo) doc.demo = true;
+  return doc;
+}
 const monthKey = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
-const monthName = k => { const [y, m] = k.split("-").map(Number); const t = new Date(y, m - 1, 1).toLocaleDateString("ru-RU", { month: "long", year: "numeric" }).replace(/\s*г\.$/, ""); return t.charAt(0).toUpperCase() + t.slice(1); };
+const monthName = k => { const [y, m] = String(k).split("-").map(Number); if (!(m >= 1 && m <= 12)) return String(k); const t = new Date(y, m - 1, 1).toLocaleDateString("ru-RU", { month: "long", year: "numeric" }).replace(/\s*г\.$/, ""); return t.charAt(0).toUpperCase() + t.slice(1); };
 const lastMonths = n => Array.from({ length: n }, (_, i) => { const d = new Date(); return monthKey(new Date(d.getFullYear(), d.getMonth() - i, 1)); });
-// Начисления считаются по студентам, которых ментор ведёт сейчас
-function mentorStats(m, month) {
-  const list = D().students.filter(s => s.mentorId === m.id), pays = paidPays(list), inMonth = sortBy(pays.filter(x => x.month === month), x => x.pay.paid).reverse();
-  const payouts = sortBy(D().payouts.filter(x => x.mentorId === m.id), x => x.date || "").reverse();
-  const accrued = r2(sum(pays, x => x.mentor)), paidOut = r2(sum(payouts, x => x.amount));
-  return { rate: mentorRate(m), students: list.filter(isActive).length, got: sum(inMonth, x => x.amount), month: r2(sum(inMonth, x => x.mentor)), accrued, paidOut, balance: r2(accrued - paidOut), inMonth, payouts };
-}
+// Трафик партнёра: сколько людей пришло и до какого этапа дошли. Деньги партнёра считает partyStats
 function partnerStats(p) {
-  const list = sortBy(D().students.filter(s => s.partnerId === p.id), s => s.createdAt).reverse();
-  const rows = list.map(s => { const paid = paidSum(s); const share = Math.round(paid * (s.partnerShare ?? p.share ?? 0)) / 100; return { s, paid, share }; });
-  const payouts = sortBy(D().payouts.filter(x => x.partnerId === p.id), x => x.date).reverse();
-  const accrued = sum(rows, r => r.share), paidOut = sum(payouts, x => x.amount);
+  const list = sortBy(sortBy(D().students, s => s.id).filter(s => s.partnerId === p.id), s => String(s.createdAt || "")).reverse();
+  const rows = list.map(s => ({ s, paid: paidSum(s) }));
   const paidStudents = rows.filter(r => r.paid > 0).length;
   return {
-    list, rows, payouts, accrued, paidOut, balance: accrued - paidOut, leads: list.length, paidStudents,
-    conv: pct(paidStudents, list.length), employed: list.filter(s => EMPLOYED.includes(s.stage)).length,
-    revenue: sum(rows, r => r.paid), funnel: funnel(list),
+    list, rows, leads: list.length, paidStudents, conv: pct(paidStudents, list.length), employed: list.filter(s => EMPLOYED.includes(s.stage)).length,
+    revenue: sum(rows, r => r.paid), funnel: funnel(list), ...partyStats("partner", p.id),
   };
 }
 
@@ -800,6 +845,7 @@ function filtersHTML(keys, { lost = false } = {}) {
 let rq = false;
 function scheduleRender() { if (rq) return; rq = true; requestAnimationFrame(() => { rq = false; render(); }); }
 function render() {
+  SETTLED = null; // расчёт по направлениям считается один раз на отрисовку
   const active = document.activeElement, aid = active?.id, sel = active && "selectionStart" in active ? [active.selectionStart, active.selectionEnd] : null;
   const kept = {}; document.querySelectorAll("[data-keep]").forEach(el => kept[el.id] = el.value);
   const boardX = $("#board")?.scrollLeft, drawerY = $("#d-body")?.scrollTop, tblX = $("#tbl")?.scrollLeft;
@@ -993,13 +1039,18 @@ function stackChart(id, items, aria, fmt = fmtK, whole = false) {
 const legendHTML = items => `<div class="legend" style="margin-bottom:8px">${items.map((l, i) => `<span><i style="background:var(--c${i + 1})"></i>${l}</span>`).join("")}</div>`;
 // Последние n месяцев от старого к новому
 const monthAxis = n => lastMonths(n).reverse().map(k => ({ key: k, label: MON[+k.slice(5) - 1].slice(0, 3), cur: k === today().slice(0, 7) }));
-function splitChartPanel(list) {
-  const pays = paidPays(list), axis = monthAxis(8).map(m => { const p = pays.filter(x => x.month === m.key); return { ...m, school: sum(p, x => x.school), mentor: sum(p, x => x.mentor), partner: sum(p, x => x.partner) }; });
-  const items = axis.map(m => ({ label: m.label, cur: m.cur, vals: [m.school, m.mentor, m.partner], tip: `${monthName(m.key)}${m.school + m.mentor + m.partner ? `\nШколе: ${money(m.school)}\nМенторам: ${money(m.mentor)}\nПартнёрам: ${money(m.partner)}` : "\nНет платежей"}` }));
-  const rows = axis.filter(m => m.school || m.mentor || m.partner).reverse();
-  return panel("Куда идут деньги", "", `<div class="pad">${legendHTML(["Школе", "Менторам", "Партнёрам"])}<div class="chart-wrap">${stackChart("chart-split", items, "Распределение полученных денег по месяцам")}</div>
-    <details style="margin-top:8px"><summary>Показать таблицей</summary><div class="table-wrap"><table class="compact"><thead><tr><th>Месяц</th><th class="num">Получено</th><th class="num">Школе</th><th class="num">Менторам</th><th class="num">Партнёрам</th></tr></thead>
-      <tbody>${rows.map(m => `<tr><td>${monthName(m.key)}</td><td class="num">${money(m.school + m.mentor + m.partner)}</td><td class="num">${money(m.school)}</td><td class="num">${money(m.mentor)}</td><td class="num">${money(m.partner)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">Платежей пока нет</td></tr>`}</tbody></table></div></details></div>`);
+function splitChartPanel() {
+  const cells = settle(), axis = monthAxis(8).map(m => {
+    const c = cells.filter(x => x.month === m.key), by = k => sum(c.flatMap(x => x.parties).filter(x => x.kind === k), x => x.accrued);
+    return { ...m, received: sum(c, x => x.received), expenses: sum(c, x => x.expenses), net: sum(c, x => x.net), owner: sum(c, x => x.owner), mentor: by("mentor"), partner: by("partner") };
+  });
+  const items = axis.map(m => ({ label: m.label, cur: m.cur, vals: [m.owner, m.mentor, m.partner].map(v => Math.max(v, 0)),
+    tip: `${monthName(m.key)}${m.received || m.expenses ? `\nПолучено: ${money(m.received)}\nРасходы: ${money(m.expenses)}\nЧистая выручка: ${money(m.net)}\nВам: ${money(m.owner)}\nМенторам: ${money(m.mentor)}\nПартнёрам: ${money(m.partner)}` : "\nНет оплат и расходов"}` }));
+  const rows = axis.filter(m => m.received || m.expenses).reverse();
+  return panel("Куда идёт чистая выручка", "", `<div class="pad">${legendHTML(["Вам", "Менторам", "Партнёрам"])}<div class="chart-wrap">${stackChart("chart-split", items, "Распределение чистой выручки по месяцам")}</div>
+    <p class="hint">Считается по всем направлениям и не зависит от фильтров выше. Месяц с убытком на графике показан нулём, точные цифры — в таблице.</p>
+    <details style="margin-top:8px"><summary>Показать таблицей</summary><div class="table-wrap"><table class="compact"><thead><tr><th>Месяц</th><th class="num">Получено</th><th class="num">Расходы</th><th class="num">Чистая выручка</th><th class="num">Вам</th><th class="num">Менторам</th><th class="num">Партнёрам</th></tr></thead>
+      <tbody>${rows.map(m => `<tr><td>${monthName(m.key)}</td><td class="num">${money(m.received)}</td><td class="num">${money(m.expenses)}</td><td class="num">${money(m.net)}</td><td class="num">${money(m.owner)}</td><td class="num">${money(m.mentor)}</td><td class="num">${money(m.partner)}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">Оплат пока нет</td></tr>`}</tbody></table></div></details></div>`);
 }
 function leadsChartPanel(list) {
   const items = monthAxis(12).map(m => { const l = list.filter(s => isoDay(s.createdAt).slice(0, 7) === m.key), paid = l.filter(s => paidSum(s) > 0).length; return { label: m.label, cur: m.cur, vals: [paid, l.length - paid], tip: `${monthName(m.key)}\nЗаявок: ${l.length}\nИз них оплатили: ${paid}${l.length ? ` (${pct(paid, l.length)}%)` : ""}` }; });
@@ -1037,8 +1088,6 @@ function financeView(list) {
     <div class="kpi"><span class="kpi-label">Ожидается по графику</span><span class="kpi-value">${money(f.expected)}</span><span class="kpi-sub">непросроченные платежи</span></div>
     <div class="kpi"><span class="kpi-label">Просрочено</span><span class="kpi-value${f.overdue ? " danger-text" : ""}">${money(f.overdue)}</span></div>
     <div class="kpi"><span class="kpi-label">Средняя оплата на студента</span><span class="kpi-value">${money(f.avg)}</span><span class="kpi-sub">оплативших: ${f.payers}</span></div>
-    <div class="kpi"><span class="kpi-label">Партнёрам и менторам</span><span class="kpi-value">${money(f.cost + f.mentors)}</span><span class="kpi-sub">партнёрам ${money(f.cost)} · менторам ${money(f.mentors)}</span></div>
-    <div class="kpi accent"><span class="kpi-label">Остаётся школе</span><span class="kpi-value">${money(f.total - f.cost - f.mentors)}</span><span class="kpi-sub">${pct(f.total - f.cost - f.mentors, f.total)}% от полученного</span></div>
   </section>
   ${panel("Деньги по месяцам", "", `<div class="pad">
     <div class="legend" style="margin-bottom:8px"><span><i style="background:var(--c1)"></i>Получено</span><span><i style="background:var(--c2)"></i>Ожидается по графику платежей</span></div>
@@ -1048,8 +1097,8 @@ function financeView(list) {
       <tbody>${rows.map(m => `<tr><td>${m.label} ${m.year}</td><td class="num">${m.got ? money(m.got) : "—"}</td><td class="num">${m.exp ? money(m.exp) : "—"}</td></tr>`).join("") || `<tr><td colspan="3" class="empty">Платежей пока нет</td></tr>`}</tbody></table></div></details>
   </div>`)}
   <div class="stack" style="margin-top:16px">
-    ${splitChartPanel(list)}
-    ${cmp("Источники", "Источник", f.sources, [["Доля партнёра", r => money(r.cost)], ["Остаётся школе", r => `<strong>${money(r.net)}</strong>`]])}
+    ${splitChartPanel()}
+    ${cmp("Источники", "Источник", f.sources, [])}
     ${cmp("Потоки", "Поток", f.cohorts, [["Ещё ожидается", r => money(r.expected)], ["Трудоустроены", r => r.employed]])}
   </div>`;
 }
@@ -1408,7 +1457,7 @@ function drawerHTML(s) {
       <dl class="facts">
         <dt>Поток</dt><dd>${esc(cohortName(s.cohortId) || "—")}</dd>
         <dt>Ментор</dt><dd>${teamName(s.mentorId) ? esc(teamName(s.mentorId)) : `<span class="warn-text">не назначен</span>`}${!S.limited && !S.readOnly && D().team.length ? ` <button class="link" data-act="assign" data-id="${esc(s.id)}">${teamName(s.mentorId) ? "сменить" : "назначить"}</button>` : ""}</dd>
-        <dt>Источник</dt><dd>${p ? `${esc(p.name)} <span class="sub">доля ${esc(s.partnerShare ?? p.share)}%</span>` : esc(s.utmSource || "—")}${s.promo ? ` <span class="sub">промокод ${esc(s.promo)}</span>` : ""}</dd>
+        <dt>Источник</dt><dd>${p ? esc(p.name) : esc(s.utmSource || "—")}${s.promo ? ` <span class="sub">промокод ${esc(s.promo)}</span>` : ""}</dd>
         ${d ? `<dt>Остаток</dt><dd class="warn-text">${money(d)}</dd>` : ""}
         ${dd("Город", esc(s.city))}
         ${s.consent ? "" : `<dt>Согласие на ПД</dt><dd class="warn-text">не получено</dd>`}
@@ -1425,76 +1474,136 @@ function drawerHTML(s) {
 }
 
 // ----- Платежи -----
-// ----- Выплаты: сколько положено менторам и партнёрам, сколько уже выплачено -----
+// ----- Выплаты: чистая выручка по направлениям, доли сторон, расходы -----
+const kpiHTML = (l, v, sub = "", cls = "") => `<div class="kpi${cls}"><span class="kpi-label">${l}</span><span class="kpi-value">${v}</span>${sub ? `<span class="kpi-sub">${sub}</span>` : ""}</div>`;
+const signed = v => `<span class="${v < 0 ? "danger-text" : ""}">${money(v)}</span>`;
+// Начисления стороны по месяцам: одна и та же таблица для владельца, ментора и партнёра
+function monthsTable(months) {
+  return months.length ? `<div class="table-wrap"><table><thead><tr><th>Месяц</th><th>Направление</th><th class="num">Получено</th><th class="num">Расходы</th><th class="num">Чистая выручка</th><th class="num">Ставка</th><th class="num">Начислено</th></tr></thead>
+    <tbody>${months.map(m => `<tr><td>${esc(monthName(m.month))}</td><td>${esc(m.direction)}</td><td class="num">${money(m.received)}</td><td class="num">${money(m.expenses)}</td><td class="num">${signed(m.net)}</td><td class="num">${esc(m.share)}%</td><td class="num"><strong>${signed(m.accrued)}</strong></td></tr>`).join("")}</tbody></table></div>`
+    : `<p class="empty">Начислений пока нет: в направлениях с вашим участием не было оплат</p>`;
+}
+const payoutList = (list, del) => list.length ? `<ul class="rows">${list.map(x => `<li><span class="who"><strong>${money(x.amount)}</strong><span>${esc(x.comment || "")}</span></span><span class="when">${fDate(x.date)}</span>${del ? `<button class="btn small ghost" data-act="payout-del" data-id="${esc(x.id)}">Удалить</button>` : ""}</li>`).join("")}</ul>` : `<p class="empty">Выплат пока не было</p>`;
+// Деньги стороны из готового отчёта (его считает сервер): так их видят ментор и партнёр
+function moneyHTML(r) {
+  const cur = today().slice(0, 7), months = Array.isArray(r.months) ? r.months : [];
+  return `<section class="kpis">
+    ${kpiHTML(`Начислено за ${esc(monthName(cur).toLowerCase())}`, signed(sum(months.filter(m => m.month === cur), m => m.accrued)), "от чистой выручки направлений")}
+    ${kpiHTML("К выплате сейчас", money(Math.max(r.balance, 0)), r.balance < 0 ? `выплачено вперёд: ${money(-r.balance)}` : "начислено минус выплачено", " accent")}
+    ${kpiHTML("Начислено всего", signed(r.accrued))}${kpiHTML("Выплачено всего", money(r.paidOut))}</section>
+  <div class="stack">${panel("Начисления по месяцам", "", monthsTable(months))}${panel("Выплаты", "", payoutList(Array.isArray(r.payouts) ? r.payouts : [], false))}</div>
+  <p class="hint" style="margin-top:12px">Чистая выручка — оплаты студентов направления за месяц минус расходы. Ваша доля считается от неё по ставке, действовавшей в этом месяце. Если расходы месяца больше оплат, начисление отрицательное и уменьшает остаток.</p>`;
+}
 function payoutsView() {
-  const months = lastMonths(12), month = months.includes(S.payMonth) ? S.payMonth : months[0], cfg = splitCfg();
-  const sel = `<select id="pay-month" aria-label="Месяц">${months.map(k => opt(k, monthName(k), month)).join("")}</select>`;
-  const kpi = (l, v, sub = "", cls = "") => `<div class="kpi${cls}"><span class="kpi-label">${l}</span><span class="kpi-value">${v}</span>${sub ? `<span class="kpi-sub">${sub}</span>` : ""}</div>`;
-  const payRows = rows => rows.length ? `<div class="table-wrap"><table><thead><tr><th>Студент</th><th>Оплачен</th><th class="num">Платёж</th><th class="num">Ментору</th></tr></thead>
-      <tbody>${rows.map(x => `<tr class="click" data-act="open" data-id="${esc(x.s.id)}"><td><strong>${esc(x.s.name)}</strong></td><td>${fDate(x.pay.paid)}</td><td class="num">${money(x.amount)}</td><td class="num"><strong>${money(x.mentor)}</strong></td></tr>`).join("")}</tbody></table></div>`
-    : `<p class="empty">В этом месяце платежей от студентов не было</p>`;
-  const outRows = (list, del) => list.length ? `<ul class="rows">${list.map(x => `<li><span class="who"><strong>${money(x.amount)}</strong><span>${esc(x.comment || "")}</span></span><span class="when">${fDate(x.date)}</span>${del ? `<button class="btn small ghost" data-act="payout-del" data-id="${esc(x.id)}">Удалить</button>` : ""}</li>`).join("")}</ul>` : `<p class="empty">Выплат пока не было</p>`;
   if (S.limited) {
-    const me = myTeam();
+    const me = myTeam(), r = me && D().reports.find(x => x.id === me.id);
     if (!me) return headHTML("Выплаты") + `<div class="card welcome"><p>Ваша учётная запись не связана с записью в команде. Попросите администратора связать их в разделе «Доступ».</p></div>`;
-    const st = mentorStats(me, month);
-    return headHTML("Выплаты", "", sel, `Ваша ставка ${st.rate}% ${cfg.mentorBase === "afterPartner" ? "от платежа за вычетом доли партнёра" : "от платежа студента"}`) + `<section class="kpis">
-      ${kpi(`Начислено за ${monthName(month).toLowerCase()}`, money(st.month), `платежей студентов: ${money(st.got)}`, " accent")}
-      ${kpi("К выплате сейчас", money(Math.max(st.balance, 0)), st.balance < 0 ? `выплачено вперёд: ${money(-st.balance)}` : "начислено минус выплачено")}
-      ${kpi("Начислено всего", money(st.accrued))}${kpi("Выплачено всего", money(st.paidOut))}</section>
-    <div class="cols2">${panel("Платежи ваших студентов", st.inMonth.length || "", payRows(st.inMonth))}${panel("Выплаты вам", st.payouts.length || "", outRows(st.payouts, false))}</div>`;
+    if (!r) return headHTML("Выплаты") + (S.loaded.reports ? `<div class="card welcome"><p>Отчёт о начислениях пока не готов. Он появится после первой оплаты в направлении с вашим участием.</p></div>` : `<p class="loading">Загружаю отчёт…</p>`);
+    return headHTML("Выплаты", "", "", `Ваши начисления и выплаты · данные на ${fDT(r.updatedAt)}`) + moneyHTML(r);
   }
-  const all = paidPays(D().students).filter(x => x.month === month);
-  const got = sum(all, x => x.amount), toMentors = sum(all, x => x.mentor), toPartners = sum(all, x => x.partner);
-  const mrows = D().team.map(m => ({ m, st: mentorStats(m, month) })).filter(r => r.st.students || r.st.accrued || r.st.paidOut || !noNum(r.m.share));
-  const prows = D().partners.map(p => { const st = partnerStats(p); return { p, st, month: r2(sum(all.filter(x => x.s.partnerId === p.id), x => x.partner)), got: sum(all.filter(x => x.s.partnerId === p.id), x => x.amount) }; });
-  const due = sum(mrows, r => Math.max(r.st.balance, 0)) + sum(prows, r => Math.max(r.st.balance, 0));
-  const open = S.payOpen && mrows.find(r => r.m.id === S.payOpen);
-  return headHTML("Выплаты", "", sel, "Сколько положено менторам и партнёрам и сколько уже выплачено") + `<section class="kpis">
-    ${kpi(`Получено за ${monthName(month).toLowerCase()}`, money(got), `платежей: ${all.length}`)}
-    ${kpi("Менторам за месяц", money(toMentors), `${pct(toMentors, got)}% от полученного`)}
-    ${kpi("Партнёрам за месяц", money(toPartners), `${pct(toPartners, got)}% от полученного`)}
-    ${kpi("Остаётся школе", money(got - toMentors - toPartners), `${pct(got - toMentors - toPartners, got)}% от полученного`)}
-    ${kpi("К выплате сейчас", money(due), "остатки за всё время", " accent")}
+  const months = lastMonths(12), month = months.includes(S.payMonth) ? S.payMonth : months[0];
+  const sel = `<select id="pay-month" aria-label="Месяц">${months.map(k => opt(k, monthName(k), month)).join("")}</select>`;
+  const addExp = S.readOnly ? "" : `<button class="btn" data-act="expense-new">+ Расход</button>`;
+  if (!D().directions.length) return headHTML("Выплаты") + `<div class="card welcome"><h2>Сначала создайте направление</h2>
+    <p>Направление — это продукт школы со своим составом сторон: кто участвует и какой процент чистой выручки получает. Потоки привязываются к направлению, и оплаты их студентов делятся по его условиям.</p>
+    <div class="actions">${S.readOnly ? "" : `<button class="btn primary" data-act="direction-new">Создать направление</button>`}</div></div>`;
+  const cells = settle().filter(c => c.month === month);
+  const parties = [], seen = new Set();
+  const add = (kind, id) => { if (!seen.has(kind + ":" + id)) { seen.add(kind + ":" + id); parties.push({ kind, id }); } };
+  for (const d of D().directions) for (const t of validTerms(d)) for (const x of termsFor({ terms: [t] }, t.from)) add(x.kind, x.id);
+  for (const x of D().payouts) { if (typeof x.partnerId === "string" && partnerById(x.partnerId)) add("partner", x.partnerId); if (typeof x.mentorId === "string" && teamById(x.mentorId)) add("mentor", x.mentorId); }
+  const prow = parties.map(x => { const st = partyStats(x.kind, x.id); return { ...x, st, month: sum(st.months.filter(m => m.month === month), m => m.accrued) }; });
+  const got = sum(cells, c => c.received), exp = sum(cells, c => c.expenses), net = got - exp, own = sum(cells, c => c.owner);
+  const due = sum(prow, r => Math.max(r.st.balance, 0));
+  const open = S.payOpen && prow.find(r => r.kind + ":" + r.id === S.payOpen);
+  const loose = D().cohorts.filter(c => !dirById(c.directionId)).length;
+  const dirPanel = c => {
+    const d = dirById(c.directionId);
+    return panel(d ? esc(d.name) : "Без направления", "", `<div class="pad"><p class="eq">Получено ${money(c.received)} − расходы ${money(c.expenses)} = <strong>чистая выручка ${signed(c.net)}</strong></p></div>
+    <div class="table-wrap"><table><thead><tr><th>Сторона</th><th class="num">Ставка</th><th class="num">Начислено за месяц</th></tr></thead>
+      <tbody>${c.parties.map(x => `<tr><td><strong>${esc(partyName(x))}</strong> <span class="sub">${x.kind === "partner" ? "партнёр" : "ментор"}</span></td><td class="num">${x.share}%</td><td class="num">${signed(x.accrued)}</td></tr>`).join("")}
+        <tr><td><strong>Вы</strong> <span class="sub">владелец, остаток</span></td><td class="num">${ownPct(c.parties)}%</td><td class="num"><strong>${signed(c.owner)}</strong></td></tr></tbody></table></div>
+    ${d ? "" : `<p class="hint pad">Оплаты студентов без потока и потоков без направления. Они ни с кем не делятся. Привяжите потоки к направлению в их настройках.</p>`}`);
+  };
+  const exps = sortBy(D().expenses.filter(e => dayOf(e.date).slice(0, 7) === month), e => String(e.date)).reverse();
+  return headHTML("Выплаты", "", sel + addExp, "Чистая выручка направлений, доли сторон и остатки к выплате") + `<section class="kpis">
+    ${kpiHTML(`Получено за ${esc(monthName(month).toLowerCase())}`, money(got))}
+    ${kpiHTML("Расходы", money(exp), `записей: ${exps.length}`)}
+    ${kpiHTML("Чистая выручка", signed(net), "получено минус расходы")}
+    ${kpiHTML("Вам за месяц", signed(own), net > 0 ? `${pct(own, net)}% чистой выручки` : "")}
+    ${kpiHTML("К выплате сторонам", money(due), "остатки за всё время", " accent")}
   </section>
+  ${loose ? `<div class="banner"><p>Потоков без направления: ${loose}. Оплаты их студентов ни с кем не делятся.</p><button class="btn small" data-act="nav" data-v="cohorts">Открыть потоки</button></div>` : ""}
   <div class="stack">
-  ${panel("Менторы", mrows.length || "", mrows.length ? `<div class="table-wrap"><table id="pay-mentors"><thead><tr><th>Ментор</th><th class="num">Ставка</th><th class="num">Ведёт</th><th class="num">Получено за месяц</th><th class="num">Начислено за месяц</th><th class="num">Выплачено всего</th><th class="num">К выплате</th><th></th></tr></thead>
-    <tbody>${mrows.map(({ m, st }) => `<tr class="click" data-act="pay-open" data-id="${esc(m.id)}"><td><strong>${esc(m.name)}</strong></td><td class="num">${st.rate}%${noNum(m.share) ? "" : ` <span class="tag">своя</span>`}</td><td class="num">${st.students}</td>
-      <td class="num">${money(st.got)}</td><td class="num">${money(st.month)}</td><td class="num">${money(st.paidOut)}</td><td class="num"><strong class="${st.balance > 0 ? "warn-text" : ""}">${money(st.balance)}</strong></td>
-      <td class="row-actions"><button class="btn small${st.balance > 0 ? " primary" : ""}" data-act="mpayout" data-id="${esc(m.id)}">Выплатить</button></td></tr>`).join("")}</tbody></table></div>
-    <p class="hint pad">Нажмите на строку, чтобы увидеть платежи студентов и историю выплат. Начисления считаются по студентам, которых ментор ведёт сейчас.</p>` : `<p class="empty">Добавьте менторов в настройках, и здесь появятся начисления</p>`)}
-  ${open ? `<div class="cols2">${panel(`${esc(open.m.name)}: платежи студентов`, open.st.inMonth.length || "", payRows(open.st.inMonth))}${panel(`${esc(open.m.name)}: выплаты`, open.st.payouts.length ? money(open.st.paidOut) : "", outRows(open.st.payouts, true))}</div>` : ""}
-  ${panel("Партнёры", prows.length || "", prows.length ? `<div class="table-wrap"><table id="pay-partners"><thead><tr><th>Партнёр</th><th class="num">Доля</th><th class="num">Получено за месяц</th><th class="num">Начислено за месяц</th><th class="num">Выплачено всего</th><th class="num">К выплате</th><th></th></tr></thead>
-    <tbody>${prows.map(({ p, st, month: acc, got: g }) => `<tr class="click" data-act="partner-open" data-id="${esc(p.id)}"><td><strong>${esc(p.name)}</strong></td><td class="num">${esc(p.share ?? 0)}%</td><td class="num">${money(g)}</td><td class="num">${money(acc)}</td><td class="num">${money(st.paidOut)}</td>
-      <td class="num"><strong class="${st.balance > 0 ? "warn-text" : ""}">${money(st.balance)}</strong></td><td class="row-actions"><button class="btn small${st.balance > 0 ? " primary" : ""}" data-act="payout-new" data-id="${esc(p.id)}">Выплатить</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="empty">Партнёров пока нет</p>`)}
-  ${splitPanel()}
+  <div class="cols2" id="pay-dirs">${cells.map(dirPanel).join("") || `<section class="panel"><p class="empty">В этом месяце оплат и расходов не было</p></section>`}</div>
+  ${panel("Стороны", prow.length || "", prow.length ? `<div class="table-wrap"><table id="pay-parties"><thead><tr><th>Сторона</th><th class="num">Начислено за месяц</th><th class="num">Начислено всего</th><th class="num">Выплачено всего</th><th class="num">К выплате</th><th></th></tr></thead>
+    <tbody>${prow.map(r => `<tr class="click" data-act="pay-open" data-id="${esc(r.kind + ":" + r.id)}"><td><strong>${esc(partyName(r))}</strong> <span class="sub">${r.kind === "partner" ? "партнёр" : "ментор"}</span></td>
+      <td class="num">${signed(r.month)}</td><td class="num">${signed(r.st.accrued)}</td><td class="num">${money(r.st.paidOut)}</td><td class="num"><strong class="${r.st.balance > 0 ? "warn-text" : ""}">${money(r.st.balance)}</strong></td>
+      <td class="row-actions">${S.readOnly ? "" : `<button class="btn small${r.st.balance > 0 ? " primary" : ""}" data-act="payout-new" data-kind="${esc(r.kind)}" data-id="${esc(r.id)}">Выплатить</button>`}</td></tr>`).join("")}</tbody></table></div>
+    <p class="hint pad">Нажмите на строку, чтобы увидеть начисления по месяцам и историю выплат.</p>` : `<p class="empty">Добавьте стороны в условиях направления: Настройки → Направления</p>`)}
+  ${open ? panel(`${esc(partyName(open))}: начисления`, "", monthsTable(open.st.months)) + panel(`${esc(partyName(open))}: выплаты`, open.st.payouts.length ? money(open.st.paidOut) : "", payoutList(open.st.payouts, !S.readOnly)) : ""}
+  ${panel(`Расходы за ${esc(monthName(month).toLowerCase())}`, exps.length ? money(exp) : "", exps.length ? `<ul class="rows" id="pay-expenses">${exps.map(e => `<li><span class="who"><strong>${esc(e.comment || "Расход")}</strong><span>${esc(dirById(e.directionId)?.name || "Без направления")}</span></span><span class="amt">${money(e.amount)}</span><span class="when">${fDate(e.date)}</span>
+      ${S.readOnly ? "" : `<span class="acts"><button class="btn small ghost" data-act="expense-edit" data-id="${esc(e.id)}">Изменить</button><button class="btn small ghost" data-act="expense-del" data-id="${esc(e.id)}">Удалить</button></span>`}</li>`).join("")}</ul>`
+    : `<p class="empty">Расходов в этом месяце нет. Реклама, налоги, комиссии и непредвиденные траты уменьшают чистую выручку до делёжки.</p>`, addExp.replace('class="btn"', 'class="btn small"'))}
   </div>`;
 }
-function splitPanel() {
-  const c = splitCfg();
-  return panel("Как делится платёж", "", `<div class="pad"><ol class="rule">
-      <li><strong>Партнёру</strong> — его доля от платежа студента, которого он привёл. Задаётся у партнёра и фиксируется в заявке.</li>
-      <li><strong>Ментору</strong> — ${c.mentorShare}% ${c.mentorBase === "afterPartner" ? "от платежа за вычетом доли партнёра" : "от всего платежа"}. Свою ставку ментору можно задать в настройках команды.</li>
-      <li><strong>Школе</strong> — всё, что осталось.</li></ol>
-    <p class="hint" style="margin-top:8px">Изменение ставки пересчитывает и прошлые начисления.</p></div>`, S.readOnly ? "" : `<button class="btn small" data-act="split-edit">Настроить</button>`);
-}
-function splitForm() {
+const EXPENSE_HINTS = ["Реклама", "Налоги", "Комиссия банка", "Сервисы и подписки", "Возврат студенту", "Непредвиденный расход"];
+function expenseForm(e) {
+  const dirs = D().directions;
   openModal({
-    title: "Как делится платёж", values: splitCfg(),
-    fields: [{ k: "mentorShare", label: "Ставка ментора по умолчанию, %", type: "number", req: true, wide: true, help: "Действует для всех, у кого не задана своя ставка" },
-      { k: "mentorBase", label: "От чего считается ставка ментора", type: "select", wide: true, options: [["full", "От всего платежа"], ["afterPartner", "От платежа за вычетом доли партнёра"]] }],
-    extra: `<p class="hint">Всё, что осталось после партнёра и ментора, — доход школы. Новая ставка пересчитает и прошлые начисления.</p>`,
-    onSubmit: v => v.mentorShare >= 0 && v.mentorShare <= 100
-      ? save(() => enqueue("config/main", () => S.db.doc("config/main").set(clean({ ...S.config, split: { mentorShare: v.mentorShare, mentorBase: v.mentorBase === "afterPartner" ? "afterPartner" : "full" } }))), "Сохранено") : "Ставка — от 0 до 100",
+    title: e ? "Расход" : "Новый расход", values: e ? { ...e, directionId: dirById(e.directionId) ? e.directionId : "" } : { date: today(), directionId: dirs.length === 1 ? dirs[0].id : "" },
+    fields: [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }, { k: "date", label: "Дата", type: "date", req: true },
+      { k: "directionId", label: "Направление", type: "select", wide: true, options: [["", "—"], ...dirs.map(d => [d.id, d.name])], help: "Расход уменьшает чистую выручку этого направления в месяце даты расхода" },
+      { k: "comment", label: "На что", wide: true, req: true, list: EXPENSE_HINTS }],
+    extra: `<p class="hint">После сохранения доли всех сторон направления за этот месяц пересчитаются.</p>`,
+    onDelete: e ? () => save(() => delDoc("expenses", e.id), "Расход удалён") : null,
+    onSubmit: v => !(v.amount > 0) ? "Сумма должна быть больше нуля" : !isDay(v.date) ? "Укажите дату" : !dirById(v.directionId) ? "Выберите направление"
+      : save(() => setDoc("expenses", e?.id || newId("expenses"), { ...(e || {}), amount: v.amount, date: v.date, directionId: v.directionId, comment: v.comment, by: e?.by ?? S.myId, createdAt: e?.createdAt || new Date().toISOString(), id: undefined }), e ? "Сохранено" : "Расход записан"),
   });
 }
-function mentorPayoutForm(m) {
-  const st = mentorStats(m, today().slice(0, 7));
+// ----- Направления: состав сторон и ставки -----
+const ownPct = parts => Math.max(0, 100 - sum(parts, x => x.share));
+// Участвует ли человек в условиях какого-нибудь направления: такого нельзя удалить, иначе его доля молча уйдёт владельцу
+const inTerms = (kind, id) => D().directions.some(d => validTerms(d).some(t => termsFor({ terms: [t] }, t.from).some(x => x.kind === kind && x.id === id)));
+const termsText = parts => [...parts.map(x => `${esc(partyName(x))} ${x.share}%`), `вам ${ownPct(parts)}%`].join(" · ");
+function directionsPanel() {
+  const cur = today().slice(0, 7), loose = D().cohorts.filter(c => !dirById(c.directionId)).length;
+  return panel("Направления", "", (D().directions.length ? `<ul class="rows">${D().directions.map(d => `<li><span class="who wrap"><strong>${esc(d.name)}</strong><span>${termsText(termsFor(d, cur))}</span>
+      <span>потоков: ${D().cohorts.filter(c => c.directionId === d.id).length}</span></span><button class="btn small ghost" data-act="direction-edit" data-id="${esc(d.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Направлений пока нет</p>`)
+    + `<p class="hint pad">Направление задаёт, между кем и в каких долях делится чистая выручка. ${loose ? `Потоков без направления: ${loose} — их оплаты ни с кем не делятся.` : "Процент считается от оплат студентов за вычетом расходов."}</p>`,
+    S.readOnly ? "" : `<button class="btn small" data-act="direction-new">+ Направление</button>`);
+}
+function directionForm(d) {
+  const cur = today().slice(0, 7), now = d ? termsFor(d, cur) : [], terms = d ? validTerms(d) : [];
+  const first = terms.length ? sortBy(terms, t => t.from)[0].from : "2000-01";
+  const next = (() => { const x = new Date(); return monthKey(new Date(x.getFullYear(), x.getMonth() + 1, 1)); })();
+  const key = (kind, id) => (kind === "partner" ? "p_" : "m_") + id;
+  const people = [...D().partners.filter(p => p.active !== false || now.some(x => x.kind === "partner" && x.id === p.id)).map(p => ({ kind: "partner", id: p.id, name: p.name })), ...D().team.map(m => ({ kind: "mentor", id: m.id, name: m.name }))];
+  // Сторона из действующих условий, которой уже нет в справочнике, остаётся в форме: её долю можно убрать только явно
+  for (const x of now) if (!people.some(y => y.kind === x.kind && y.id === x.id)) people.push({ kind: x.kind, id: x.id, name: partyName(x) });
+  const values = { name: d?.name || "", from: cur };
+  for (const x of now) values[key(x.kind, x.id)] = x.share;
+  const own = () => { const el = $("#m-own"); if (!el) return; const total = sum(people, x => +($("#m-" + CSS.escape(key(x.kind, x.id)))?.value) || 0); el.textContent = total > 100 ? `Доли в сумме ${total}% — больше 100%` : `Вам остаётся: ${100 - total}%`; el.classList.toggle("danger-text", total > 100); };
   openModal({
-    title: `Выплата: ${m.name}`, values: { amount: st.balance > 0 ? Math.round(st.balance) : null, date: today() },
-    fields: [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }, { k: "date", label: "Дата", type: "date", req: true }, { k: "comment", label: "Комментарий", wide: true, ph: "За октябрь" }],
-    extra: `<p class="hint">К выплате сейчас: ${money(st.balance)}</p>`,
-    onSubmit: v => !(v.amount > 0) ? "Сумма должна быть больше нуля" : !isDay(v.date) ? "Укажите дату" : save(() => setDoc("payouts", newId("payouts"), { mentorId: m.id, ...v }), "Выплата записана"),
+    title: d ? "Направление" : "Новое направление", wide: true, values,
+    fields: [{ k: "name", label: "Название", req: true, ph: "Аналитик 1С с нуля", wide: !d },
+      ...(d ? [{ k: "from", label: "Условия действуют с", type: "select", options: [[first, "С самого начала (исправление)"], [next, monthName(next) + " (со следующего месяца)"], ...lastMonths(12).map(k => [k, monthName(k)])], help: "Месяцы до этого считаются по прежним условиям. Условия, заданные на более поздние месяцы, заменяются этими" }] : []),
+      { section: "Партнёры: процент от чистой выручки" }, ...D().partners.length ? people.filter(x => x.kind === "partner").map(x => ({ k: key(x.kind, x.id), label: x.name, type: "number", ph: "не участвует" })) : [],
+      { section: "Менторы: процент от чистой выручки" }, ...people.filter(x => x.kind === "mentor").map(x => ({ k: key(x.kind, x.id), label: x.name, type: "number", ph: "не участвует" }))],
+    extra: `<p><strong id="m-own">Вам остаётся: ${ownPct(now)}%</strong></p><p class="hint">Пустое поле — человек не участвует. Чистая выручка — оплаты студентов направления за месяц минус расходы. ${people.length ? "" : "Добавьте партнёра и менторов в настройках, чтобы включить их в состав."}</p>`,
+    onInput: own,
+    onDelete: d ? () => D().cohorts.some(c => c.directionId === d.id) ? (showErr("К направлению привязаны потоки. Сначала перенесите их в другое направление."), false) : D().expenses.some(e => e.directionId === d.id) ? (showErr("По направлению записаны расходы. Удалите их или перенесите в другое направление."), false) : save(() => delDoc("directions", d.id), "Направление удалено") : null,
+    onSubmit: v => {
+      const parties = [];
+      for (const x of people) { const val = v[key(x.kind, x.id)]; if (val === null || val === undefined || val === "") continue; if (!(val >= 0 && val <= 100)) return `${x.name}: процент от 0 до 100`; if (val > 0) parties.push({ kind: x.kind, id: x.id, share: val }); }
+      if (sum(parties, x => x.share) > 100) return "Доли в сумме больше 100%";
+      const from = d ? v.from : "2000-01";
+      if (!/^\d{4}-\d{2}$/.test(from)) return "Выберите месяц";
+      // Новые условия действуют с выбранного месяца и дальше: более поздние прежние условия заменяются
+      const kept = terms.filter(t => t.from < from).map(t => ({ from: t.from, parties: termsFor({ terms: [t] }, t.from) }));
+      const id = d?.id || newId("directions");
+      return save(() => setDoc("directions", id, { ...(d || {}), name: v.name, terms: [...kept, { from, parties }], id: undefined }), d ? `Сохранено. Условия действуют с: ${from === first ? "самого начала" : monthName(from).toLowerCase()}` : "Направление создано. Привяжите к нему потоки");
+    },
   });
 }
 function paymentsView() {
@@ -1520,10 +1629,10 @@ function partnersView() {
   const rows = D().partners.map(p => ({ p, st: partnerStats(p) }));
   return headHTML("Партнёры", "", `<button class="btn" data-act="partner-new">+ Партнёр</button>`) + `
   <div class="panel table-wrap"><table>
-    <thead><tr><th>Партнёр</th><th>Промокод / UTM</th><th class="num">Доля</th><th class="num">Заявок</th><th class="num">Оплатили</th><th class="num">Начислено</th><th class="num">Выплачено</th><th class="num">К выплате</th></tr></thead>
+    <thead><tr><th>Партнёр</th><th>Промокод / UTM</th><th class="num">Заявок</th><th class="num">Оплатили</th><th class="num">Начислено</th><th class="num">Выплачено</th><th class="num">К выплате</th></tr></thead>
     <tbody>${rows.map(({ p, st }) => `<tr class="click" data-act="partner-open" data-id="${esc(p.id)}"><td><strong>${esc(p.name)}</strong>${p.active === false ? ` <span class="tag">неактивен</span>` : ""}</td>
-      <td class="muted">${esc(p.promo || "—")} / ${esc(p.utm || "—")}</td><td class="num">${esc(p.share ?? 0)}%</td><td class="num">${st.leads}</td><td class="num">${st.paidStudents}</td>
-      <td class="num">${money(st.accrued)}</td><td class="num">${money(st.paidOut)}</td><td class="num"><strong>${money(st.balance)}</strong></td></tr>`).join("") || `<tr><td colspan="8" class="empty">Партнёров пока нет. Добавьте блогера, чтобы считать его долю.</td></tr>`}</tbody>
+      <td class="muted">${esc(p.promo || "—")} / ${esc(p.utm || "—")}</td><td class="num">${st.leads}</td><td class="num">${st.paidStudents}</td>
+      <td class="num">${money(st.accrued)}</td><td class="num">${money(st.paidOut)}</td><td class="num"><strong>${money(st.balance)}</strong></td></tr>`).join("") || `<tr><td colspan="7" class="empty">Партнёров пока нет. Добавьте блогера, чтобы считать его долю.</td></tr>`}</tbody>
   </table></div>`;
 }
 function kpisPartner(st) {
@@ -1543,7 +1652,7 @@ function partnerView() {
   const acc = S.accounts.find(a => a.role === "partner" && a.linkId === p.id);
   const repNote = S.server ? (acc ? `У партнёра есть вход (${esc(acc.username)}): он видит эти цифры без контактов студентов.` : "У партнёра пока нет входа в CRM.")
     : rep ? `Отчёт для партнёра обновлён ${fDT(rep.updatedAt)}.` : "Отчёт для партнёра ещё не публиковался.";
-  const sub = `Доля ${esc(p.share ?? 0)}% от фактических оплат${p.promo ? ` · промокод ${esc(p.promo)}` : ""}${p.utm ? ` · utm_source ${esc(p.utm)}` : ""}. ${repNote}`;
+  const sub = `${[p.promo ? `промокод ${esc(p.promo)}` : "", p.utm ? `utm_source ${esc(p.utm)}` : ""].filter(Boolean).join(" · ")}${p.promo || p.utm ? ". " : ""}${repNote}`;
   const botLink = tgBot() && TG_PROMO.test(p.promo || "") ? `<button class="btn" data-act="copy" data-text="${esc(tgLink(p.promo))}" title="${esc(tgLink(p.promo))}">Ссылка на бота</button>` : "";
   return headHTML(esc(p.name), `<button class="back" data-act="nav" data-v="partners">← Партнёры</button>`,
     `${botLink}<button class="btn" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button>${S.server ? (acc ? "" : `<button class="btn primary" data-act="account-new" data-partner="${esc(p.id)}">Выдать партнёру доступ</button>`) : `<button class="btn primary" data-act="report-publish" data-id="${esc(p.id)}">${rep ? "Обновить отчёт сейчас" : "Опубликовать отчёт для партнёра"}</button>`}`, sub) + `
@@ -1552,9 +1661,10 @@ function partnerView() {
     ${panel("Воронка по трафику партнёра", "", `<div class="pad">${funnelHTML(st.funnel)}</div>`)}
     ${panel("Выплаты", st.payouts.length ? money(st.paidOut) : "", st.payouts.length ? `<ul class="rows">${st.payouts.map(x => `<li><span class="who"><strong>${money(x.amount)}</strong><span>${esc(x.comment || "")}</span></span><span class="when">${fDate(x.date)}</span><button class="btn small ghost" data-act="payout-del" data-id="${esc(x.id)}">Удалить</button></li>`).join("")}</ul>` : `<p class="empty">Выплат пока не было</p>`, `<button class="btn small" data-act="payout-new" data-id="${esc(p.id)}">+ Выплата</button>`)}
   </div>
+  <div class="stack" style="margin-bottom:16px">${panel("Начисления по месяцам", "", monthsTable(st.months))}</div>
   <div class="panel table-wrap"><header><h2>Студенты из трафика</h2></header><table>
-    <thead><tr><th>Студент</th><th>Этап</th><th>Заявка</th><th class="num">Оплатил</th><th class="num">Доля партнёра</th></tr></thead>
-    <tbody>${st.rows.map(r => `<tr class="click" data-act="open" data-id="${esc(r.s.id)}"><td><strong>${esc(r.s.name)}</strong></td><td>${badge(r.s.stage)}</td><td class="muted">${fDate(isoDay(r.s.createdAt))}</td><td class="num">${money(r.paid)}</td><td class="num">${money(r.share)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">Заявок от партнёра пока нет</td></tr>`}</tbody>
+    <thead><tr><th>Студент</th><th>Этап</th><th>Заявка</th><th class="num">Оплатил</th></tr></thead>
+    <tbody>${st.rows.map(r => `<tr class="click" data-act="open" data-id="${esc(r.s.id)}"><td><strong>${esc(r.s.name)}</strong></td><td>${badge(r.s.stage)}</td><td class="muted">${fDate(isoDay(r.s.createdAt))}</td><td class="num">${money(r.paid)}</td></tr>`).join("") || `<tr><td colspan="4" class="empty">Заявок от партнёра пока нет</td></tr>`}</tbody>
   </table></div>
   <p class="hint" style="margin-top:12px">${S.server ? "Партнёр входит под своим логином и видит только отчёт: цифры, воронку и сокращённые имена («Иван П.») без контактов. Отчёт всегда актуален: сервер пересчитывает его при каждом изменении оплат, этапов и выплат." : "Партнёр видит только опубликованный отчёт: цифры, воронку и сокращённые имена («Иван П.») без контактов. После первой публикации отчёт обновляется сам, когда меняются оплаты, этапы или выплаты."}</p>`;
 }
@@ -1566,15 +1676,17 @@ function reportView() {
   if (!reps.length) return `<div class="card welcome"><h1>Отчёт пока не опубликован</h1><p class="muted">Как только школа опубликует отчёт по вашему трафику, он появится здесь.</p></div>`;
   const r = reps.find(x => x.id === S.reportId) || reps[0];
   const tabs = reps.length > 1 ? `<nav class="tabs">${reps.map(x => `<button data-act="report-tab" data-id="${esc(x.id)}" class="${x.id === r.id ? "on" : ""}">${esc(x.name)}</button>`).join("")}</nav>` : "";
-  return tabs + headHTML(`Отчёт по трафику: ${esc(r.name)}`, "", "", `Доля ${esc(r.share)}% от фактических оплат${r.promo ? ` · промокод ${esc(r.promo)}` : ""} · данные на ${fDT(r.updatedAt)}`) + `
+  return tabs + headHTML(`Отчёт: ${esc(r.name)}`, "", "", `${r.promo ? `промокод ${esc(r.promo)} · ` : ""}данные на ${fDT(r.updatedAt)}`) + `
   ${kpisPartner(r)}
   <div class="grid-2">
     ${panel("Воронка", "", `<div class="pad">${funnelHTML(r.funnel || [])}</div>`)}
     ${panel("Выплаты", "", (r.payouts || []).length ? `<ul class="rows">${r.payouts.map(x => `<li><span class="who"><strong>${money(x.amount)}</strong><span>${esc(x.comment || "")}</span></span><span class="when">${fDate(x.date)}</span></li>`).join("")}</ul>` : `<p class="empty">Выплат пока не было</p>`)}
   </div>
+  <div class="stack" style="margin-bottom:16px">${panel("Начисления по месяцам", "", monthsTable(Array.isArray(r.months) ? r.months : []))}</div>
+  <p class="hint" style="margin-bottom:16px">Ваша доля считается от чистой выручки направления: оплаты всех его студентов за месяц минус расходы.</p>
   <div class="panel table-wrap"><header><h2>Студенты из вашего трафика</h2></header><table>
-    <thead><tr><th>Студент</th><th>Этап</th><th>Заявка</th><th class="num">Оплатил</th><th class="num">Ваша доля</th></tr></thead>
-    <tbody>${(r.rows || []).map(x => `<tr><td>${esc(x.name)}</td><td>${badge(x.stage)}</td><td class="muted">${fDate(x.date)}</td><td class="num">${money(x.paid)}</td><td class="num">${money(x.share)}</td></tr>`).join("") || `<tr><td colspan="5" class="empty">Заявок пока нет</td></tr>`}</tbody>
+    <thead><tr><th>Студент</th><th>Этап</th><th>Заявка</th><th class="num">Оплатил</th></tr></thead>
+    <tbody>${(r.rows || []).map(x => `<tr><td>${esc(x.name)}</td><td>${badge(x.stage)}</td><td class="muted">${fDate(x.date)}</td><td class="num">${money(x.paid)}</td></tr>`).join("") || `<tr><td colspan="4" class="empty">Заявок пока нет</td></tr>`}</tbody>
   </table></div>`;
 }
 
@@ -1631,15 +1743,15 @@ function settingsView() {
   // Слева — люди и доступ, справа — источники заявок и обслуживание базы
   return headHTML("Настройки") + `<div class="cols2"><div class="stack">
   ${S.server ? accountPanel() : ""}
-  ${panel("Команда", "", (D().team.length ? `<ul class="rows">${D().team.map(m => `<li><span class="who"><strong>${esc(m.name)}</strong><span>ставка ${mentorRate(m)}%${noNum(m.share) ? " · общая" : ""}</span></span>${m.userId && m.userId === S.myId ? `<span class="tag ok">это вы</span>` : ""}${S.myId && m.userId !== S.myId && !S.server ? `<button class="btn small ghost" data-act="team-me" data-id="${esc(m.id)}">Это я</button>` : ""}<button class="btn small ghost" data-act="team-edit" data-id="${esc(m.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Добавьте себя и менторов</p>`) + `<p class="hint pad">${S.server ? "Чтобы ментор мог входить в CRM, добавьте его сюда, а затем выдайте доступ в разделе «Доступ»." : "Нажмите «Это я» у своего имени: в фильтрах появится «Мои студенты», а ваши заметки будут подписаны."}</p>`, `<button class="btn small" data-act="team-new">+ Ментор</button>`)}
-  ${splitPanel()}
+  ${panel("Команда", "", (D().team.length ? `<ul class="rows">${D().team.map(m => `<li><span class="who"><strong>${esc(m.name)}</strong></span>${m.userId && m.userId === S.myId ? `<span class="tag ok">это вы</span>` : ""}${S.myId && m.userId !== S.myId && !S.server ? `<button class="btn small ghost" data-act="team-me" data-id="${esc(m.id)}">Это я</button>` : ""}<button class="btn small ghost" data-act="team-edit" data-id="${esc(m.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Добавьте себя и менторов</p>`) + `<p class="hint pad">${S.server ? "Чтобы ментор мог входить в CRM, добавьте его сюда, а затем выдайте доступ в разделе «Доступ»." : "Нажмите «Это я» у своего имени: в фильтрах появится «Мои студенты», а ваши заметки будут подписаны."}</p>`, `<button class="btn small" data-act="team-new">+ Ментор</button>`)}
   ${S.server ? accessPanel() : panel("Доступ", "", `<ul class="rows">
       <li><span><strong>Менторам:</strong> откройте «Поделиться» и пригласите их по email с правами редактора. Они смогут вносить изменения.</span></li>
       <li><span><strong>Блогеру:</strong> пригласите его по email с правами просмотра. Он увидит только опубликованный отчёт без контактов студентов.</span></li>
       <li><span class="warn-text">Не включайте доступ по публичной ссылке: пока он включён, приглашённые редакторы теряют право на изменения.</span></li>
     </ul>`)}
   </div><div class="stack">
-  ${panel("Партнёры", "", D().partners.length ? `<ul class="rows">${D().partners.map(p => `<li><span class="who"><strong>${esc(p.name)}</strong><span>${esc(p.share ?? 0)}%${p.promo ? " · " + esc(p.promo) : ""}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Партнёров нет</p>`, `<button class="btn small" data-act="partner-new">+ Партнёр</button>`)}
+  ${directionsPanel()}
+  ${panel("Партнёры", "", D().partners.length ? `<ul class="rows">${D().partners.map(p => `<li><span class="who"><strong>${esc(p.name)}</strong><span>${p.promo ? "промокод " + esc(p.promo) : "без промокода"}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Партнёров нет</p>`, `<button class="btn small" data-act="partner-new">+ Партнёр</button>`)}
   ${S.server ? tgPanel() : ""}
   ${trashPanel()}
   ${panel("Резервная копия", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, встречи, команда, партнёры и выплаты. ${S.server ? "Сервер каждую ночь сохраняет копию сам, но она лежит на том же сервере. Раз в неделю скачивайте файл к себе: из него база восстанавливается на любом сервере." : "Этот же файл загружается в версию для своего сервера при переезде."}</p>
@@ -1769,12 +1881,12 @@ function fieldsHTML(spec, vals) {
   for (const f of spec) {
     if (f.section !== undefined) { out += close() + `<fieldset>${f.section ? `<legend>${esc(f.section)}</legend>` : ""}<div class="fgrid">`; open = true; continue; }
     if (!open) { out += `<fieldset><div class="fgrid">`; open = true; }
-    const id = "m-" + f.k, v = vals[f.k] ?? f.def ?? "", req = f.req ? " required" : "";
+    const id = esc("m-" + f.k), name = esc(f.k), v = vals[f.k] ?? f.def ?? "", req = f.req ? " required" : "";
     let ctl;
-    if (f.type === "select") ctl = `<select id="${id}" name="${f.k}">${f.options.map(([ov, ol]) => opt(ov, ol, String(v ?? ""))).join("")}</select>`;
-    else if (f.type === "textarea") ctl = `<textarea id="${id}" name="${f.k}" rows="${f.rows || 3}"${f.ph ? ` placeholder="${esc(f.ph)}"` : ""}>${esc(v)}</textarea>`;
-    else if (f.type === "checkbox") { out += `<label class="field checkbox"><input type="checkbox" id="${id}" name="${f.k}"${v ? " checked" : ""}><span>${esc(f.label)}</span></label>`; continue; }
-    else ctl = `<input id="${id}" name="${f.k}" type="${f.type || "text"}" value="${esc(v)}"${f.type === "number" ? ' step="any" min="0" inputmode="decimal"' : ""}${f.auto ? ` autocomplete="${esc(f.auto)}"` : ""}${req}${f.ph ? ` placeholder="${esc(f.ph)}"` : ""}${f.list ? ` list="${id}-list" autocomplete="off"` : ""}>${f.list ? `<datalist id="${id}-list">${f.list.map(x => `<option value="${esc(x)}">`).join("")}</datalist>` : ""}`;
+    if (f.type === "select") ctl = `<select id="${id}" name="${name}">${f.options.map(([ov, ol]) => opt(ov, ol, String(v ?? ""))).join("")}</select>`;
+    else if (f.type === "textarea") ctl = `<textarea id="${id}" name="${name}" rows="${f.rows || 3}"${f.ph ? ` placeholder="${esc(f.ph)}"` : ""}>${esc(v)}</textarea>`;
+    else if (f.type === "checkbox") { out += `<label class="field checkbox"><input type="checkbox" id="${id}" name="${name}"${v ? " checked" : ""}><span>${esc(f.label)}</span></label>`; continue; }
+    else ctl = `<input id="${id}" name="${name}" type="${f.type || "text"}" value="${esc(v)}"${f.type === "number" ? ' step="any" min="0" inputmode="decimal"' : ""}${f.auto ? ` autocomplete="${esc(f.auto)}"` : ""}${req}${f.ph ? ` placeholder="${esc(f.ph)}"` : ""}${f.list ? ` list="${id}-list" autocomplete="off"` : ""}>${f.list ? `<datalist id="${id}-list">${f.list.map(x => `<option value="${esc(x)}">`).join("")}</datalist>` : ""}`;
     const quick = f.quick ? `<div class="chips">${[["Сегодня", 0], ["Завтра", 1], ["Через 3 дня", 3], ["Через неделю", 7]].map(([l, n]) => `<button type="button" class="chip" data-act="qdate" data-target="${id}" data-days="${n}">${l}</button>`).join("")}</div>` : "";
     out += `<label class="field${f.wide ? " span2" : ""}"><span>${esc(f.label)}${f.req ? " *" : ""}</span>${ctl}${quick}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`;
   }
@@ -2181,14 +2293,15 @@ function lostForm(s) {
 }
 function cohortForm(c) {
   openModal({
-    title: c ? "Поток" : "Новый поток", wide: true, values: c ? { ...c, modules: (c.modules || []).map(m => m.title).join("\n") } : { active: true },
+    title: c ? "Поток" : "Новый поток", wide: true, values: c ? { ...c, directionId: c.directionId || "", modules: (c.modules || []).map(m => m.title).join("\n") } : { active: true, directionId: D().directions.length === 1 ? D().directions[0].id : "" },
     fields: [{ k: "name", label: "Название", req: true, ph: "Поток 4" }, { k: "price", label: "Базовая цена, ₽", type: "number" },
+      ...(S.limited ? [] : [{ k: "directionId", label: "Направление", type: "select", options: [["", "—"], ...D().directions.map(d => [d.id, d.name])], help: "От направления зависит, между кем делится выручка потока" }]),
       { k: "start", label: "Старт", type: "date" }, { k: "end", label: "Окончание обучения", type: "date" }, { k: "active", label: "Идёт набор или обучение", type: "checkbox" },
       { k: "modules", label: "Программа: модули, по одному в строке", type: "textarea", rows: 7, wide: true, ph: "Введение в 1С\nОписание бизнес-процессов\nНаписание ТЗ", help: "По модулям отмечается прогресс студентов. Чтобы отметки сохранились, переименовывайте по одному модулю за сохранение." }],
     onDelete: c ? () => [...D().students, ...S.trash].some(s => s.cohortId === c.id) ? (showErr("В потоке есть студенты. Сначала перенесите их в другой поток."), false) : save(() => delDoc("cohorts", c.id), "Поток удалён") : null,
     onSubmit: v => {
       const id = c?.id || newId("cohorts"), isNew = !c;
-      return save(() => setDoc("cohorts", id, { ...(c || {}), ...v, modules: mergeModules(c?.modules || [], v.modules), id: undefined }), "Сохранено").then(ok => { if (ok && isNew) { S.cohortId = id; S.view = "cohort"; render(); } return ok; });
+      return save(() => setDoc("cohorts", id, { ...(c || {}), ...v, directionId: S.limited ? (c?.directionId || null) : (v.directionId || null), modules: mergeModules(c?.modules || [], v.modules), id: undefined }), "Сохранено").then(ok => { if (ok && isNew) { S.cohortId = id; S.view = "cohort"; render(); } return ok; });
     },
   });
 }
@@ -2207,10 +2320,9 @@ function mergeModules(old, text) {
 function teamForm(m) {
   openModal({
     title: m ? "Участник команды" : "Новый ментор", values: m ? { ...m } : {},
-    fields: [{ k: "name", label: "Имя", req: true, ph: "Ирина Котова", wide: true },
-      { k: "share", label: "Ставка, %", type: "number", wide: true, help: `Доля ментора от платежей его студентов. Пусто — общая ставка ${splitCfg().mentorShare}%` }],
-    onDelete: m ? () => S.accounts.some(a => a.role !== "partner" && a.linkId === m.id) ? (showErr("С этим человеком связана учётная запись. Сначала измените её в разделе «Доступ»."), false) : save(() => delDoc("team", m.id), "Удалено") : null,
-    onSubmit: v => { if (!noNum(v.share) && !(v.share >= 0 && v.share <= 100)) return "Ставка — от 0 до 100"; const id = m?.id || newId("team"); return save(() => setDoc("team", id, { ...(m || {}), name: v.name, share: noNum(v.share) ? null : v.share, id: undefined }), "Сохранено"); },
+    fields: [{ k: "name", label: "Имя", req: true, ph: "Ирина Котова", wide: true }],
+    onDelete: m ? () => inTerms("mentor", m.id) ? (showErr("Ментор участвует в условиях направления. Сначала уберите его долю в настройках направления."), false) : S.accounts.some(a => a.role !== "partner" && a.linkId === m.id) ? (showErr("С этим человеком связана учётная запись. Сначала измените её в разделе «Доступ»."), false) : save(() => delDoc("team", m.id), "Удалено") : null,
+    onSubmit: v => { const id = m?.id || newId("team"); return save(() => setDoc("team", id, { ...(m || {}), name: v.name, id: undefined }), "Сохранено"); },
   });
 }
 // Владелец добавляет себя в команду одной кнопкой: появляется «Мои студенты», а заявки по умолчанию назначаются ему
@@ -2275,38 +2387,28 @@ function accountForm(a, prefill = {}) {
 }
 function partnerForm(p) {
   openModal({
-    title: p ? "Партнёр" : "Новый партнёр", values: p ? { ...p } : { share: 50, active: true },
-    fields: [{ k: "name", label: "Название", req: true, ph: "Блог «…»", wide: true }, { k: "share", label: "Доля партнёра, %", type: "number", req: true },
+    title: p ? "Партнёр" : "Новый партнёр", values: p ? { ...p } : { active: true },
+    fields: [{ k: "name", label: "Название", req: true, ph: "Блог «…»", wide: true },
       { k: "promo", label: "Промокод" }, { k: "utm", label: "utm_source" }, { k: "contacts", label: "Контакты и реквизиты", type: "textarea", wide: true },
       { k: "active", label: "Активен", type: "checkbox" }],
-    onDelete: p ? () => [...D().students, ...S.trash].some(s => s.partnerId === p.id) ? (showErr("У партнёра есть студенты. Отметьте его неактивным вместо удаления."), false) : save(() => delDoc("partners", p.id), "Партнёр удалён") : null,
+    onDelete: p ? () => inTerms("partner", p.id) ? (showErr("Партнёр участвует в условиях направления. Сначала уберите его долю в настройках направления."), false) : [...D().students, ...S.trash].some(s => s.partnerId === p.id) ? (showErr("У партнёра есть студенты. Отметьте его неактивным вместо удаления."), false) : save(() => delDoc("partners", p.id), "Партнёр удалён") : null,
     onSubmit: v => {
-      if (v.share < 0 || v.share > 100) return "Доля должна быть от 0 до 100%";
       const id = p?.id || newId("partners");
-      return save(() => setDoc("partners", id, { ...(p || {}), ...v, id: undefined }), p ? "Сохранено. Доля уже привязанных студентов не меняется." : "Партнёр добавлен");
+      return save(() => setDoc("partners", id, { ...(p || {}), ...v, id: undefined }), p ? "Сохранено" : "Партнёр добавлен. Его процент задаётся в направлении: Настройки → Направления");
     },
   });
 }
-function payoutForm(p) {
-  const st = partnerStats(p);
+function payoutForm(kind, id) {
+  const who = kind === "partner" ? partnerById(id) : teamById(id); if (!who) return;
+  const st = partyStats(kind, id);
   openModal({
-    title: `Выплата: ${p.name}`, values: { amount: st.balance > 0 ? Math.round(st.balance) : null, date: today() },
-    fields: [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }, { k: "date", label: "Дата", type: "date", req: true }, { k: "comment", label: "Комментарий", wide: true }],
-    onSubmit: v => v.amount > 0 ? save(() => setDoc("payouts", newId("payouts"), { partnerId: p.id, ...v }), "Выплата записана") : "Сумма должна быть больше нуля",
+    title: `Выплата: ${who.name}`, values: { amount: st.balance > 0 ? Math.round(st.balance) : null, date: today() },
+    fields: [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }, { k: "date", label: "Дата", type: "date", req: true }, { k: "comment", label: "Комментарий", wide: true, ph: "За октябрь" }],
+    extra: `<p class="hint">К выплате сейчас: ${money(st.balance)}</p>`,
+    onSubmit: v => !(v.amount > 0) ? "Сумма должна быть больше нуля" : !isDay(v.date) ? "Укажите дату" : save(() => setDoc("payouts", newId("payouts"), { [kind === "partner" ? "partnerId" : "mentorId"]: id, ...v }), "Выплата записана"),
   });
 }
-function reportDoc(p) {
-  const st = partnerStats(p);
-  const doc = {
-    partnerId: p.id, name: p.name, share: p.share ?? 0, promo: p.promo || "", updatedAt: new Date().toISOString(),
-    leads: st.leads, paidStudents: st.paidStudents, conv: st.conv, employed: st.employed, revenue: st.revenue,
-    accrued: st.accrued, paidOut: st.paidOut, balance: st.balance, funnel: st.funnel,
-    payouts: st.payouts.map(x => ({ date: x.date, amount: x.amount, comment: x.comment || "" })),
-    rows: st.rows.map(r => ({ name: mask(r.s.name), stage: r.s.stage, date: String(r.s.createdAt || "").slice(0, 10), paid: r.paid, share: r.share })),
-  };
-  if (p.demo) doc.demo = true;
-  return doc;
-}
+const reportDoc = p => partyReport("partner", p.id);
 function publishReport(p) { save(() => setDoc("reports", p.id, reportDoc(p)), "Отчёт для партнёра обновлён"); }
 // Уже опубликованный отчёт обновляется сам после правок, если его цифры изменились
 const stable = o => JSON.stringify(o, (k, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(x => [x, v[x]])) : v);
@@ -2341,8 +2443,7 @@ async function exportBackup() {
   if (!dl) return toast("Выгрузка недоступна в этом окне");
   const data = {}; for (const c of COLS) data[c] = D()[c];
   data.students = [...D().students, ...S.trash]; // корзина тоже попадает в копию, с пометкой deletedAt
-  if (S.config.split) data.settings = { split: splitCfg() };
-  const backup = { format: "crm-menti-backup", version: 5, exportedAt: new Date().toISOString(), data };
+  const backup = { format: "crm-menti-backup", version: 6, exportedAt: new Date().toISOString(), data };
   try {
     await dl.save({ filename: `crm-menti-копия-${today()}.json`, data: JSON.stringify(backup, null, 1) }); toast("Резервная копия сохранена");
     // Дату копии помним в базе, чтобы напомнить о следующей
@@ -2360,15 +2461,19 @@ async function loadDemo() {
   const W = [];
   const c1 = newId("cohorts"), c2 = newId("cohorts"), c3 = newId("cohorts");
   const MODS = ["Введение в 1С и роль аналитика", "Сбор требований", "Описание бизнес-процессов", "Конфигурации 1С: обзор", "Написание ТЗ", "Постановка задач разработчику", "Тестирование и приёмка", "Итоговый проект"].map((title, i) => ({ id: "m" + (i + 1), title }));
-  W.push(["cohorts", c1, { name: "Поток 1", start: dAgo(150), end: dAgo(60), price: 90000, active: false, modules: MODS, demo: true }]);
-  W.push(["cohorts", c2, { name: "Поток 2", start: dAgo(45), end: dAgo(-45), price: 100000, active: true, modules: MODS, demo: true }]);
-  W.push(["cohorts", c3, { name: "Поток 3", start: dAgo(-30), end: dAgo(-120), price: 110000, active: true, modules: MODS, demo: true }]);
+  const d1 = newId("directions");
+  W.push(["cohorts", c1, { name: "Поток 1", start: dAgo(150), end: dAgo(60), price: 90000, active: false, modules: MODS, directionId: d1, demo: true }]);
+  W.push(["cohorts", c2, { name: "Поток 2", start: dAgo(45), end: dAgo(-45), price: 100000, active: true, modules: MODS, directionId: d1, demo: true }]);
+  W.push(["cohorts", c3, { name: "Поток 3", start: dAgo(-30), end: dAgo(-120), price: 110000, active: true, modules: MODS, directionId: d1, demo: true }]);
   const m1 = newId("team"), m2 = newId("team");
   W.push(["team", m1, { name: "Ирина Котова", demo: true }]); W.push(["team", m2, { name: "Алексей Дёмин", demo: true }]);
   const p1 = newId("partners"), p2 = newId("partners");
   W.push(["partners", p1, { name: "Блог «1С без боли»", share: 40, promo: "BLOG1C", utm: "youtube", active: true, demo: true }]);
   W.push(["partners", p2, { name: "Telegram «Вкат в IT»", share: 25, promo: "VKAT", utm: "telegram", active: true, demo: true }]);
   W.push(["payouts", newId("payouts"), { partnerId: p1, amount: 50000, date: dAgo(20), comment: "Выплата за поток 1", demo: true }]);
+  W.push(["directions", d1, { name: "Аналитик 1С с нуля", terms: [{ from: "2000-01", parties: [{ kind: "partner", id: p1, share: 30 }, { kind: "mentor", id: m1, share: 20 }, { kind: "mentor", id: m2, share: 10 }] }], demo: true }]);
+  W.push(["expenses", newId("expenses"), { directionId: d1, date: dAgo(3), amount: 12000, comment: "Реклама", demo: true }]);
+  W.push(["expenses", newId("expenses"), { directionId: d1, date: dAgo(35), amount: 8000, comment: "Сервисы и подписки", demo: true }]);
   const F = ["Анна", "Дмитрий", "Екатерина", "Иван", "Мария", "Алексей", "Ольга", "Сергей", "Татьяна", "Никита", "Юлия", "Павел", "Ксения", "Артём", "Наталья", "Максим", "Елена", "Роман"];
   const fem = new Set(["Анна", "Екатерина", "Мария", "Ольга", "Татьяна", "Юлия", "Ксения", "Наталья", "Елена"]);
   const L = ["Смирнов", "Кузнецов", "Попов", "Васильев", "Петров", "Соколов", "Михайлов", "Новиков", "Фёдоров", "Морозов", "Волков", "Лебедев", "Семёнов", "Егоров", "Павлов"];
@@ -2540,8 +2645,10 @@ const ACT = {
   "partner-new": () => partnerForm(null),
   "partner-edit": d => partnerForm(partnerById(d.id)),
   "partner-open": d => { S.partnerId = d.id; S.view = "partner"; render(); window.scrollTo(0, 0); },
-  "payout-new": d => payoutForm(partnerById(d.id)),
-  "split-edit": () => splitForm(), mpayout: d => { const m = teamById(d.id); if (m) mentorPayoutForm(m); },
+  "payout-new": d => payoutForm(d.kind === "mentor" ? "mentor" : "partner", d.id),
+  "direction-new": () => directionForm(null), "direction-edit": d => { const x = dirById(d.id); if (x) directionForm(x); },
+  "expense-new": () => expenseForm(null), "expense-edit": d => { const x = D().expenses.find(e => e.id === d.id); if (x) expenseForm(x); },
+  "expense-del": (d, el) => { if (el.dataset.armed) return save(() => delDoc("expenses", d.id), "Расход удалён"); el.dataset.armed = "1"; el.textContent = "Точно удалить?"; },
   "pay-open": d => { S.payOpen = S.payOpen === d.id ? null : d.id; render(); },
   "payout-del": (d, el) => { if (el.dataset.armed) return save(() => delDoc("payouts", d.id), "Выплата удалена"); el.dataset.armed = "1"; el.textContent = "Точно удалить?"; },
   "report-publish": d => publishReport(partnerById(d.id)),
@@ -2653,6 +2760,7 @@ async function boot() {
       const docs = snap.docs.map(d => ({ ...d.data(), id: d.id }));
       if (c === "students") { S.trash = docs.filter(x => x.deletedAt); D()[c] = docs.filter(x => !x.deletedAt); }
       else D()[c] = docs;
+      SETTLED = null;
       S.loaded[c] = true; scheduleRender();
     }, err => {
       console.warn(c, err); S.loaded[c] = true;
