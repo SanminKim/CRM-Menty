@@ -3,7 +3,8 @@
 Правила доступа:
 - администратор читает и пишет всё;
 - ментор читает и правит только своих студентов и связанные с ними встречи, читает потоки, команду
-  и названия партнёров; выплаты, отчёты и доли партнёров ему недоступны;
+  и названия партнёров; из выплат видит только свои, из ставок менторов — только свою;
+  выплаты партнёрам, отчёты и доли партнёров ему недоступны;
 - партнёр читает только отчёт по своему трафику.
 """
 import json
@@ -17,7 +18,7 @@ from .models import COLLECTIONS, Account, Doc, State, Tombstone
 ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
 MAX_DEPTH = 12
 MAX_DOC_BYTES = 512 * 1024
-MENTOR_READ = ("students", "cohorts", "team", "partners", "meetings", "config")
+MENTOR_READ = ("students", "cohorts", "team", "partners", "meetings", "config", "payouts")
 # Ментору нужны название и доля партнёра (она фиксируется в заявке), но не его контакты и реквизиты
 PARTNER_PUBLIC_FIELDS = ("name", "promo", "utm", "share", "active", "demo")
 
@@ -93,6 +94,8 @@ class Access:
             return False
         if collection == "students":
             return bool(self.link_id) and data.get("mentorId") == self.link_id
+        if collection == "payouts":
+            return bool(self.link_id) and data.get("mentorId") == self.link_id  # только выплаты самому ментору
         if collection == "meetings":
             if data.get("studentId"):
                 return self._owns_student(data["studentId"]) or (
@@ -111,6 +114,8 @@ class Access:
         data = dict(doc.data)
         if doc.collection == "partners" and not self.is_admin:
             data = {k: v for k, v in data.items() if k in PARTNER_PUBLIC_FIELDS}
+        if doc.collection == "team" and not self.is_admin and doc.doc_id != self.link_id:
+            data.pop("share", None)  # чужую ставку ментор не видит
         return data
 
     def check_write(self, collection, old, new):

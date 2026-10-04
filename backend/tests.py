@@ -101,6 +101,35 @@ class AccessTests(BaseCase):
         self.assertEqual(self.client.get("/api/profiles/", {"ids": f"u{self.mentor.pk}"}).json(), {})
         self.assertEqual(self.client.get("/api/accounts/").status_code, 403)
 
+    def test_mentor_sees_own_payouts_and_own_share_only(self):
+        store.system_write("payouts", "mp1", {"mentorId": "t1", "amount": 9000, "date": "2026-01-10"})
+        store.system_write("payouts", "mp2", {"mentorId": "t2", "amount": 7000, "date": "2026-01-10"})
+        store.system_write("team", "t1", {"name": "Ирина Котова", "share": 35})
+        store.system_write("team", "t2", {"name": "Алексей Дёмин", "share": 20})
+        self.login("mentor")
+        data = self.sync()
+        self.assertEqual(self.ids(data, "payouts"), ["mp1"])              # ни чужих выплат, ни выплат партнёрам
+        team = {d["id"]: d["data"] for d in data["docs"]["team"]}
+        self.assertEqual(team["t1"]["share"], 35)
+        self.assertNotIn("share", team["t2"])                              # чужая ставка не видна
+        self.assertEqual(team["t2"]["name"], "Алексей Дёмин")
+        for method, doc_id, body in (("put", "mp9", {"mentorId": "t1", "amount": 1}), ("patch", "mp1", {"amount": 1}), ("delete", "mp1", None)):
+            self.assertEqual(self.send(method, "payouts", doc_id, body).status_code, 403)   # выплаты записывает только администратор
+        self.assertEqual(self.send("patch", "team", "t1", {"share": 90}).status_code, 403)
+        self.assertEqual(self.send("patch", "config", "main", {"split": {"mentorShare": 90}}).status_code, 403)
+        self.login("blogger")
+        self.assertNotIn("payouts", self.sync()["docs"])
+        self.assertNotIn("team", self.sync()["docs"])
+
+    def test_mentor_hears_about_a_payout_added_later(self):
+        self.login("mentor")
+        rev = self.sync()["rev"]
+        epoch = self.sync()["epoch"]
+        store.system_write("payouts", "mp3", {"mentorId": "t1", "amount": 100})
+        store.system_write("payouts", "mp4", {"mentorId": "t2", "amount": 100})
+        later = self.sync(since=rev, epoch=epoch)
+        self.assertEqual(self.ids(later, "payouts"), ["mp3"])
+
     def test_mentor_cannot_touch_other_students(self):
         self.login("mentor")
         self.assertEqual(self.send("patch", "students", "s2", {"name": "Взлом"}).status_code, 403)
@@ -839,6 +868,35 @@ def sample_backup():
 
 
 class BackupImportTests(BaseCase):
+    def test_import_restores_split_settings(self):
+        raw = sample_backup()
+        raw["version"] = 5
+        raw["data"]["settings"] = {"split": {"mentorShare": 25, "mentorBase": "afterPartner", "лишнее": 1}}
+        store.system_write("config", "main", {"lastBackupAt": "2026-01-01"})
+        import_backup(raw)
+        cfg = Doc.objects.get(collection="config", doc_id="main").data
+        self.assertEqual(cfg["split"], {"mentorShare": 25, "mentorBase": "afterPartner"})
+        self.assertEqual(cfg["lastBackupAt"], "2026-01-01")                  # остальные настройки не затёрты
+        raw["data"]["settings"] = {"split": {"mentorShare": 90, "mentorBase": "full"}}
+        import_backup(raw)
+        self.assertEqual(Doc.objects.get(collection="config", doc_id="main").data["split"]["mentorShare"], 25)  # без overwrite не меняется
+        import_backup(raw, overwrite=True)
+        self.assertEqual(Doc.objects.get(collection="config", doc_id="main").data["split"]["mentorShare"], 90)
+        for bad in ({"split": {"mentorShare": 500}}, {"split": "x"}, "x", {"split": {"mentorShare": True}}):
+            raw["data"]["settings"] = bad
+            import_backup(raw, overwrite=True)
+        self.assertEqual(Doc.objects.get(collection="config", doc_id="main").data["split"]["mentorShare"], 90)  # мусор пропускается
+
+    def test_import_keeps_mentor_payouts(self):
+        raw = sample_backup()
+        team_id = raw["data"]["team"][0]["id"]
+        raw["data"]["payouts"] = list(raw["data"].get("payouts") or []) + [
+            {"id": "mpA", "mentorId": team_id, "amount": 3000, "date": "2026-02-01"},
+            {"id": "mpB", "mentorId": "нет-такого", "amount": 1, "date": "2026-02-01"}]
+        import_backup(raw)
+        self.assertTrue(Doc.objects.filter(collection="payouts", doc_id="mpA").exists())
+        self.assertFalse(Doc.objects.filter(collection="payouts", doc_id="mpB").exists())
+
     def test_import_keeps_documents_as_they_are(self):
         stats = import_backup(sample_backup())
         self.assertEqual(stats["students"], {"created": 2, "updated": 0, "skipped": 0})

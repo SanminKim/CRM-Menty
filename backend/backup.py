@@ -11,7 +11,7 @@ from . import store
 from .models import Doc
 
 BACKUP_FORMAT = "crm-menti-backup"
-SUPPORTED_VERSIONS = (1, 2, 3, 4)
+SUPPORTED_VERSIONS = (1, 2, 3, 4, 5)  # с версии 5 в копии есть настройки распределения дохода
 SECTIONS = ("cohorts", "team", "partners", "students", "payouts", "meetings")
 LABELS = {"cohorts": "Потоки", "team": "Команда", "partners": "Партнёры", "students": "Студенты",
           "payouts": "Выплаты", "meetings": "Встречи"}
@@ -43,6 +43,11 @@ def _rows(data, key):
     return [r for r in rows if isinstance(r, dict) and store.ID_RE.fullmatch(str(r.get("id") or ""))]
 
 
+def _ref(value, ids):
+    """Ссылка на загруженную запись. В повреждённой копии на месте идентификатора может быть что угодно."""
+    return isinstance(value, str) and value in ids
+
+
 @transaction.atomic
 def import_backup(raw, overwrite=False, with_demo=False):
     data = parse_backup(raw)["data"]
@@ -61,7 +66,8 @@ def import_backup(raw, overwrite=False, with_demo=False):
             doc_id = str(row.pop("id"))
             if section != "students" and row.get("demo") and not with_demo and doc_id not in used.get(section, ()):
                 continue
-            if section == "payouts" and row.get("partnerId") not in kept.get("partners", ()):
+            if section == "payouts" and not _ref(row.get("partnerId"), kept.get("partners", ())) \
+                    and not _ref(row.get("mentorId"), kept.get("team", ())):
                 stats[section]["skipped"] += 1
                 continue
             if section == "meetings" and row.get("studentId") and row["studentId"] not in kept["students"]:
@@ -79,7 +85,24 @@ def import_backup(raw, overwrite=False, with_demo=False):
             else:
                 stats[section]["created"] += 1
             store.system_write(section, doc_id, row)
+    _import_split(data.get("settings"), overwrite)
     return stats
+
+
+def _import_split(settings, overwrite):
+    """Правило распределения дохода из копии. Существующее правило заменяется только при overwrite."""
+    split = settings.get("split") if isinstance(settings, dict) else None
+    if not isinstance(split, dict):
+        return
+    share, base = split.get("mentorShare"), split.get("mentorBase")
+    if isinstance(share, bool) or not isinstance(share, (int, float)) or not 0 <= share <= 100:
+        return
+    current = Doc.objects.filter(collection="config", doc_id="main").first()
+    config = dict(current.data) if current else {}
+    if "split" in config and not overwrite:
+        return
+    config["split"] = {"mentorShare": share, "mentorBase": "afterPartner" if base == "afterPartner" else "full"}
+    store.system_write("config", "main", config)
 
 
 def summary_lines(stats):
