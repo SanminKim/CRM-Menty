@@ -419,6 +419,16 @@ try:
       pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(300)
       check("owner is prompted to join the team", pg.locator("text=Вас нет в команде").count() == 1 and pg.evaluate("!myTeam()"))
       pg.click("[data-act=self-team]"); pg.wait_for_function("() => typeof S !== 'undefined' && S.status === 'ready' && S.loaded.team && !!myTeam()", timeout=15000)
+      # тема и раскладка настроек
+      pg.click(".nav >> text=Настройки"); pg.wait_for_selector(".cols2")
+      tops = pg.evaluate("[...document.querySelectorAll('.cols2 > .stack')].map(e => Math.round(e.getBoundingClientRect().top))")
+      check("settings: two columns start at the same height", len(tops) == 2 and tops[0] == tops[1], tops)
+      pg.locator(".seg >> text=Тёмная").click(); pg.wait_for_timeout(150)
+      check("theme: dark is applied and marked", pg.evaluate("document.documentElement.dataset.theme") == "dark" and pg.locator(".seg button.on", has_text="Тёмная").count() == 1)
+      pg.reload(); pg.wait_for_selector(".cols2"); check("theme survives reload", pg.evaluate("document.documentElement.dataset.theme") == "dark")
+      pg.click("#sync .tbtn"); pg.wait_for_timeout(150); check("theme button in the menu switches to light", pg.evaluate("document.documentElement.dataset.theme") == "light")
+      pg.locator(".seg >> text=Как в системе").click(); pg.wait_for_timeout(150); check("theme: back to system", pg.evaluate("document.documentElement.dataset.theme") is None)
+      shot(pg, "s26_settings.png", full_page=True)
       # сквозной путь: от заявки до оффера одной кнопкой «Дальше»
       pg.click(".nav >> text=Сегодня"); pg.click("[data-act=quick]"); pg.wait_for_selector("#mform"); pg.fill("#m-name", "Путь Сквозной"); pg.fill("#m-contact", "@put_skvoznoy"); pg.click("#m-submit"); pg.wait_for_timeout(400)
       fid = pg.evaluate("D().students.find(s => s.name === 'Путь Сквозной').id")

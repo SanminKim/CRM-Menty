@@ -211,6 +211,15 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .chk:hover::after { content: ""; width: 9px; height: 5px; border-left: 2px solid var(--ok); border-bottom: 2px solid var(--ok); transform: rotate(-45deg) translateY(-1px); }
 .today { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.rows .who.wrap span { white-space: normal; }
+.tbtn { all: unset; box-sizing: border-box; cursor: pointer; width: 28px; height: 28px; border-radius: var(--r-ctl); display: grid; place-items: center; color: var(--side-text); flex: none; margin-left: auto; }
+.tbtn:hover { background: var(--side-2); color: var(--side-ink); }
+.tbtn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.side-foot .tbtn + .link { margin-left: 4px; }
+td.clip { white-space: nowrap; max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+.nw { white-space: nowrap; }
+.side-foot .st { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .allclear { padding: 22px 16px; color: var(--muted); border-top: 1px solid var(--border); }
 .allclear strong { color: var(--text); display: block; font-weight: 600; }
 
@@ -459,7 +468,8 @@ details + details { margin-top: 6px; }
   input, select, textarea { font-size: 16px; }
   #toast { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
   .bulk { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
-  .today { grid-template-columns: minmax(0, 1fr); }
+  .today, .cols2 { grid-template-columns: minmax(0, 1fr); }
+  .tbtn { width: 36px; height: 36px; }
   .board { grid-auto-columns: minmax(78vw, 1fr); }
   .col { max-height: none; }
   .tile-move { display: block; }
@@ -561,6 +571,14 @@ const sortBy = (arr, f) => [...arr].sort((a, b) => { const x = f(a), y = f(b); r
 const sum = (arr, f) => arr.reduce((a, x) => a + (+f(x) || 0), 0);
 const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
+// Тема хранится в браузере: «как в системе» — без атрибута, иначе data-theme на корне
+const THEMES = [["auto", "Как в системе"], ["light", "Светлая"], ["dark", "Тёмная"]];
+const themePref = () => { const t = lsGet("crm-menti-theme"); return t === "light" || t === "dark" ? t : "auto"; };
+const themeNow = () => themePref() !== "auto" ? themePref() : (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+function applyTheme() { const t = themePref(); if (t === "auto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t; }
+function setTheme(t) { lsSet("crm-menti-theme", THEMES.some(x => x[0] === t) ? t : "auto"); applyTheme();
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => renderSync()); } catch (e) { } render(); }
+applyTheme();
 
 // ---------- Состояние ----------
 const S = {
@@ -773,9 +791,11 @@ function render() {
 function renderSync() {
   const el = $("#sync"); if (!el) return;
   if (S.status !== "ready") { el.innerHTML = ""; return; }
-  if (S.offline) { el.innerHTML = `<span class="dot busy" role="img" aria-label="Нет связи"></span><span class="st">Нет связи с сервером</span>`; return; }
-  if (S.readOnly || S.mode === "partner") { el.innerHTML = `<span class="dot" role="img" aria-label="Только просмотр"></span><span class="st">Только просмотр</span>` + (S.server ? `<button class="link" data-act="logout">Выйти</button>` : ""); return; }
-  el.innerHTML = (S.pending ? `<span class="dot busy" role="img" aria-label="Сохраняю"></span><span class="st">Сохраняю…</span>` : `<span class="dot" role="img" aria-label="Изменения сохранены"></span><span class="st">Изменения сохранены</span>`) + (S.server ? `<button class="link" data-act="logout">Выйти</button>` : "");
+  const dark = themeNow() === "dark", label = dark ? "Включить светлую тему" : "Включить тёмную тему";
+  const theme = `<button class="tbtn" data-act="theme" data-v="${dark ? "light" : "dark"}" aria-label="${label}" title="${label}">${ico(dark ? "sun" : "moon")}</button>`;
+  const out = S.server ? `<button class="link" data-act="logout">Выйти</button>` : "";
+  const st = (text, busy) => `<span class="dot${busy ? " busy" : ""}" role="img" aria-label="${text}"></span><span class="st">${text}</span>`;
+  el.innerHTML = (S.offline ? st("Нет связи с сервером", true) : S.readOnly || S.mode === "partner" ? st("Только просмотр") : S.pending ? st("Сохраняю…", true) : st("Сохранено")) + theme + (S.offline ? "" : out);
 }
 const ICONS = {
   today: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18M8.5 12.5l2.5 2.5l4.5-5",
@@ -788,6 +808,8 @@ const ICONS = {
   partners: "M4 10v4h3l6 4V6l-6 4zM17 9a4 4 0 0 1 0 6",
   settings: "M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4",
   more: "M5 12h.01M12 12h.01M19 12h.01",
+  sun: "M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4l1.4-1.4M17 7l1.4-1.4",
+  moon: "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z",
   report: "M4 20V10M10 20V4M16 20v-7M21 20H3",
   password: "M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3",
   logout: "M10 4H5v16h5M14 8l4 4l-4 4M18 12H9",
@@ -859,7 +881,7 @@ function todayView() {
     <div class="stack">
       ${orphans.length ? panel("Без ментора", orphans.length, `<ul class="rows">${orphans.slice(0, 8).map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
           <span class="who"><strong>${esc(s.name)}</strong><span>${s.source === "site" ? "заявка с сайта · " : s.source === "telegram" ? "заявка из Telegram · " : ""}${fShort(isoDay(s.createdAt))}${partnerById(s.partnerId) ? " · " + esc(partnerById(s.partnerId).name) : ""}</span>${s.comment ? `<span>${esc(s.comment)}</span>` : ""}</span>
-          ${badge(s.stage)}<span class="acts">${tgUser(s) ? `<a class="btn small ghost" data-stop href="https://t.me/${esc(tgUser(s))}" target="_blank" rel="noopener">Написать</a>` : ""}${myTeam() || (S.server && S.isOwner) ? `<button class="btn small primary" data-act="take" data-id="${esc(s.id)}">Взять себе</button>` : ""}<button class="btn small" data-act="assign" data-id="${esc(s.id)}">Назначить ментора</button></span></li>`).join("")}
+          ${badge(s.stage)}<span class="acts">${tgUser(s) ? `<a class="btn small ghost" data-stop href="https://t.me/${esc(tgUser(s))}" target="_blank" rel="noopener">Написать</a>` : ""}${myTeam() || (S.server && S.isOwner) ? `<button class="btn small primary" data-act="take" data-id="${esc(s.id)}">Взять себе</button>` : ""}<button class="btn small" data-act="assign" data-id="${esc(s.id)}">${myTeam() || (S.server && S.isOwner) ? "Назначить" : "Назначить ментора"}</button></span></li>`).join("")}
           ${orphans.length > 8 ? `<li><button class="link" data-act="list-nomentor">Показать всех: ${orphans.length}</button></li>` : ""}</ul>
           ${S.server && S.isOwner && !myTeam() ? `<p class="hint pad">Чтобы ваши заявки сразу были закреплены за вами, <button class="link" data-act="nav" data-v="settings">добавьте себя в команду</button> в настройках.</p>` : ""}`) : ""}
       ${panel("Сделать", ag.due.length || "", dueBody)}
@@ -1066,7 +1088,7 @@ function studentsTable(list, mods, emptyText) {
   const ids = list.map(s => s.id), all = ids.length > 0 && ids.every(id => S.sel.has(id));
   S.visible = ids;
   const th = (k, label, cls = "") => { const on = S.sort?.k === k; return `<th${cls ? ` class="${cls}"` : ""}${on ? ` aria-sort="${S.sort.dir > 0 ? "ascending" : "descending"}"` : ""}><button class="th-sort${on ? " on" : ""}" id="th-${k}" data-act="sort" data-k="${k}" title="Сортировать">${label}${on ? `<span aria-hidden="true">${S.sort.dir > 0 ? "↑" : "↓"}</span>` : ""}</button></th>`; };
-  const stepCell = s => hasStep(s) ? `${esc(s.next.text)} <span class="sub${stepLate(s) ? " danger-text" : ""}">· ${dueLabel(s.next.date)}</span>` : isActive(s) ? `<span class="warn-text">не назначен</span>` : `<span class="muted">—</span>`;
+  const stepCell = s => hasStep(s) ? `${esc(s.next.text)} <span class="sub nw${stepLate(s) ? " danger-text" : ""}">· ${dueLabel(s.next.date)}</span>` : isActive(s) ? `<span class="warn-text">не назначен</span>` : `<span class="muted">—</span>`;
   const paidCell = s => s.price ? `${money(paidSum(s))} <span class="sub">из ${money(s.price)}</span>` : money(paidSum(s) || null);
   const cols = 6 + (mods ? mods.length : 2);
   return `<div class="panel table-wrap" id="tbl"><table>
@@ -1079,8 +1101,8 @@ function studentsTable(list, mods, emptyText) {
       <td>${badge(s.stage)}</td>
       ${mods ? mods.map(m => `<td class="mxc"><button class="mx${s.progress && s.progress[m.id] ? " on" : ""}" id="mx-${esc(s.id)}-${esc(m.id)}" data-act="mod-toggle" data-id="${esc(s.id)}" data-mid="${esc(m.id)}" title="${esc(m.title)}" aria-label="${esc(m.title)}: ${esc(s.name)}" aria-pressed="${!!(s.progress && s.progress[m.id])}"></button></td>`).join("")
         : `<td>${stepCell(s)}</td><td>${esc(cohortName(s.cohortId) || "—")}${progressOf(s) && (progressOf(s).done || SGROUP[s.stage] === "study") ? `<div>${progHTML(progressOf(s))}</div>` : ""}</td>`}
-      ${mods ? `<td>${stepCell(s)}</td>` : `<td>${esc(partnerById(s.partnerId)?.name || s.utmSource || "—")}</td>`}
-      <td>${esc(teamName(s.mentorId) || "—")}</td><td class="num">${paidCell(s)}</td>
+      ${mods ? `<td>${stepCell(s)}</td>` : `<td class="clip" title="${esc(partnerById(s.partnerId)?.name || s.utmSource || "")}">${esc(partnerById(s.partnerId)?.name || s.utmSource || "—")}</td>`}
+      <td class="clip" title="${esc(teamName(s.mentorId) || "")}">${esc(teamName(s.mentorId) || "—")}</td><td class="num">${paidCell(s)}</td>
     </tr>`).join("") || `<tr><td colspan="${cols}" class="empty">${emptyText}</td></tr>`}</tbody>
   </table></div>${bulkBar(ids)}`;
 }
@@ -1433,12 +1455,16 @@ function tgPanel() {
       : `<li><span class="who"><strong>${esc(p.name)}</strong><span class="warn-text">${p.promo ? "Промокод для ссылки должен состоять из латинских букв, цифр, «-» и «_»" : "Задайте партнёру промокод, чтобы получить его ссылку"}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}
     </ul><p class="hint pad">Блогер ставит свою ссылку под видео вместо вашего личного аккаунта. Бот @${esc(tg.bot)} спрашивает согласие, имя и цель, и заявка попадает в блок «Без ментора» на экране «Сегодня».</p>`);
 }
+function themePanel() {
+  return panel("Оформление", "", `<div class="pad"><div class="seg" role="group" aria-label="Тема">${THEMES.map(([v, l]) => `<button data-act="theme" data-v="${v}" class="${themePref() === v ? "on" : ""}" aria-pressed="${themePref() === v}">${l}</button>`).join("")}</div>
+    <p class="hint" style="margin-top:8px">Выбор запоминается в этом браузере.</p></div>`);
+}
 function accountPanel() {
   const me = S.me || {}, link = myTeam();
   return panel("Учётная запись", "", `<ul class="rows"><li><span class="who"><strong>${esc(me.name || me.username)}</strong><span>${esc(ROLEL[me.role] || "")}${link ? " · в команде: " + esc(link.name) : ""}</span></span>
     <span class="acts"><a class="btn small" href="${esc(SRV.passwordUrl)}">Сменить пароль</a><button class="btn small ghost" data-act="logout">Выйти</button></span></li>
     ${tgRow()}
-    ${S.isOwner && !link ? `<li><span class="who"><strong class="warn-text">Вас нет в команде</strong><span>Без этого нет фильтра «Мои студенты», и вас нельзя назначить ментором</span></span><button class="btn small" data-act="self-team">Добавить себя в команду</button></li>` : ""}</ul>`);
+    ${S.isOwner && !link ? `<li><span class="who wrap"><strong class="warn-text">Вас нет в команде</strong><span>Без этого нет фильтра «Мои студенты», и вас нельзя назначить ментором</span></span><button class="btn small" data-act="self-team">Добавить себя в команду</button></li>` : ""}</ul>`);
 }
 function accessPanel() {
   const linkName = a => a.role === "partner" ? partnerById(a.linkId)?.name : teamName(a.linkId);
@@ -1454,24 +1480,27 @@ function trashPanel() {
 function settingsView() {
   const hasDemo = COLS.some(c => D()[c].some(x => x.demo)) || S.trash.some(x => x.demo);
   // Ментор на сервере: только своя учётная запись и корзина своих студентов
-  if (S.limited) return headHTML("Настройки") + `<div class="grid-2">${accountPanel()}${trashPanel()}</div>`;
-  return headHTML("Настройки") + `<div class="grid-2">
+  if (S.limited) return headHTML("Настройки") + `<div class="cols2"><div class="stack">${accountPanel()}</div><div class="stack">${themePanel()}${trashPanel()}</div></div>`;
+  // Слева — люди и доступ, справа — источники заявок и обслуживание базы
+  return headHTML("Настройки") + `<div class="cols2"><div class="stack">
+  ${S.server ? accountPanel() : ""}
   ${panel("Команда", "", (D().team.length ? `<ul class="rows">${D().team.map(m => `<li><span class="who"><strong>${esc(m.name)}</strong></span>${m.userId && m.userId === S.myId ? `<span class="tag ok">это вы</span>` : ""}${S.myId && m.userId !== S.myId && !S.server ? `<button class="btn small ghost" data-act="team-me" data-id="${esc(m.id)}">Это я</button>` : ""}<button class="btn small ghost" data-act="team-edit" data-id="${esc(m.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Добавьте себя и менторов</p>`) + `<p class="hint pad">${S.server ? "Чтобы ментор мог входить в CRM, добавьте его сюда, а затем выдайте доступ в разделе «Доступ»." : "Нажмите «Это я» у своего имени: в фильтрах появится «Мои студенты», а ваши заметки будут подписаны."}</p>`, `<button class="btn small" data-act="team-new">+ Ментор</button>`)}
-  ${panel("Партнёры", "", D().partners.length ? `<ul class="rows">${D().partners.map(p => `<li><span class="who"><strong>${esc(p.name)}</strong><span>${esc(p.share ?? 0)}%${p.promo ? " · " + esc(p.promo) : ""}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Партнёров нет</p>`, `<button class="btn small" data-act="partner-new">+ Партнёр</button>`)}
-  ${S.server ? tgPanel() : ""}
   ${S.server ? accessPanel() : panel("Доступ", "", `<ul class="rows">
       <li><span><strong>Менторам:</strong> откройте «Поделиться» и пригласите их по email с правами редактора. Они смогут вносить изменения.</span></li>
       <li><span><strong>Блогеру:</strong> пригласите его по email с правами просмотра. Он увидит только опубликованный отчёт без контактов студентов.</span></li>
       <li><span class="warn-text">Не включайте доступ по публичной ссылке: пока он включён, приглашённые редакторы теряют право на изменения.</span></li>
     </ul>`)}
+  </div><div class="stack">
+  ${panel("Партнёры", "", D().partners.length ? `<ul class="rows">${D().partners.map(p => `<li><span class="who"><strong>${esc(p.name)}</strong><span>${esc(p.share ?? 0)}%${p.promo ? " · " + esc(p.promo) : ""}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Партнёров нет</p>`, `<button class="btn small" data-act="partner-new">+ Партнёр</button>`)}
+  ${S.server ? tgPanel() : ""}
   ${trashPanel()}
   ${panel("Резервная копия", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, встречи, команда, партнёры и выплаты. ${S.server ? "Сервер каждую ночь сохраняет копию сам, но она лежит на том же сервере. Раз в неделю скачивайте файл к себе: из него база восстанавливается на любом сервере." : "Этот же файл загружается в версию для своего сервера при переезде."}</p>
     <div class="actions"><button class="btn" data-act="backup">Скачать резервную копию</button>${S.server ? `<a class="btn" href="${esc(SRV.importUrl)}">Загрузить копию</a>` : ""}</div>
     <p class="hint" style="margin-top:8px">В файле есть контакты студентов. Храните его там, куда нет доступа посторонним.</p></div>`)}
   ${panel("Пример данных", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вымышленные студенты, потоки и партнёры с пометкой «пример», чтобы посмотреть, как всё работает. Ваши настоящие записи не затрагиваются.</p>
     <div class="actions">${hasDemo ? `<button class="btn danger" data-act="demo-clear">Удалить примеры</button>` : `<button class="btn" data-act="demo-load">Загрузить пример</button>`}</div></div>`)}
-  ${S.server ? accountPanel() : ""}
-  </div>`;
+  ${themePanel()}
+  </div></div>`;
 }
 
 // ---------- Имена людей ----------
@@ -2287,6 +2316,7 @@ function openStudent(id) {
 }
 const ACT = {
   nav: d => go(d.v),
+  theme: d => setTheme(d.v),
   "nav-more": () => { S.navMore = !S.navMore; render(); $("#nav .more")?.focus(); },
   open: d => openStudent(d.id),
   "d-close": () => { S.openId = null; render(); },
