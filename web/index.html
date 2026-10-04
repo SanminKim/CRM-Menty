@@ -1554,7 +1554,7 @@ function expenseForm(e) {
     title: e ? "Расход" : "Новый расход", values: e ? { ...e, directionId: dirById(e.directionId) ? e.directionId : "" } : { date: today(), directionId: dirs.length === 1 ? dirs[0].id : "" },
     fields: [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }, { k: "date", label: "Дата", type: "date", req: true },
       { k: "directionId", label: "Направление", type: "select", wide: true, options: [["", "—"], ...dirs.map(d => [d.id, d.name])], help: "Расход уменьшает чистую выручку этого направления в месяце даты расхода" },
-      { k: "comment", label: "На что", wide: true, req: true, list: EXPENSE_HINTS }],
+      { k: "comment", label: "На что", wide: true, req: true, list: EXPENSE_HINTS, ph: "Напишите своё или выберите из подсказок", help: "Любой текст: подсказки в списке только для скорости" }],
     extra: `<p class="hint">После сохранения доли всех сторон направления за этот месяц пересчитаются.</p>`,
     onDelete: e ? () => save(() => delDoc("expenses", e.id), "Расход удалён") : null,
     onSubmit: v => !(v.amount > 0) ? "Сумма должна быть больше нуля" : !isDay(v.date) ? "Укажите дату" : !dirById(v.directionId) ? "Выберите направление"
