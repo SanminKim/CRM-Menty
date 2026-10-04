@@ -94,6 +94,11 @@ X_FRAME_OPTIONS = "DENY"
 # --- Настройки CRM ---
 # Токен для приёма заявок с лендинга (POST /api/leads/?token=...)
 LEAD_WEBHOOK_TOKEN = os.environ.get("LEAD_WEBHOOK_TOKEN", "")
+# Токен Telegram-бота от @BotFather. Пусто — бот выключен
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+# Адрес CRM снаружи: на него Telegram присылает сообщения, он же ставится в уведомления
+PUBLIC_URL = (os.environ.get("PUBLIC_URL")
+              or (f"https://{ALLOWED_HOSTS[0]}" if not DEBUG and ALLOWED_HOSTS else "http://127.0.0.1:8000")).rstrip("/")
 
 if not DEBUG:
     if len(SECRET_KEY) < 32 or SECRET_KEY.startswith(("dev-insecure", "change-me")):

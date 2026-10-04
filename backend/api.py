@@ -11,8 +11,8 @@ from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_http_methods
 
-from . import reports, store
-from .models import Account, Doc
+from . import reports, store, telegram
+from .models import Account, Doc, TgChat
 
 User = get_user_model()
 
@@ -59,7 +59,24 @@ def me(request, access):
         "id": store.user_key(request.user), "name": display_name(request.user), "username": request.user.get_username(),
         "role": access.role, "isOwner": access.is_admin, "canWrite": access.role != Account.Role.PARTNER,
         "linkId": access.link_id, "server": True,
+        "telegram": {"enabled": telegram.enabled(), "bot": telegram.bot_username() if telegram.enabled() else "",
+                     "linked": TgChat.objects.filter(user=request.user).exists()},
     })
+
+
+@require_http_methods(["POST", "DELETE"])
+@api
+def telegram_link(request, access):
+    """Подключение своего Telegram к учётной записи (уведомления) и отключение."""
+    if access.role == Account.Role.PARTNER:
+        raise store.Denied
+    if request.method == "DELETE":
+        telegram.unlink(request.user)
+        return JsonResponse({"linked": False})
+    url = telegram.link_url(request.user)
+    if not url:
+        raise store.Invalid("Telegram-бот не настроен на сервере")
+    return JsonResponse({"url": url})
 
 
 @require_GET
@@ -151,6 +168,8 @@ def _apply_account(user, data, creating):
         user.set_password(password)
     user.save()
     Account.objects.update_or_create(user=user, defaults={"role": role, "link_id": link_id})
+    if not user.is_active or role == Account.Role.PARTNER:
+        telegram.unlink(user)  # отключённому сотруднику и партнёру уведомления о заявках не идут и не вернутся сами
     if role == Account.Role.PARTNER:
         # Партнёру не нужно ждать, пока отчёт «опубликуют»: он появляется вместе с доступом
         reports.refresh(store.lock().rev, only={link_id})

@@ -16,6 +16,8 @@ class State(models.Model):
     rev = models.BigIntegerField(default=0)
     # Меняется, когда меняются учётные записи: клиенты перечитывают базу целиком
     epoch = models.IntegerField(default=1)
+    # Имя Telegram-бота: узнаётся у Telegram при настройке, нужно странице для ссылок
+    bot_username = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         verbose_name = "Состояние базы"
@@ -99,3 +101,25 @@ class LeadLog(models.Model):
 
     def __str__(self):
         return f"{self.created_at:%d.%m.%Y %H:%M} {self.result}"
+
+
+class TgChat(models.Model):
+    """Личный чат с Telegram-ботом: человек, оставляющий заявку, или сотрудник, получающий уведомления."""
+
+    chat_id = models.BigIntegerField(unique=True)
+    username = models.CharField(max_length=64, blank=True)
+    first_name = models.CharField(max_length=100, blank=True)
+    # Шаг разговора о заявке: consent → name → contact → goal → done
+    state = models.CharField(max_length=10, blank=True)
+    data = models.JSONField(default=dict, blank=True)
+    student_id = models.CharField(max_length=64, blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                             related_name="tg_chats")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Чат Telegram"
+        verbose_name_plural = "Чаты Telegram"
+
+    def __str__(self):
+        return f"{self.chat_id} {self.username}".strip()

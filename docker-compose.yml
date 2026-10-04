@@ -24,6 +24,7 @@ services:
       DEBUG: "0"
       ALLOWED_HOSTS: ${DOMAIN}
       CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
+      PUBLIC_URL: https://${DOMAIN}
     depends_on:
       db:
         condition: service_healthy

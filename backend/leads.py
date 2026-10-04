@@ -1,4 +1,4 @@
-"""Приём заявок с сайта (Tilda, Taplink, своя форма): POST /api/leads/ с токеном в заголовке X-Token или ?token=."""
+"""Приём заявок: с сайта (POST /api/leads/ с токеном) и из Telegram-бота (backend/telegram.py)."""
 import hmac
 import json
 import secrets
@@ -14,9 +14,20 @@ from django.views.decorators.http import require_POST
 from . import store
 from .models import Doc, LeadLog
 
+LEADS_PER_MINUTE = 30
+MAX_AUTO_NOTES = 200
+TRUE_WORDS = ("1", "true", "yes", "on", "да", "y")
+SOURCE_NAMES = {"site": "с сайта", "telegram": "из Telegram"}
+
 
 def new_id():
     return secrets.token_urlsafe(15)
+
+
+def stamp():
+    """Время в том же виде, в каком его пишет страница."""
+    moment = timezone.now()
+    return moment.strftime("%Y-%m-%dT%H:%M:%S.") + f"{moment.microsecond // 1000:03d}Z"
 
 
 def _digits(value):
@@ -27,17 +38,30 @@ def _low(value):
     return str(value or "").strip().lower().lstrip("@")
 
 
-def find_duplicate(phone, email, telegram):
-    """Тот же человек по телефону (последние 10 цифр), почте или Telegram. Корзина тоже учитывается."""
+def find_duplicate(phone, email, telegram, tg_id=None):
+    """Тот же человек: (запись, чем совпал) или (None, ""). Корзина тоже учитывается.
+
+    «tg» — совпал сам чат Telegram, это точно тот же человек. «contact» — совпал телефон, почта или
+    имя пользователя, которые человек мог ввести и чужие.
+    """
+    by_contact = None
     for doc in Doc.objects.filter(collection="students"):
         d = doc.data
-        if phone and len(_digits(phone)) >= 6 and _digits(d.get("phone")) == _digits(phone):
-            return doc
-        if email and _low(d.get("email")) == _low(email):
-            return doc
-        if telegram and _low(d.get("telegram")) == _low(telegram):
-            return doc
-    return None
+        if tg_id and d.get("tgId") == tg_id:
+            return doc, "tg"
+        if by_contact is not None:
+            continue
+        if ((phone and len(_digits(phone)) >= 6 and _digits(d.get("phone")) == _digits(phone))
+                or (email and _low(d.get("email")) == _low(email))
+                or (telegram and _low(d.get("telegram")) == _low(telegram))):
+            by_contact = doc
+    return (by_contact, "contact") if by_contact is not None else (None, "")
+
+
+def plain(text, limit=100):
+    """Текст от постороннего человека для уведомления: одной строкой и без ссылок, чтобы его нельзя было выдать за сообщение CRM."""
+    text = " ".join(str(text or "").split())
+    return text.replace("://", " ").replace("www.", " ").replace(".", "․")[:limit]
 
 
 def next_cohort_id():
@@ -66,9 +90,56 @@ def _log(ok, result, student_id=""):
     LeadLog.objects.create(ok=ok, result=result, student_id=student_id)
 
 
-LEADS_PER_MINUTE = 30
-MAX_AUTO_NOTES = 200
-TRUE_WORDS = ("1", "true", "yes", "on", "да", "y")
+def _notify(text):
+    from . import telegram  # позднее подключение: telegram сам пользуется этим модулем
+    telegram.notify_admins(text)
+
+
+def register(*, name="", phone="", email="", telegram="", city="", consent=False, promo="", utm="", campaign="",
+             comment="", source="site", tg_id=None):
+    """Создаёт заявку или, если человек уже есть в базе, добавляет заметку в его карточку.
+
+    Возвращает (id студента, новая ли это заявка, чем совпал дубль). Поиск дубля и запись идут под одной
+    блокировкой, поэтому двойная отправка формы не создаст двоих.
+    """
+    now = stamp()
+    origin = SOURCE_NAMES.get(source, source)
+    with transaction.atomic():
+        store.lock()
+        existing, matched = find_duplicate(phone, email, telegram, tg_id)
+        if existing:
+            # Повторная заявка не плодит дубль: в карточке появляется заметка
+            notes = list(existing.data.get("notes") or [])
+            if len(notes) < MAX_AUTO_NOTES:
+                text = f"Повторная заявка {origin}" + (f": {comment}" if comment else "")
+                notes.append({"id": new_id(), "text": text, "at": now, "by": None, "kind": "step"})
+                store.system_write("students", existing.doc_id, {**existing.data, "notes": notes})
+            _log(True, "duplicate", existing.doc_id)
+            return existing.doc_id, False, matched
+        partner = find_partner(promo, utm)
+        doc_id = new_id()
+        data = {
+            "name": name or phone or email or telegram or "Без имени", "phone": phone, "telegram": telegram,
+            "email": email, "city": city, "consent": bool(consent),
+            "stage": "new", "stageAt": now, "createdAt": now,
+            "history": [{"from": None, "to": "new", "at": now, "by": None}],
+            "cohortId": next_cohort_id(), "mentorId": None, "price": None, "lostReason": "",
+            "partnerId": partner.doc_id if partner else None,
+            "partnerShare": (partner.data.get("share") or 0) if partner else 0,
+            "promo": promo, "utmSource": utm, "utmCampaign": campaign,
+            "jobCompany": "", "jobPosition": "", "jobSalary": None, "offerDate": None, "comment": comment,
+            "next": {"text": "Связаться", "date": timezone.localdate().isoformat()},
+            "payments": [], "apps": [], "notes": [], "source": source,
+        }
+        if tg_id:
+            data["tgId"] = tg_id
+        store.system_write("students", doc_id, data)
+        _log(True, "created", doc_id)
+        label = plain(data["name"]) + (f", {plain(telegram, 40)}" if telegram and telegram != data["name"] else "")
+        text = f"Новая заявка {origin}: {label}" + (f" · {plain(partner.data.get('name'), 60)}" if partner else "")
+        # Уведомление уходит после фиксации записи: сбой Telegram не отменяет заявку
+        transaction.on_commit(lambda: _notify(text))
+    return doc_id, True, ""
 
 
 def token_ok(token):
@@ -125,39 +196,11 @@ def api_lead(request):
         _log(False, "empty")
         return JsonResponse({"error": "empty lead"}, status=400)
 
-    utm, promo = get("utm_source"), get("promo", "promo_code", "promocode")
-    moment = timezone.now()  # в том же виде, в каком время пишет страница
-    now = moment.strftime("%Y-%m-%dT%H:%M:%S.") + f"{moment.microsecond // 1000:03d}Z"
     try:
-        with transaction.atomic():
-            store.lock()  # поиск дубля и запись идут под одной блокировкой: двойная отправка формы не создаст двоих
-            existing = find_duplicate(phone, email, telegram)
-            if existing:
-                # Повторная заявка не плодит дубль: в карточке появляется заметка
-                notes = list(existing.data.get("notes") or [])
-                if len(notes) < MAX_AUTO_NOTES:
-                    notes.append({"id": new_id(), "text": f"Повторная заявка с сайта (utm_source={utm or '—'})",
-                                  "at": now, "by": None, "kind": "step"})
-                    store.system_write("students", existing.doc_id, {**existing.data, "notes": notes})
-                _log(True, "duplicate", existing.doc_id)
-            else:
-                partner = find_partner(promo, utm)
-                doc_id = new_id()
-                store.system_write("students", doc_id, {
-                    "name": name or phone or email or telegram, "phone": phone, "telegram": telegram, "email": email,
-                    "city": get("city"), "consent": get("consent", "agreement").lower() in TRUE_WORDS,
-                    "stage": "new", "stageAt": now, "createdAt": now,
-                    "history": [{"from": None, "to": "new", "at": now, "by": None}],
-                    "cohortId": next_cohort_id(), "mentorId": None, "price": None, "lostReason": "",
-                    "partnerId": partner.doc_id if partner else None,
-                    "partnerShare": (partner.data.get("share") or 0) if partner else 0,
-                    "promo": promo, "utmSource": utm, "utmCampaign": get("utm_campaign"),
-                    "jobCompany": "", "jobPosition": "", "jobSalary": None, "offerDate": None,
-                    "comment": get("comment", "message"),
-                    "next": {"text": "Связаться", "date": timezone.localdate().isoformat()},
-                    "payments": [], "apps": [], "notes": [], "source": "site",
-                })
-                _log(True, "created", doc_id)
+        register(name=name, phone=phone, email=email, telegram=telegram, city=get("city"),
+                 consent=get("consent", "agreement").lower() in TRUE_WORDS,
+                 promo=get("promo", "promo_code", "promocode"), utm=get("utm_source"), campaign=get("utm_campaign"),
+                 comment=get("comment", "message"), source="site")
     except store.Invalid:
         return JsonResponse({"error": "bad lead"}, status=400)
     # Ответ одинаковый для новой и повторной заявки: по нему нельзя узнать, есть ли человек в базе

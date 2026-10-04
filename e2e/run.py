@@ -20,11 +20,15 @@ def check(name, cond, info=""):
 today = datetime.date.today().isoformat(); tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
 
 tmp = tempfile.mkdtemp(prefix="crm-e2e-")
-env = {**os.environ, "DATABASE_URL": f"sqlite:///{tmp}/e2e.sqlite3", "LEAD_WEBHOOK_TOKEN": TOKEN, "CRM_ADMIN_PASSWORD": PASSWORD, "DEBUG": "1"}
+env = {**os.environ, "DATABASE_URL": f"sqlite:///{tmp}/e2e.sqlite3", "LEAD_WEBHOOK_TOKEN": TOKEN, "CRM_ADMIN_PASSWORD": PASSWORD, "DEBUG": "1",
+       "TELEGRAM_BOT_TOKEN": "1:e2e-not-a-real-token", "SECRET_KEY": "e2e-secret-key-not-for-production-0123456789"}
 def manage(*args):
     res = subprocess.run([sys.executable, "manage.py", *args], cwd=ROOT, env=env, capture_output=True, text=True)
     if res.returncode: sys.exit(f"manage.py {' '.join(args)} завершилась с ошибкой:\n{res.stderr[-2000:]}")
 manage("migrate", "-v0"); manage("create_admin", "admin", "--name", "Анна Владелец")
+# Бот «подключён» без обращения к Telegram: имя бота записывается напрямую, сообщения бота уходят в никуда
+manage("shell", "-c", "from backend import store; s = store.state(); s.bot_username = 'menti_e2e_bot'; s.save()")
+TG_SECRET = __import__("hmac").new(env["SECRET_KEY"].encode(), b"telegram-webhook", "sha256").hexdigest()[:48]
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 try:
     opener.open(URL + "login/", timeout=1); sys.exit(f"Порт {PORT} уже занят другим сервером: остановите его или задайте E2E_PORT")
@@ -48,6 +52,11 @@ HTMLAnchorElement.prototype.click = function () { if (!this.download) click.call
 def login(page, username, password=PASSWORD):
     page.goto(URL + "login/"); page.fill("input[name=username]", username); page.fill("input[name=password]", password); page.click("button")
 def shot(page, name, **kw): page.screenshot(path=str(SHOTS / name), **kw)
+def tg(update):
+    req = urllib.request.Request(URL + "api/telegram/", data=json.dumps(update).encode(), headers={"Content-Type": "application/json", "X-Telegram-Bot-Api-Secret-Token": TG_SECRET})
+    return opener.open(req, timeout=60).status
+def tg_say(text, chat=4242):
+    return tg({"update_id": 1, "message": {"message_id": 1, "chat": {"id": chat, "type": "private"}, "from": {"id": chat, "is_bot": False, "first_name": "Глеб", "username": "gleb_tg"}, "text": text}})
 def post(path, data):
     req = urllib.request.Request(URL + path, data=json.dumps(data).encode(), headers={"Content-Type": "application/json", "X-Token": TOKEN})
     return json.loads(opener.open(req, timeout=5).read())
@@ -383,6 +392,29 @@ try:
       check("assigned lead appears for the mentor", got and pg.locator(".panel", has_text="Без ментора").locator("li", has_text="Сайтова Вера").count() == 0)
       mn.click(".nav >> text=Настройки"); mn.click(".panel >> text=Выйти"); mn.wait_for_selector("input[name=password]")
       mn.goto(URL); check("logout ends the session", "/login/" in mn.url, mn.url)
+      # --- Telegram: ссылки партнёров, подключение уведомлений, заявка через бота ---
+      pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(300)
+      tgp = pg.locator(".panel", has_text="Заявки из Telegram")
+      check("telegram panel lists partner links", tgp.locator("li", has_text="https://t.me/menti_e2e_bot?start=BLOG1C").count() == 1 and tgp.locator("li", has_text="Общая ссылка").count() == 1, tgp.inner_text()[:300])
+      tgp.locator("li", has_text="BLOG1C").locator("[data-act=copy]").click(); pg.wait_for_timeout(200)
+      check("partner bot link copied", pg.evaluate("navigator.clipboard.readText()") == "https://t.me/menti_e2e_bot?start=BLOG1C")
+      shot(pg, "s25_telegram_settings.png", full_page=True)
+      pg.click("[data-act=tg-link]"); pg.wait_for_selector("#mform a.btn")
+      href = pg.get_attribute("#mform a.btn", "href")
+      check("staff telegram link offered", href.startswith("https://t.me/menti_e2e_bot?start=link_") and pg.get_attribute("#mform a.btn", "rel") == "noopener", href)
+      pg.keyboard.press("Escape")
+      n_before = pg.evaluate("D().students.length")
+      codes = [tg_say("/start " + href.split("start=")[1], chat=1001), tg_say("/start BLOG1C"),
+               tg({"update_id": 2, "callback_query": {"id": "c", "data": "consent", "from": {"id": 4242, "username": "gleb_tg", "first_name": "Глеб"}, "message": {"message_id": 1, "chat": {"id": 4242, "type": "private"}}}}),
+               tg_say("Ботов Глеб"), tg_say("Хочу в аналитики 1С")]
+      try: pg.wait_for_function("() => D().students.some(s => s.name === 'Ботов Глеб')", timeout=15000)
+      except Exception: pass
+      bot_lead = pg.evaluate("D().students.find(s => s.name === 'Ботов Глеб')")
+      check("lead from telegram bot arrives with partner", codes == [200] * 5 and bool(bot_lead) and bot_lead["telegram"] == "@gleb_tg" and bot_lead["source"] == "telegram" and bot_lead["partnerShare"] == 40 and bot_lead["consent"] is True and bot_lead["comment"] == "Хочу в аналитики 1С" and pg.evaluate("D().students.length") == n_before + 1, (codes, bot_lead))
+      pg.reload(); pg.wait_for_function("() => typeof S !== 'undefined' && S.status === 'ready' && S.loaded.students", timeout=15000)
+      check("staff telegram linked after pressing start", pg.evaluate("S.me.telegram.linked === true"))
+      pg.click(".nav >> text=Сегодня"); pg.wait_for_timeout(300)
+      check("telegram lead shown in no-mentor panel", "заявка из Telegram" in pg.locator(".panel", has_text="Без ментора").locator("li", has_text="Ботов Глеб").inner_text())
       # владелец добавляет себя в команду одной кнопкой
       pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(300)
       check("owner is prompted to join the team", pg.locator("text=Вас нет в команде").count() == 1 and pg.evaluate("!myTeam()"))

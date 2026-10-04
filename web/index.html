@@ -387,6 +387,7 @@ td.mxc { padding: 4px 2px; text-align: center; }
 .ev-more { font-size: 11.5px; color: var(--muted); padding-left: 5px; }
 .rows .evt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; min-width: 44px; }
 a.btn { text-decoration: none; }
+.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 13px; }
 .side-foot .link { color: var(--side-ink); margin-left: auto; }
 .th-sort { all: unset; cursor: pointer; display: inline-flex; gap: 4px; align-items: center; }
 .th-sort:hover, .th-sort.on { color: var(--text); }
@@ -789,7 +790,7 @@ function todayView() {
   <div class="today">
     <div class="stack">
       ${orphans.length ? panel("Без ментора", orphans.length, `<ul class="rows">${orphans.slice(0, 8).map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
-          <span class="who"><strong>${esc(s.name)}</strong><span>${s.source === "site" ? "заявка с сайта · " : ""}${fShort(isoDay(s.createdAt))}${partnerById(s.partnerId) ? " · " + esc(partnerById(s.partnerId).name) : ""}</span></span>
+          <span class="who"><strong>${esc(s.name)}</strong><span>${s.source === "site" ? "заявка с сайта · " : s.source === "telegram" ? "заявка из Telegram · " : ""}${fShort(isoDay(s.createdAt))}${partnerById(s.partnerId) ? " · " + esc(partnerById(s.partnerId).name) : ""}</span></span>
           ${badge(s.stage)}<button class="btn small" data-act="assign" data-id="${esc(s.id)}">Назначить ментора</button></li>`).join("")}
           ${orphans.length > 8 ? `<li><button class="link" data-act="list-nomentor">Показать всех: ${orphans.length}</button></li>` : ""}</ul>
           ${S.server && S.isOwner && !myTeam() ? `<p class="hint pad">Чтобы ваши заявки сразу были закреплены за вами, <button class="link" data-act="nav" data-v="settings">добавьте себя в команду</button> в настройках.</p>` : ""}`) : ""}
@@ -1126,7 +1127,7 @@ function drawerHTML(s) {
   const result = s.jobCompany ? `${esc(s.jobCompany)}${s.jobPosition ? ", " + esc(s.jobPosition) : ""}${s.jobSalary ? " · " + money(s.jobSalary) : ""}${s.offerDate ? " · " + fDate(s.offerDate) : ""}` : "";
   return `<div class="scrim" data-act="d-close"></div>
   <aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(s.name)}">
-    <header class="d-head"><h2>${esc(s.name)}${s.demo ? ` <span class="tag">пример</span>` : ""}${s.source === "site" ? ` <span class="tag">с сайта</span>` : ""}</h2>
+    <header class="d-head"><h2>${esc(s.name)}${s.demo ? ` <span class="tag">пример</span>` : ""}${s.source === "site" ? ` <span class="tag">с сайта</span>` : s.source === "telegram" ? ` <span class="tag">из Telegram</span>` : ""}</h2>
       <button class="btn small" data-act="student-edit" data-id="${esc(s.id)}">Изменить</button>
       <button class="x" id="d-x" data-act="d-close" aria-label="Закрыть">×</button></header>
     <div class="d-body" id="d-body">
@@ -1201,8 +1202,9 @@ function partnerView() {
   const repNote = S.server ? (acc ? `У партнёра есть вход (${esc(acc.username)}): он видит эти цифры без контактов студентов.` : "У партнёра пока нет входа в CRM.")
     : rep ? `Отчёт для партнёра обновлён ${fDT(rep.updatedAt)}.` : "Отчёт для партнёра ещё не публиковался.";
   const sub = `Доля ${esc(p.share ?? 0)}% от фактических оплат${p.promo ? ` · промокод ${esc(p.promo)}` : ""}${p.utm ? ` · utm_source ${esc(p.utm)}` : ""}. ${repNote}`;
+  const botLink = tgBot() && TG_PROMO.test(p.promo || "") ? `<button class="btn" data-act="copy" data-text="${esc(tgLink(p.promo))}" title="${esc(tgLink(p.promo))}">Ссылка на бота</button>` : "";
   return headHTML(esc(p.name), `<button class="back" data-act="nav" data-v="partners">← Партнёры</button>`,
-    `<button class="btn" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button>${S.server ? (acc ? "" : `<button class="btn primary" data-act="account-new" data-partner="${esc(p.id)}">Выдать партнёру доступ</button>`) : `<button class="btn primary" data-act="report-publish" data-id="${esc(p.id)}">${rep ? "Обновить отчёт сейчас" : "Опубликовать отчёт для партнёра"}</button>`}`, sub) + `
+    `${botLink}<button class="btn" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button>${S.server ? (acc ? "" : `<button class="btn primary" data-act="account-new" data-partner="${esc(p.id)}">Выдать партнёру доступ</button>`) : `<button class="btn primary" data-act="report-publish" data-id="${esc(p.id)}">${rep ? "Обновить отчёт сейчас" : "Опубликовать отчёт для партнёра"}</button>`}`, sub) + `
   ${kpisPartner(st)}
   <div class="grid-2">
     ${panel("Воронка по трафику партнёра", "", `<div class="pad">${funnelHTML(st.funnel)}</div>`)}
@@ -1235,10 +1237,34 @@ function reportView() {
 }
 
 // ----- Настройки -----
+// Ссылка на бота с промокодом партнёра: по ней заявка сразу привязывается к нему
+const TG_PROMO = /^[A-Za-z0-9_-]{1,64}$/;
+const tgBot = () => (S.me?.telegram?.enabled && S.me.telegram.bot) || "";
+const tgLink = promo => `https://t.me/${tgBot()}${promo ? "?start=" + promo : ""}`;
+function tgRow() {
+  const tg = S.me?.telegram;
+  if (!tg || !tg.enabled || !tg.bot) return "";
+  return `<li><span class="who"><strong>Уведомления в Telegram</strong><span>${tg.linked ? "Подключены: " + (S.isOwner ? "новые заявки" : "студенты, которых закрепили за вами") : "Не подключены"}</span></span>
+    <span class="acts">${tg.linked ? `<button class="btn small ghost" data-act="tg-unlink">Отключить</button>` : `<button class="btn small" data-act="tg-link">Подключить</button>`}</span></li>`;
+}
+function tgPanel() {
+  const tg = S.me?.telegram || {};
+  if (!tg.enabled || !tg.bot) return panel("Заявки из Telegram", "", `<div class="pad"><p class="muted" style="margin-bottom:8px">Бот принимает заявки вместо личных сообщений: человек переходит по ссылке от блогера, отвечает на два вопроса, и заявка появляется здесь с привязкой к партнёру.</p>
+    <ol class="steps"><li>В Telegram напишите @BotFather команду /newbot и получите токен бота.</li><li>На сервере впишите его в файл .env в строку TELEGRAM_BOT_TOKEN.</li><li>Перезапустите CRM командой docker compose up -d.</li></ol>
+    <p class="hint" style="margin-top:8px">${tg.enabled ? "Токен задан, но Telegram его не принял или сервер ещё не перезапущен." : "Сейчас бот не подключён."}</p></div>`);
+  const row = (title, sub, url) => `<li><span class="who"><strong>${esc(title)}</strong><span>${esc(sub)}</span></span><span class="acts"><button class="btn small" data-act="copy" data-text="${esc(url)}">Скопировать ссылку</button></span></li>`;
+  const partners = D().partners.filter(p => p.active !== false);
+  return panel("Заявки из Telegram", "", `<ul class="rows">
+    ${row("Общая ссылка", tgLink(""), tgLink(""))}
+    ${partners.map(p => TG_PROMO.test(p.promo || "") ? row(p.name, tgLink(p.promo), tgLink(p.promo))
+      : `<li><span class="who"><strong>${esc(p.name)}</strong><span class="warn-text">${p.promo ? "Промокод для ссылки должен состоять из латинских букв, цифр, «-» и «_»" : "Задайте партнёру промокод, чтобы получить его ссылку"}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}
+    </ul><p class="hint pad">Блогер ставит свою ссылку под видео вместо вашего личного аккаунта. Бот @${esc(tg.bot)} спрашивает согласие, имя и цель, и заявка попадает в блок «Без ментора» на экране «Сегодня».</p>`);
+}
 function accountPanel() {
   const me = S.me || {}, link = myTeam();
   return panel("Учётная запись", "", `<ul class="rows"><li><span class="who"><strong>${esc(me.name || me.username)}</strong><span>${esc(ROLEL[me.role] || "")}${link ? " · в команде: " + esc(link.name) : ""}</span></span>
     <span class="acts"><a class="btn small" href="${esc(SRV.passwordUrl)}">Сменить пароль</a><button class="btn small ghost" data-act="logout">Выйти</button></span></li>
+    ${tgRow()}
     ${S.isOwner && !link ? `<li><span class="who"><strong class="warn-text">Вас нет в команде</strong><span>Без этого нет фильтра «Мои студенты», и вас нельзя назначить ментором</span></span><button class="btn small" data-act="self-team">Добавить себя в команду</button></li>` : ""}</ul>`);
 }
 function accessPanel() {
@@ -1259,6 +1285,7 @@ function settingsView() {
   return headHTML("Настройки") + `<div class="grid-2">
   ${panel("Команда", "", (D().team.length ? `<ul class="rows">${D().team.map(m => `<li><span class="who"><strong>${esc(m.name)}</strong></span>${m.userId && m.userId === S.myId ? `<span class="tag ok">это вы</span>` : ""}${S.myId && m.userId !== S.myId && !S.server ? `<button class="btn small ghost" data-act="team-me" data-id="${esc(m.id)}">Это я</button>` : ""}<button class="btn small ghost" data-act="team-edit" data-id="${esc(m.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Добавьте себя и менторов</p>`) + `<p class="hint pad">${S.server ? "Чтобы ментор мог входить в CRM, добавьте его сюда, а затем выдайте доступ в разделе «Доступ»." : "Нажмите «Это я» у своего имени: в фильтрах появится «Мои студенты», а ваши заметки будут подписаны."}</p>`, `<button class="btn small" data-act="team-new">+ Ментор</button>`)}
   ${panel("Партнёры", "", D().partners.length ? `<ul class="rows">${D().partners.map(p => `<li><span class="who"><strong>${esc(p.name)}</strong><span>${esc(p.share ?? 0)}%${p.promo ? " · " + esc(p.promo) : ""}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Партнёров нет</p>`, `<button class="btn small" data-act="partner-new">+ Партнёр</button>`)}
+  ${S.server ? tgPanel() : ""}
   ${S.server ? accessPanel() : panel("Доступ", "", `<ul class="rows">
       <li><span><strong>Менторам:</strong> откройте «Поделиться» и пригласите их по email с правами редактора. Они смогут вносить изменения.</span></li>
       <li><span><strong>Блогеру:</strong> пригласите его по email с правами просмотра. Он увидит только опубликованный отчёт без контактов студентов.</span></li>
@@ -2111,6 +2138,19 @@ const ACT = {
   password: () => { if (SRV) location.href = SRV.passwordUrl; },
   "self-team": () => selfTeam(),
   logout: () => SRV && SRV.logout(),
+  "tg-link": async () => {
+    let url;
+    try { url = (await SRV.telegram.link()).url; } catch (e) { return toast(e?.message || "Не удалось получить ссылку. Попробуйте ещё раз"); }
+    openModal({
+      title: "Уведомления в Telegram", submit: "Готово", cancel: "Закрыть", fields: [],
+      extra: `<p>Откройте бота и нажмите «Старт» (Start). Ссылка одноразовая и действует 15 минут.</p><p style="margin-top:10px"><a class="btn primary" href="${esc(url)}" target="_blank" rel="noopener">Открыть бота</a></p><p class="hint" style="margin-top:10px">После этого нажмите «Готово»: страница обновится и покажет, что уведомления подключены.</p>`,
+      onSubmit: () => { location.reload(); return false; },
+    });
+  },
+  "tg-unlink": async () => {
+    try { await SRV.telegram.unlink(); } catch (e) { return toast("Не удалось отключить. Попробуйте ещё раз"); }
+    location.reload();
+  },
   "account-new": d => accountForm(null, d.partner ? { partnerId: d.partner } : {}),
   "account-edit": d => { const a = S.accounts.find(x => String(x.id) === d.id); if (a) accountForm(a); },
   "trash-purge": (d, el) => { if (el.dataset.armed) return purgeStudent(d.id); el.dataset.armed = "1"; el.textContent = "Точно удалить?"; },

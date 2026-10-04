@@ -557,6 +557,262 @@ class LeadTests(BaseCase):
         self.assertEqual(self.client.post("/api/leads/?token=secret-token-0123456789", {}).status_code, 400)
 
 
+class mock_limits:
+    """Временно уменьшает общий предел заявок через бота."""
+
+    def __init__(self, module, per_minute):
+        self.module, self.value = module, per_minute
+
+    def __enter__(self):
+        self.old = self.module.LEADS_PER_MINUTE
+        self.module.LEADS_PER_MINUTE = self.value
+
+    def __exit__(self, *exc):
+        self.module.LEADS_PER_MINUTE = self.old
+
+
+@override_settings(TELEGRAM_BOT_TOKEN="123456:test-token", PUBLIC_URL="https://crm.example.test")
+class TelegramTests(BaseCase):
+    SECRET = None
+
+    def setUp(self):
+        from unittest import mock
+        from backend import telegram
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.sent = []
+        patcher = mock.patch.object(telegram, "call", side_effect=lambda method, **kw: self.sent.append((method, kw)) or {"ok": True})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.secret = telegram.webhook_secret()
+        st = store.state()
+        st.bot_username = "menti_bot"
+        st.save()
+
+    def hook(self, update, secret=None):
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post("/api/telegram/", data=json.dumps(update), content_type="application/json",
+                                    headers={"X-Telegram-Bot-Api-Secret-Token": self.secret if secret is None else secret})
+
+    def say(self, text, chat=555, username="vera_s", **extra):
+        sender = {"id": chat, "is_bot": False, "first_name": "Вера"}
+        if username:
+            sender["username"] = username
+        return self.hook({"update_id": 1, "message": {"message_id": 1, "chat": {"id": chat, "type": "private"},
+                                                      "from": sender, "text": text, **extra}})
+
+    def press(self, chat=555, username="vera_s"):
+        return self.hook({"update_id": 2, "callback_query": {
+            "id": "cb1", "data": "consent", "from": {"id": chat, "username": username, "first_name": "Вера"},
+            "message": {"message_id": 1, "chat": {"id": chat, "type": "private"}}}})
+
+    def texts(self, chat=555):
+        return [kw["text"] for method, kw in self.sent if method == "sendMessage" and kw["chat_id"] == chat]
+
+    def lead(self):
+        return Doc.objects.filter(collection="students", data__source="telegram").order_by("-rev").first()
+
+    def test_rejects_wrong_secret_and_is_off_without_token(self):
+        self.assertEqual(self.hook({"message": {}}, secret="wrong").status_code, 403)
+        self.assertEqual(self.hook({"message": {}}, secret="").status_code, 403)
+        with override_settings(TELEGRAM_BOT_TOKEN=""):
+            self.assertEqual(self.hook({"message": {}}).status_code, 404)
+
+    def test_full_lead_dialog_with_partner_link(self):
+        from backend.models import TgChat
+        TgChat.objects.create(chat_id=900, user=self.admin)       # администратор подключил уведомления
+        TgChat.objects.create(chat_id=901, user=self.mentor)
+        self.say("/start BLOG")
+        self.assertIn("соглашаетесь", self.texts()[-1])
+        self.assertFalse(self.lead())
+        self.say("Вера Сайтова")                                   # без согласия дальше не идём
+        self.assertIn("нажмите кнопку", self.texts()[-1])
+        self.press()
+        self.assertIn("Как к вам обращаться", self.texts()[-1])
+        self.say("Сайтова Вера")
+        self.assertIn("опыт", self.texts()[-1])
+        self.say("Работаю бухгалтером, хочу в аналитики")
+        data = self.lead().data
+        self.assertEqual((data["name"], data["telegram"], data["partnerId"], data["partnerShare"], data["consent"]),
+                         ("Сайтова Вера", "@vera_s", "p1", 40, True))
+        self.assertEqual((data["comment"], data["stage"], data["tgId"], data["mentorId"], data["cohortId"]),
+                         ("Работаю бухгалтером, хочу в аналитики", "new", 555, None, "c1"))
+        self.assertEqual(data["next"]["text"], "Связаться")
+        self.assertIn("Спасибо", self.texts()[-1])
+        note = self.texts(900)[-1]
+        self.assertIn("Новая заявка из Telegram: Сайтова Вера, @vera_s · Блог", note)
+        self.assertIn("https://crm.example.test/", note)
+        self.assertEqual(self.texts(901), [])                      # ментору о ничьей заявке не пишем
+        # человек пишет ещё раз: дубль не создаётся, сообщение попадает заметкой
+        count = Doc.objects.filter(collection="students").count()
+        self.say("/start OTHER")
+        self.assertIn("уже у нас", self.texts()[-1])
+        self.say("Забыла сказать: могу только по вечерам")
+        self.assertEqual(Doc.objects.filter(collection="students").count(), count)
+        self.assertIn("Сообщение в боте: Забыла сказать", self.lead().data["notes"][-1]["text"])
+
+    def test_without_username_bot_asks_for_phone(self):
+        self.say("/start", username=None)
+        self.press(username=None)
+        self.say("Пётр Безников", username=None)
+        self.assertIn("Оставьте телефон", self.texts()[-1])
+        self.say("нет", username=None)
+        self.assertIn("Оставьте телефон", self.texts()[-1])
+        # чужой контакт, пересланный в чат, не принимается
+        self.say("", username=None, contact={"phone_number": "+79990001122", "user_id": 777})
+        self.assertIn("Оставьте телефон", self.texts()[-1])
+        self.say("", username=None, contact={"phone_number": "+79990001122", "user_id": 555})
+        self.say("Хочу сменить профессию", username=None)
+        data = self.lead().data
+        self.assertEqual((data["name"], data["phone"], data["telegram"], data["partnerId"]), ("Пётр Безников", "+79990001122", "", None))
+
+    def test_existing_student_is_not_duplicated(self):
+        store.system_write("students", "s7", student("t1", telegram="@Vera_S"))
+        count = Doc.objects.filter(collection="students").count()
+        self.say("/start BLOG"); self.press(); self.say("Вера"); self.say("Вернулась")
+        self.assertEqual(Doc.objects.filter(collection="students").count(), count)
+        self.assertIn("Повторная заявка из Telegram: Вернулась", Doc.objects.get(doc_id="s7").data["notes"][-1]["text"])
+
+    def test_ignores_groups_bots_junk_and_floods(self):
+        from backend import telegram
+        from backend.models import TgChat
+        self.hook({"message": {"chat": {"id": -100, "type": "group"}, "from": {"id": 1}, "text": "/start"}})
+        self.hook({"message": {"chat": {"id": 5, "type": "private"}, "from": {"id": 5, "is_bot": True}, "text": "/start"}})
+        for junk in ([], "x", {"message": "x"}, {"message": {"chat": "x"}}, {"callback_query": {"id": 1}},
+                     {"message": {"chat": {"id": "5", "type": "private"}, "from": {}, "text": "/start"}}):
+            self.assertEqual(self.hook(junk).status_code, 200)
+        self.assertEqual(TgChat.objects.count(), 0)
+        self.assertEqual(self.client.post("/api/telegram/", data="{не json", content_type="application/json",
+                                          headers={"X-Telegram-Bot-Api-Secret-Token": self.secret}).status_code, 200)
+        for _ in range(telegram.MESSAGES_PER_MINUTE + 5):
+            self.say("/start")
+        self.assertEqual(len(self.texts()), telegram.MESSAGES_PER_MINUTE)
+        self.say("/start <b>x</b> ../../etc", chat=556)           # неподходящий промокод отбрасывается
+        self.assertEqual(TgChat.objects.get(chat_id=556).data, {"promo": ""})
+
+    def test_staff_links_telegram_and_gets_assignment_notice(self):
+        from backend.models import TgChat
+        self.login("blogger")
+        self.assertEqual(self.client.post("/api/telegram/link/").status_code, 403)
+        self.login("mentor")
+        me = self.client.get("/api/me/").json()["telegram"]
+        self.assertEqual(me, {"enabled": True, "bot": "menti_bot", "linked": False})
+        url = self.client.post("/api/telegram/link/").json()["url"]
+        self.assertTrue(url.startswith("https://t.me/menti_bot?start=link_"))
+        code = url.split("start=")[1]
+        self.say("/start link_wrong", chat=700)
+        self.assertIn("устарела", self.texts(700)[-1])
+        self.say("/start " + code, chat=700)
+        self.assertIn("Уведомления CRM", self.texts(700)[-1])
+        self.assertEqual(TgChat.objects.get(chat_id=700).user, self.mentor)
+        self.say("/start " + code, chat=701)                       # ссылка одноразовая
+        self.assertIn("устарела", self.texts(701)[-1])
+        self.assertTrue(self.client.get("/api/me/").json()["telegram"]["linked"])
+        self.say("привет", chat=700)                               # сотрудник не становится заявкой
+        self.assertFalse(self.lead())
+        # администратор закрепляет студента за ментором: ментору приходит сообщение
+        self.login("admin")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.send("patch", "students", "s2", {"mentorId": "t1"})
+        self.assertIn("За вами закреплён студент: Чужой Студент", self.texts(700)[-1])
+        # сам себе ментор уведомление не шлёт
+        before = len(self.texts(700))
+        self.login("mentor")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.send("put", "students", "own1", student("t1"))
+        self.assertEqual(len(self.texts(700)), before)
+        self.assertEqual(self.client.delete("/api/telegram/link/").json(), {"linked": False})
+        self.assertIsNone(TgChat.objects.get(chat_id=700).user)
+
+    def test_stranger_cannot_write_into_someone_elses_card(self):
+        from backend.models import TgChat
+        store.system_write("students", "s8", student("t1", name="Жертва Анна", phone="+7 999 000-11-22"))
+        self.say("/start", username=None); self.press(username=None); self.say("Посторонний", username=None)
+        self.say("8 999 000 11 22", username=None)                 # чужой номер, набранный текстом
+        self.say("оплатил, реквизиты новые", username=None)
+        notes = Doc.objects.get(doc_id="s8").data["notes"]
+        self.assertEqual(len(notes), 1)                             # одна пометка о повторной заявке
+        self.assertEqual(TgChat.objects.get(chat_id=555).student_id, "")
+        self.assertNotIn("tgId", Doc.objects.get(doc_id="s8").data)
+        for text in ("ещё сообщение", "и ещё", "/start"):
+            self.say(text, username=None)
+        self.assertEqual(len(Doc.objects.get(doc_id="s8").data["notes"]), 1)   # дальше в чужую карточку ничего не пишется
+        self.assertIn("уже у ментора", self.texts()[-1])
+
+    def test_global_lead_cap_and_start_parsing(self):
+        from backend import telegram
+        from backend.models import TgChat
+        with mock_limits(telegram, 2):
+            for chat in (601, 602, 603):
+                self.say("/start", chat=chat, username=f"user{chat}"); self.press(chat=chat, username=f"user{chat}")
+                self.say("Имя Фамилия", chat=chat, username=f"user{chat}"); self.say("цель", chat=chat, username=f"user{chat}")
+        self.assertEqual(Doc.objects.filter(collection="students", data__source="telegram").count(), 2)
+        self.assertIn("много заявок", self.texts(603)[-1])
+        self.assertEqual(TgChat.objects.get(chat_id=603).state, "goal")       # человек сможет повторить позже
+        self.say("/startBLOG", chat=610)                                         # не команда /start: промокод из неё не берётся
+        self.say("/start@menti_bot BLOG", chat=611)
+        self.assertEqual(TgChat.objects.get(chat_id=611).data, {"promo": "BLOG"})
+        self.assertEqual(TgChat.objects.get(chat_id=610).data, {"promo": ""})
+
+    def test_deactivated_or_partner_account_loses_telegram_link(self):
+        from backend.models import TgChat
+        TgChat.objects.create(chat_id=701, user=self.mentor)
+        self.login("admin")
+        self.client.patch(f"/api/accounts/{self.mentor.pk}/", data=json.dumps({"active": False}), content_type="application/json")
+        self.assertIsNone(TgChat.objects.get(chat_id=701).user)
+        self.client.patch(f"/api/accounts/{self.mentor.pk}/", data=json.dumps({"active": True}), content_type="application/json")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.send("patch", "students", "s2", {"mentorId": "t1"})
+        self.assertEqual(self.texts(701), [])                                    # после возврата доступа уведомления сами не вернулись
+
+    def test_purged_student_chat_is_forgotten(self):
+        from backend.models import TgChat
+        self.say("/start"); self.press(); self.say("Вера Сайтова"); self.say("цель")
+        lead = self.lead()
+        self.assertTrue(TgChat.objects.filter(student_id=lead.doc_id).exists())
+        store.delete(store.Access(self.admin), "students", lead.doc_id)
+        self.assertFalse(TgChat.objects.filter(chat_id=555).exists())
+
+    def test_notification_text_cannot_carry_links(self):
+        from backend.models import TgChat
+        TgChat.objects.create(chat_id=900, user=self.admin)
+        self.say("/start"); self.press(); self.say("Сессия истекла\nвойдите на https://evil.example/login"); self.say("цель")
+        note = self.texts(900)[-1]
+        self.assertNotIn("evil.example", note)
+        self.assertNotIn("https://evil", note)
+        self.assertEqual(note.count("\n"), 1)                                   # единственный перенос — перед адресом CRM
+
+    def test_site_lead_notifies_admins(self):
+        from backend.models import TgChat
+        TgChat.objects.create(chat_id=900, user=self.admin)
+        with override_settings(LEAD_WEBHOOK_TOKEN="secret-token-0123456789"), self.captureOnCommitCallbacks(execute=True):
+            self.client.post("/api/leads/?token=secret-token-0123456789", {"name": "Мария Соколова", "phone": "+7 900 111-22-33"})
+        self.assertIn("Новая заявка с сайта: Мария Соколова", self.texts(900)[-1])
+        self.assertNotIn("+7 900", self.texts(900)[-1])            # телефон в Telegram не уходит
+
+    def test_telegram_failure_does_not_break_writes(self):
+        from unittest import mock
+        from backend import telegram
+        from backend.models import TgChat
+        TgChat.objects.create(chat_id=900, user=self.admin)
+        with mock.patch.object(telegram, "send", side_effect=OSError("сеть")), self.assertLogs("backend.telegram", level="ERROR"):
+            res = self.say("/start")
+        self.assertEqual(res.status_code, 200)
+
+    def test_unreachable_telegram_is_not_retried_for_a_while(self):
+        from unittest import mock
+        import urllib.error
+        from backend import telegram
+        self.addCleanup(cache.clear)
+        mock.patch.stopall()                                                     # здесь нужен настоящий call
+        with mock.patch("urllib.request.urlopen", side_effect=urllib.error.URLError("нет сети")) as opened, \
+                self.assertLogs("backend.telegram", level="WARNING"):
+            self.assertIsNone(telegram.call("getMe"))
+            self.assertIsNone(telegram.call("getMe"))
+            self.assertIsNone(telegram.send(1, "x"))
+        self.assertEqual(opened.call_count, 1)                                   # после сбоя минуту не стучимся
+
+
 def sample_backup():
     return {
         "format": "crm-menti-backup", "version": 4, "exportedAt": "2026-10-02T20:00:00.000Z",

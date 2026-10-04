@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
-from . import api, leads, views
+from . import api, leads, telegram, views
 
 urlpatterns = [
     path("", views.app, name="home"),
@@ -17,4 +17,6 @@ urlpatterns = [
     path("api/accounts/", api.accounts),
     path("api/accounts/<int:pk>/", api.account),
     path("api/leads/", leads.api_lead, name="api_lead"),
+    path("api/telegram/", telegram.webhook),
+    path("api/telegram/link/", api.telegram_link),
 ]
