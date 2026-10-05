@@ -659,9 +659,22 @@ function metrics(list) {
     revMonth: sum(paid.filter(p => p.paid >= month), p => p.amount), revTotal: sum(paid, p => p.amount),
     stuck: sortBy(list.filter(isStuck), s => s.stageAt).slice(0, 12),
     lost: lost.length, reasons: Object.entries(reasons).sort((a, b) => b[1] - a[1]),
-    funnel: funnel(list),
+    funnel: funnel(list), ...firstContact(list),
   };
 }
+// Время от заявки до первого перехода с этапа «Новая заявка»: медиана, чтобы одна забытая заявка не искажала картину
+function firstContact(list) {
+  const hours = [];
+  for (const s of list) {
+    const h = (Array.isArray(s.history) ? s.history : []).find(x => x && x.from === "new" && x.to !== "new" && x.to !== "lost");
+    const d = h && s.createdAt ? (new Date(h.at) - new Date(s.createdAt)) / 36e5 : NaN;
+    if (isFinite(d) && d >= 0) hours.push(d);
+  }
+  hours.sort((a, b) => a - b);
+  const n = hours.length, mid = n ? (n % 2 ? hours[(n - 1) / 2] : (hours[n / 2 - 1] + hours[n / 2]) / 2) : null;
+  return { fcHours: mid, fcCount: n };
+}
+const hoursText = h => h < 1 ? "меньше часа" : h < 48 ? `${Math.round(h)} ч` : days(Math.round(h / 24));
 // Что требует внимания: шаги, платежи, студенты без шага
 function agenda(list) {
   const t = today(), in3 = daysAhead(3), in7 = daysAhead(7);
@@ -961,7 +974,7 @@ function todayView() {
     <div class="stack">
       ${orphans.length ? panel("Без ментора", orphans.length, `<ul class="rows">${orphans.slice(0, 8).map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
           <span class="who"><strong>${esc(s.name)}</strong><span>${s.source === "site" ? "заявка с сайта · " : s.source === "telegram" ? "заявка из Telegram · " : ""}${fShort(isoDay(s.createdAt))}${partnerById(s.partnerId) ? " · " + esc(partnerById(s.partnerId).name) : ""}</span>${s.comment ? `<span>${esc(s.comment)}</span>` : ""}</span>
-          ${badge(s.stage)}<span class="acts">${tgUser(s) ? `<a class="btn small ghost" data-stop href="https://t.me/${esc(tgUser(s))}" target="_blank" rel="noopener">Написать</a>` : ""}${myTeam() || (S.server && S.isOwner) ? `<button class="btn small primary" data-act="take" data-id="${esc(s.id)}">Взять себе</button>` : ""}<button class="btn small" data-act="assign" data-id="${esc(s.id)}">${myTeam() || (S.server && S.isOwner) ? "Назначить" : "Назначить ментора"}</button></span></li>`).join("")}
+          ${badge(s.stage)}${waitHours(s) !== null ? `<span class="when${waitHours(s) >= 1 ? " late" : ""}">${waitLabel(waitHours(s))}</span>` : ""}<span class="acts">${tgUser(s) ? `<a class="btn small ghost" data-stop href="https://t.me/${esc(tgUser(s))}" target="_blank" rel="noopener">Написать</a>` : ""}${myTeam() || (S.server && S.isOwner) ? `<button class="btn small primary" data-act="take" data-id="${esc(s.id)}">Взять себе</button>` : ""}<button class="btn small" data-act="assign" data-id="${esc(s.id)}">${myTeam() || (S.server && S.isOwner) ? "Назначить" : "Назначить ментора"}</button></span></li>`).join("")}
           ${orphans.length > 8 ? `<li><button class="link" data-act="list-nomentor">Показать всех: ${orphans.length}</button></li>` : ""}</ul>
           ${S.server && S.isOwner && !myTeam() ? `<p class="hint pad">Чтобы ваши заявки сразу были закреплены за вами, <button class="link" data-act="nav" data-v="settings">добавьте себя в команду</button> в настройках.</p>` : ""}`) : ""}
       ${panel("Сделать", ag.due.length || "", dueBody)}
@@ -1111,6 +1124,7 @@ function analyticsView() {
   return head + `
   <section class="kpis">
     <div class="kpi"><span class="kpi-label">Всего заявок</span><span class="kpi-value">${m.total}</span></div>
+    <div class="kpi"><span class="kpi-label">До первого контакта</span><span class="kpi-value">${m.fcHours === null ? "—" : hoursText(m.fcHours)}</span><span class="kpi-sub">${m.fcCount ? `медиана по ${m.fcCount} заявкам` : "пока нет данных"}</span></div>
     <div class="kpi"><span class="kpi-label">Оплатили</span><span class="kpi-value">${m.paidStudents}</span><span class="kpi-sub">${m.conv}% от заявок</span></div>
     <div class="kpi"><span class="kpi-label">Учатся сейчас</span><span class="kpi-value">${m.studying}</span><span class="kpi-sub">в поиске работы: ${m.jobSearch}</span></div>
     <div class="kpi"><span class="kpi-label">Трудоустроены</span><span class="kpi-value">${m.employed}</span><span class="kpi-sub">${m.rate}% из вышедших на поиск (${m.graduates})</span></div>
@@ -1329,6 +1343,18 @@ const NEXT_STEP = {
 };
 const tgUser = s => { const u = s.telegram ? String(s.telegram).replace(/^@/, "") : ""; return /^[A-Za-z0-9_]{3,}$/.test(u) ? u : ""; };
 const firstUnpaid = s => sortBy((s.payments || []).filter(x => !x.paid), x => x.due || "")[0] || null;
+// Переход на следующий этап, которому нужны данные (дата созвона, стоимость, оффер), всегда идёт через форму:
+// на доске и в списке этапов так же, как по кнопке «Дальше»
+const ASK_ON = ["call", "waiting_payment", "studying", "offer"];
+function requestMove(s, to) {
+  if (!s || to === s.stage) return;
+  if (to === "lost") return lostForm(s);
+  if (to === nextStage(s) && ASK_ON.includes(to) && !S.readOnly) return advanceForm(s);
+  return moveStage(s.id, to).then(ok => { if (!ok) scheduleRender(); });
+}
+// Сколько новая заявка ждёт первого ответа
+const waitHours = s => { if (s.stage !== "new" || !s.createdAt) return null; const h = Math.floor((Date.now() - new Date(s.createdAt)) / 36e5); return isFinite(h) ? Math.max(h, 0) : null; };
+const waitLabel = h => h < 1 ? "только что" : h < 24 ? `ждёт ${h} ч` : `ждёт ${days(Math.floor(h / 24))}`;
 function pathHTML(s) {
   const i = PATH.indexOf(s.stage); if (i < 0) return "";
   const g = SGROUP[s.stage], leg = (k, l) => `<span class="pl-${k}${g === k ? " on" : ""}">${l}</span>`;
@@ -2688,7 +2714,8 @@ document.addEventListener("change", e => {
   if (MODAL?.onInput && el.closest("#mform")) MODAL.onInput();
   if (el.dataset.move) {
     const s = stu(el.dataset.move), to = el.value; if (!s || to === s.stage) return;
-    if (to === "lost") { el.value = s.stage; lostForm(s); } else moveStage(s.id, to).then(ok => { if (!ok) scheduleRender(); });
+    el.value = s.stage; // выбранный этап появится после сохранения: форму перехода можно отменить
+    requestMove(s, to);
   }
 });
 let qT;
@@ -2729,8 +2756,7 @@ document.addEventListener("dragover", e => { const c = e.target.closest?.(".col"
 document.addEventListener("drop", e => {
   const c = e.target.closest?.(".col"); if (!c || !S.drag) return; e.preventDefault();
   const id = S.drag; S.drag = null; c.classList.remove("drop");
-  if (c.dataset.stage === "lost") return lostForm(stu(id));
-  moveStage(id, c.dataset.stage);
+  requestMove(stu(id), c.dataset.stage);
 });
 
 // ---------- Запуск ----------

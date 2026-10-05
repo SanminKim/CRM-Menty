@@ -121,6 +121,10 @@ try:
       tile.drag_to(pg.locator(".col[data-stage=call] .col-body")); pg.wait_for_timeout(300)
       check("drag moves stage", store()["students/" + tid]["stage"] == "call")
       pg.click("#toast button"); pg.wait_for_timeout(300)
+      nb = pg.locator(".col[data-stage=contacted] .tile").first; nbid = nb.get_attribute("data-id")
+      nb.drag_to(pg.locator(".col[data-stage=call] .col-body")); pg.wait_for_selector("#mform")
+      check("dragging to the next stage asks what that stage needs", pg.locator("#m-mdate").count() == 1 and store()["students/" + nbid]["stage"] == "contacted")
+      pg.click("[data-act=m-close]"); pg.wait_for_timeout(200); check("cancelled form leaves the stage as it was", store()["students/" + nbid]["stage"] == "contacted")
       st = store()["students/" + tid]
       check("undo stage", st["stage"] == "new" and len(st["history"]) == hist0, (st["stage"], len(st["history"])))
       pg.click(".seg >> text=Обучение"); pg.wait_for_timeout(150); check("study pipeline", pg.locator(".col").count() == 2)
@@ -228,7 +232,7 @@ try:
       pg.fill("#f-q", "Тестов"); pg.wait_for_timeout(400); check("list search keeps focus", pg.locator("tbody tr.click").count() == 1 and pg.evaluate("document.activeElement.id") == "f-q")
       pg.click("[data-act=freset]"); pg.click("[data-act=csv]"); pg.wait_for_timeout(200); check("csv", "Следующий шаг" in pg.evaluate("window.__saved.data"))
       pg.click(".nav >> text=Аналитика"); pg.wait_for_timeout(200); shot(pg, "s6_analytics.png", full_page=True)
-      check("analytics", pg.locator(".kpi").count() == 6 and pg.locator("text=Почему уходят").count() == 1)
+      check("analytics", pg.locator(".kpi").count() == 7 and "До первого контакта" in pg.text_content("#main") and pg.locator("text=Почему уходят").count() == 1)
       pg.click(".nav >> text=Платежи"); pg.wait_for_timeout(200); shot(pg, "s7_payments.png")
       pg.click(".nav >> text=Партнёры"); pg.wait_for_timeout(200); pg.locator("tr.click").first.click(); pg.wait_for_timeout(200)
       pg.click("text=Выдать партнёру доступ"); pg.wait_for_selector("#mform")
@@ -370,7 +374,7 @@ try:
       mkeys = list(mn.evaluate("window.__store").keys())
       check("mentor sees only own accruals", mn.locator("#pay-parties").count() == 0 and mn.locator("#pay-dirs").count() == 0 and mn.locator(".kpi").count() == 4 and "Начисления по месяцам" in mn.text_content("#main")
             and not any(k.startswith(("payouts/", "directions/", "expenses/")) for k in mkeys) and [k for k in mkeys if k.startswith("reports/")] == ["reports/" + mn.evaluate("myTeam().id")], [k for k in mkeys if not k.startswith(("students/", "meetings/"))])
-      mn.click(".nav >> text=Аналитика"); mn.wait_for_timeout(200); check("mentor has no finance tab", mn.locator(".tabs >> text=Финансы").count() == 0 and mn.locator(".kpi").count() == 6)
+      mn.click(".nav >> text=Аналитика"); mn.wait_for_timeout(200); check("mentor has no finance tab", mn.locator(".tabs >> text=Финансы").count() == 0 and mn.locator(".kpi").count() == 7)
       mn.click(".nav >> text=Настройки"); mn.wait_for_timeout(200); check("mentor settings: account only", mn.locator(".panel").count() <= 2 and mn.locator("text=Сменить пароль").count() == 1 and mn.locator("text=Резервная копия").count() == 0)
       foreign = pg.evaluate(f"D().students.find(s => s.mentorId !== {json.dumps(mentor_team['id'])}).id")
       denied = mn.evaluate(f"S.db.collection('students').doc({json.dumps(foreign)}).update({{ name: 'Взлом' }}).then(() => 'written', e => e.code)")
@@ -488,6 +492,7 @@ try:
       doc = lambda: pg.evaluate("window.__store")["students/" + fid]
       pg.evaluate(f"updDoc('students', {json.dumps(fid)}, {{ mentorId: null }})"); pg.wait_for_timeout(500)
       row = pg.locator(f".rows li[data-id='{fid}']").first
+      check("new lead shows how long it has been waiting", "только что" in row.inner_text(), row.inner_text())
       check("lead row: write link and take button", row.locator("a[href='https://t.me/put_skvoznoy']").count() == 1 and row.locator("[data-act=take]").count() == 1)
       row.locator("[data-act=take]").click(); pg.wait_for_timeout(500)
       check("take assigns the lead to me", doc()["mentorId"] == pg.evaluate("myTeam().id"), doc().get("mentorId"))
