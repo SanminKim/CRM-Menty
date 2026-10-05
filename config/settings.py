@@ -96,6 +96,8 @@ X_FRAME_OPTIONS = "DENY"
 LEAD_WEBHOOK_TOKEN = os.environ.get("LEAD_WEBHOOK_TOKEN", "")
 # Токен Telegram-бота от @BotFather. Пусто — бот выключен
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+# Пароль, которым шифруется копия базы перед отправкой администратору в Telegram. Пусто или короче 12 символов — копии не отправляются
+BACKUP_PASSPHRASE = os.environ.get("BACKUP_PASSPHRASE", "").strip()
 # Адрес CRM снаружи: на него Telegram присылает сообщения, он же ставится в уведомления
 PUBLIC_URL = (os.environ.get("PUBLIC_URL")
               or (f"https://{ALLOWED_HOSTS[0]}" if not DEBUG and ALLOWED_HOSTS else "http://127.0.0.1:8000")).rstrip("/")

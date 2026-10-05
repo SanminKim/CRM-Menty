@@ -3,9 +3,15 @@
 Файл копии — те же документы, что хранит сервер, поэтому импорт просто раскладывает их по коллекциям.
 Повторный импорт не создаёт дублей: существующие записи пропускаются, если не указано overwrite.
 """
+import base64
+import hashlib
 import json
+import secrets
+import zlib
 
+from cryptography.fernet import Fernet, InvalidToken
 from django.db import transaction
+from django.utils import timezone
 
 from . import store
 from .models import Doc
@@ -17,11 +23,58 @@ LABELS = {"cohorts": "Потоки", "team": "Команда", "partners": "Па
           "payouts": "Выплаты", "meetings": "Встречи", "directions": "Направления", "expenses": "Расходы"}
 
 
+MAGIC = b"CRMENC1\n"       # начало зашифрованной копии
+KDF_ROUNDS = 600_000
+MIN_PASSPHRASE = 12
+MAX_PLAIN_BYTES = 50 * 1024 * 1024   # распакованная копия: с запасом для любой базы CRM, но не больше, чем выдержит сервер
+
+
 class BackupError(ValueError):
     """Файл не похож на резервную копию или повреждён."""
 
 
-def parse_backup(raw):
+def passphrase_ok(passphrase):
+    return isinstance(passphrase, str) and len(passphrase) >= MIN_PASSPHRASE
+
+
+def _key(passphrase, salt):
+    return base64.urlsafe_b64encode(hashlib.pbkdf2_hmac("sha256", passphrase.encode(), salt, KDF_ROUNDS, 32))
+
+
+def encrypt(raw, passphrase):
+    """Сжимает и шифрует копию паролем. Без пароля файл не прочитать: его можно хранить вне сервера."""
+    salt = secrets.token_bytes(16)
+    return MAGIC + salt + Fernet(_key(passphrase, salt)).encrypt(zlib.compress(raw, 9))
+
+
+def decrypt(blob, passphrase):
+    if not passphrase:
+        raise BackupError("Копия зашифрована: введите пароль копии")
+    salt, token = blob[len(MAGIC):len(MAGIC) + 16], blob[len(MAGIC) + 16:]
+    try:
+        packed = Fernet(_key(passphrase, salt)).decrypt(token)
+        unpacker = zlib.decompressobj()
+        raw = unpacker.decompress(packed, MAX_PLAIN_BYTES)
+    except (InvalidToken, ValueError, zlib.error):
+        raise BackupError("Пароль копии не подошёл или файл повреждён")
+    if unpacker.unconsumed_tail:
+        raise BackupError("Копия слишком большая")
+    return raw
+
+
+def dump():
+    """Вся база в том же виде, в каком её скачивает страница: с корзиной, без отчётов (их считает сервер)."""
+    data = {section: [] for section in SECTIONS}
+    for doc in Doc.objects.filter(collection__in=SECTIONS).order_by("collection", "doc_id"):
+        data[doc.collection].append({**doc.data, "id": doc.doc_id})
+    moment = timezone.now().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    return json.dumps({"format": BACKUP_FORMAT, "version": SUPPORTED_VERSIONS[-1], "exportedAt": moment, "data": data},
+                      ensure_ascii=False).encode()
+
+
+def parse_backup(raw, passphrase=None):
+    if isinstance(raw, bytes) and raw.startswith(MAGIC):
+        raw = decrypt(raw, passphrase)
     if isinstance(raw, (bytes, str)):
         try:
             raw = json.loads(raw)
@@ -49,8 +102,8 @@ def _ref(value, ids):
 
 
 @transaction.atomic
-def import_backup(raw, overwrite=False, with_demo=False):
-    data = parse_backup(raw)["data"]
+def import_backup(raw, overwrite=False, with_demo=False, passphrase=None):
+    data = parse_backup(raw, passphrase)["data"]
     stats = {k: {"created": 0, "updated": 0, "skipped": 0} for k in SECTIONS}
     students = [r for r in _rows(data, "students") if with_demo or not r.get("demo")]
     # Примеры пропускаются, кроме потоков, менторов и партнёров, на которые ссылаются настоящие студенты

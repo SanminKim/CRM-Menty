@@ -7,7 +7,8 @@
   <p class="muted">Файл скачивается на странице CRM: Настройки → Резервная копия. Так переносятся данные из версии в Claude. Записи, которые уже есть на сервере, пропускаются.</p>
   {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
   {% if result %}<div class="ok" role="status"><p>Готово.</p><ul>{% for line in result %}<li>{{ line }}</li>{% endfor %}</ul></div>{% endif %}
-  <label>Файл копии (.json)<input type="file" name="file" accept=".json,application/json" required></label>
+  <label>Файл копии (.json или .crmbackup из Telegram)<input type="file" name="file" accept=".json,.crmbackup,application/json" required></label>
+  <label>Пароль копии — только для файла из Telegram<input type="password" name="passphrase" autocomplete="off"></label>
   <label class="check"><input type="checkbox" name="overwrite"> Заменить записи, которые уже есть на сервере</label>
   <label class="check"><input type="checkbox" name="with_demo"> Загрузить и примерные данные</label>
   <button>Загрузить</button>

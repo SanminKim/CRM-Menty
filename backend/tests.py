@@ -803,7 +803,7 @@ class TelegramTests(BaseCase):
         self.assertEqual(self.client.post("/api/telegram/link/").status_code, 403)
         self.login("mentor")
         me = self.client.get("/api/me/").json()["telegram"]
-        self.assertEqual(me, {"enabled": True, "bot": "menti_bot", "linked": False})
+        self.assertEqual(me, {"enabled": True, "bot": "menti_bot", "linked": False, "backup": False})
         url = self.client.post("/api/telegram/link/").json()["url"]
         self.assertTrue(url.startswith("https://t.me/menti_bot?start=link_"))
         code = url.split("start=")[1]
@@ -1026,3 +1026,189 @@ class BackupImportTests(BaseCase):
         upload = SimpleUploadedFile("backup.json", json.dumps(sample_backup()).encode(), content_type="application/json")
         res = self.client.post("/backup/import/", {"file": upload})
         self.assertContains(res, "Студенты: добавлено 2")
+
+
+@override_settings(TELEGRAM_BOT_TOKEN="123456:test-token", PUBLIC_URL="https://crm.example.test", BACKUP_PASSPHRASE="dlinnyi-parol-kopii")
+class SchedulerTests(BaseCase):
+    """Планировщик: утренняя сводка, напоминание о встрече и зашифрованная копия базы в Telegram администратору."""
+
+    def setUp(self):
+        import datetime
+        from unittest import mock
+        from backend import telegram
+        from backend.models import TgChat
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.sent, self.files = [], []
+        for name, fake in (("send", lambda chat_id, text, **kw: self.sent.append((chat_id, text)) or {"ok": True}),
+                           ("send_document", lambda chat_id, filename, content, caption="": self.files.append((chat_id, filename, content, caption)) or {"ok": True})):
+            patcher = mock.patch.object(telegram, name, side_effect=fake)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        TgChat.objects.create(chat_id=100, user=self.admin)
+        TgChat.objects.create(chat_id=200, user=self.mentor)
+        TgChat.objects.create(chat_id=300, user=self.blogger)
+        self.day = datetime.date(2026, 10, 6)
+        store.system_write("students", "s1", student("t1", name="Иванов Пётр", phone="+7 900 000-00-01", stage="studying",
+                                                     next={"text": "Проверить домашку", "date": "2026-10-06"},
+                                                     payments=[{"id": "a", "amount": 30000, "due": "2026-10-01", "paid": None},
+                                                               {"id": "b", "amount": 20000, "due": "2026-10-06", "paid": None},
+                                                               {"id": "c", "amount": 10000, "due": "2026-09-01", "paid": "2026-09-01"}]))
+        store.system_write("students", "s2", student("t2", name="Чужой Студент", next={"text": "Связаться", "date": "2026-10-03"}))
+        store.system_write("students", "s3", student(None, name="Новая Заявка"))
+        store.system_write("students", "s4", student("t1", name="В Корзине", deletedAt="2026-10-01T00:00:00Z", next={"text": "x", "date": "2026-10-01"}))
+        store.system_write("students", "s5", student("t1", name="Выбыл", stage="lost", next={"text": "x", "date": "2026-10-01"},
+                                                     payments=[{"amount": 5000, "due": "2026-10-01", "paid": None}]))
+
+    def at(self, hour, minute=0, day=None):
+        import datetime
+        from django.utils import timezone
+        return timezone.make_aware(datetime.datetime.combine(day or self.day, datetime.time(hour, minute)))
+
+    def run_at(self, *args, **kwargs):
+        from backend import scheduler
+        scheduler.run(self.at(*args, **kwargs))
+
+    def texts(self, chat):
+        return [text for chat_id, text in self.sent if chat_id == chat]
+
+    def test_morning_digest_goes_once_a_day_to_each_employee_with_their_own_numbers(self):
+        store.system_write("meetings", "m7", {"title": "Разбор", "date": "2026-10-06", "time": "18:00", "studentId": "s1", "mentorId": "t1", "status": "planned"})
+        self.run_at(8, 59)
+        self.assertEqual(self.sent, [])
+        self.run_at(9, 1)
+        admin, mentor = self.texts(100), self.texts(200)
+        self.assertEqual((len(admin), len(mentor), self.texts(300)), (1, 1, []))          # партнёру сводка не идёт
+        self.assertIn("шагов: 2 (просрочено 1)", admin[0])
+        self.assertIn("просрочено платежей: 1 на 30 000 ₽", admin[0])
+        self.assertIn("срок оплаты сегодня: 1", admin[0])
+        self.assertIn("заявок без ментора: 1", admin[0])
+        self.assertIn("встреч: 1", admin[0])
+        self.assertIn("шагов: 1", mentor[0])
+        self.assertNotIn("просрочено 1)", mentor[0])                                      # чужой просроченный шаг ментору не считается
+        self.assertNotIn("без ментора", mentor[0])
+        for text in admin + mentor:
+            self.assertIn("https://crm.example.test/", text)
+            for secret in ("+7 900", "Иванов", "Чужой"):
+                self.assertNotIn(secret, text)                                            # в сводке только числа
+        self.run_at(9, 2)
+        self.run_at(11, 30)
+        self.assertEqual(len(self.sent), 2)                                               # второй раз за день не приходит
+        import datetime
+        self.run_at(9, 5, day=self.day + datetime.timedelta(days=1))
+        self.assertEqual(len(self.texts(100)), 2)
+
+    def test_no_digest_in_the_evening_or_when_there_is_nothing_to_do(self):
+        self.run_at(15, 0)
+        self.assertEqual(self.sent, [])                                                   # днём «утренняя» сводка уже не нужна
+        Doc.objects.filter(collection="students").delete()
+        self.run_at(9, 1)
+        self.assertEqual(self.sent, [])
+
+    def test_meeting_reminder_goes_to_the_one_who_runs_it(self):
+        store.system_write("meetings", "m12", {"title": "Кривая", "date": "2026-10-06", "time": "25:99", "studentId": ["s1"], "mentorId": {"a": 1}, "status": "planned"})
+        store.system_write("meetings", "m7", {"title": "Разбор https://evil.example +7 900 123-45-67", "date": "2026-10-06", "time": "15:00", "studentId": "s1", "mentorId": "t1", "status": "planned"})
+        store.system_write("meetings", "m8", {"title": "Созвон-знакомство", "date": "2026-10-06", "time": "15:10", "studentId": "s3", "mentorId": None, "status": "planned"})
+        store.system_write("meetings", "m9", {"title": "Уже прошла", "date": "2026-10-06", "time": "15:05", "mentorId": "t1", "status": "done"})
+        store.system_write("meetings", "m10", {"title": "Через два часа", "date": "2026-10-06", "time": "16:30", "mentorId": "t1", "status": "planned"})
+        store.system_write("meetings", "m11", {"title": "Без времени", "date": "2026-10-06", "time": "", "mentorId": "t1", "status": "planned"})
+        self.run_at(14, 15)
+        self.assertEqual(len(self.texts(200)), 1)
+        self.assertIn("15:00", self.texts(200)[0])
+        self.assertIn("Разбор", self.texts(200)[0])
+        self.assertNotIn("evil.example", self.texts(200)[0])
+        self.assertNotIn("123-45", self.texts(200)[0])                                    # телефон из названия не уходит
+        self.assertEqual(len(self.texts(100)), 1)                                         # встреча без ведущего — администратору
+        self.assertIn("Созвон-знакомство", self.texts(100)[0])
+        self.run_at(14, 16)
+        self.run_at(14, 50)
+        self.assertEqual(len(self.sent), 2)                                               # об одной встрече — один раз
+        self.run_at(15, 1)
+        self.assertEqual(len(self.sent), 2)                                               # начавшиеся не напоминаются
+        import datetime
+        tomorrow = self.day + datetime.timedelta(days=1)
+        store.system_write("meetings", "m13", {"title": "Кривая завтра", "date": tomorrow.isoformat(), "time": "ab:cd", "studentId": ["s1"], "mentorId": {"a": 1}, "status": "planned"})
+        self.run_at(9, 1, day=tomorrow)                                                   # кривая встреча не ломает сводку
+        self.assertEqual(len([x for x in self.texts(200) if "Доброе утро" in x]), 1)
+
+    def test_encrypted_backup_goes_to_admin_and_can_be_restored(self):
+        from backend import backup
+        self.run_at(3, 59)
+        self.assertEqual(self.files, [])
+        self.run_at(4, 5)
+        self.assertEqual([chat for chat, *_ in self.files], [100])                        # только администратору
+        chat, filename, content, caption = self.files[0]
+        self.assertTrue(filename.endswith(".crmbackup"))
+        for plain in ("Иванов".encode(), b"+7 900", b"students"):
+            self.assertNotIn(plain, content)                                              # в файле нет ничего читаемого
+        self.run_at(4, 6)
+        self.run_at(20, 0)
+        self.assertEqual(len(self.files), 1)                                              # раз в сутки
+        with self.assertRaises(backup.BackupError):
+            backup.parse_backup(content)                                                  # без пароля не открывается
+        with self.assertRaises(backup.BackupError):
+            backup.parse_backup(content, passphrase="ne-tot-parol-2026")
+        data = backup.parse_backup(content, passphrase="dlinnyi-parol-kopii")["data"]
+        self.assertEqual(sorted(s["id"] for s in data["students"]), ["s1", "s2", "s3", "s4", "s5"])   # с корзиной
+        self.assertEqual([p["id"] for p in data["partners"]], ["p1"])
+        Doc.objects.filter(collection__in=("students", "partners", "team", "cohorts")).delete()
+        self.login("admin")
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        res = self.client.post("/backup/import/", {"file": SimpleUploadedFile("k.crmbackup", content), "passphrase": "ne-tot-parol-2026"})
+        self.assertContains(res, "не подошёл")
+        self.assertFalse(Doc.objects.filter(collection="students").exists())
+        res = self.client.post("/backup/import/", {"file": SimpleUploadedFile("k.crmbackup", content), "passphrase": "dlinnyi-parol-kopii"})
+        self.assertContains(res, "Готово")
+        self.assertEqual(Doc.objects.get(collection="students", doc_id="s1").data["phone"], "+7 900 000-00-01")
+        self.assertTrue(Doc.objects.get(collection="students", doc_id="s4").data["deletedAt"])
+
+    def test_backup_is_not_sent_without_a_good_passphrase_and_retries_after_failure(self):
+        from unittest import mock
+        from backend import telegram
+        with override_settings(BACKUP_PASSPHRASE="korotkii"):
+            self.run_at(5, 0)
+        self.assertEqual(self.files, [])                                                  # незашифрованная база в Telegram не уходит
+        with mock.patch.object(telegram, "send_document", return_value=None):             # Telegram недоступен
+            self.run_at(5, 1)
+        self.run_at(5, 2)
+        self.assertEqual(self.files, [])                                                  # сразу не повторяем
+        self.run_at(6, 5)
+        self.assertEqual(len(self.files), 1)                                              # через час — ещё попытка
+
+    def test_document_upload_request_and_me_flag(self):
+        from unittest import mock
+        from backend import telegram
+        mock.patch.stopall()                                                              # здесь нужна настоящая отправка
+        seen = {}
+
+        class Reply:
+            def __enter__(self): return self
+            def __exit__(self, *exc): return False
+            def read(self): return b'{"ok": true, "result": {"message_id": 7}}'
+
+        def fake(request, timeout):
+            seen.update(url=request.full_url, body=request.data, type=request.get_header("Content-type"), timeout=timeout)
+            return Reply()
+        with mock.patch("urllib.request.urlopen", side_effect=fake):
+            result = telegram.send_document(100, "копия 2026.crmbackup", b"\x00\x01binary", "Подпись")
+        self.assertEqual(result, {"message_id": 7})
+        self.assertTrue(seen["url"].endswith("/sendDocument"))
+        self.assertIn("multipart/form-data; boundary=", seen["type"])
+        self.assertIn(b'name="chat_id"\r\n\r\n100\r\n', seen["body"])
+        self.assertIn(b"\r\n\r\n\x00\x01binary\r\n--", seen["body"])
+        self.assertIn(b'filename="______2026.crmbackup"', seen["body"])                     # имя файла без пробелов и кириллицы
+        with mock.patch("urllib.request.urlopen", side_effect=OSError("нет сети")), self.assertLogs("backend.telegram", level="WARNING"):
+            self.assertIsNone(telegram.send_document(100, "a", b"x"))
+        cache.clear()
+        self.login("admin")
+        self.assertTrue(self.client.get("/api/me/").json()["telegram"]["backup"])
+        self.login("mentor")
+        self.assertFalse(self.client.get("/api/me/").json()["telegram"]["backup"])
+        with override_settings(BACKUP_PASSPHRASE=""):
+            self.login("admin")
+            self.assertFalse(self.client.get("/api/me/").json()["telegram"]["backup"])
+
+    def test_scheduler_is_silent_without_the_bot(self):
+        with override_settings(TELEGRAM_BOT_TOKEN=""):
+            self.run_at(9, 1)
+        self.assertEqual((self.sent, self.files), ([], []))

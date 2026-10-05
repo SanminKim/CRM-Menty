@@ -3,6 +3,7 @@ import json
 import re
 from functools import wraps
 
+from django.conf import settings
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -11,7 +12,7 @@ from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_http_methods
 
-from . import reports, store, telegram
+from . import backup, reports, store, telegram
 from .models import Account, Doc, TgChat
 
 User = get_user_model()
@@ -60,7 +61,9 @@ def me(request, access):
         "role": access.role, "isOwner": access.is_admin, "canWrite": access.role != Account.Role.PARTNER,
         "linkId": access.link_id, "server": True,
         "telegram": {"enabled": telegram.enabled(), "bot": telegram.bot_username() if telegram.enabled() else "",
-                     "linked": TgChat.objects.filter(user=request.user).exists()},
+                     "linked": TgChat.objects.filter(user=request.user).exists(),
+                     # администратору: включена ли ночная отправка зашифрованной копии базы
+                     "backup": access.is_admin and telegram.enabled() and backup.passphrase_ok(settings.BACKUP_PASSPHRASE)},
     })
 
 

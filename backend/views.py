@@ -138,7 +138,8 @@ def backup_import(request):
         else:
             try:
                 stats = import_backup(upload.read(), overwrite=bool(request.POST.get("overwrite")),
-                                      with_demo=bool(request.POST.get("with_demo")))
+                                      with_demo=bool(request.POST.get("with_demo")),
+                                      passphrase=request.POST.get("passphrase") or None)
                 ctx["result"] = summary_lines(stats)
             except BackupError as exc:
                 ctx["error"] = str(exc)

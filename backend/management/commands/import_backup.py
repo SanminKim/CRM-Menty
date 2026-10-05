@@ -1,4 +1,5 @@
 """Загрузка резервной копии из консоли: python manage.py import_backup копия.json"""
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from backend import store
@@ -16,7 +17,9 @@ class Command(BaseCommand):
     def handle(self, *args, path, overwrite, with_demo, **opts):
         try:
             with open(path, "rb") as fh:
-                stats = import_backup(fh.read(), overwrite=overwrite, with_demo=with_demo)
+                # Зашифрованная копия из Telegram открывается паролем копии из настроек сервера
+                stats = import_backup(fh.read(), overwrite=overwrite, with_demo=with_demo,
+                                      passphrase=settings.BACKUP_PASSPHRASE or None)
         except OSError as exc:
             raise CommandError(f"Не удалось открыть файл: {exc}")
         except BackupError as exc:

@@ -95,6 +95,33 @@ def send(chat_id, text, **extra):
     return call("sendMessage", chat_id=chat_id, text=text[:4000], disable_web_page_preview=True, **extra)
 
 
+def send_document(chat_id, filename, content, caption=""):
+    """Отправляет файл в чат. Как и call, не пробрасывает ошибки и минуту молчит после сбоя связи."""
+    if not enabled() or cache.get("tg-down"):
+        return None
+    boundary = secrets.token_hex(16)
+    parts = b"".join(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode()
+                     for name, value in (("chat_id", chat_id), ("caption", caption[:1000])))
+    safe = re.sub(r"[^A-Za-z0-9._-]", "_", filename)[:80] or "file"
+    body = (parts + f'--{boundary}\r\nContent-Disposition: form-data; name="document"; filename="{safe}"\r\n'
+            f"Content-Type: application/octet-stream\r\n\r\n".encode() + content + f"\r\n--{boundary}--\r\n".encode())
+    request = urllib.request.Request(
+        f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendDocument",
+        data=body, headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        log.warning("Telegram sendDocument отклонён: %s", exc.code)
+        return None
+    except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as exc:
+        log.warning("Telegram sendDocument не выполнен: %s", type(exc).__name__)
+        cache.set("tg-down", 1, PAUSE_SECONDS)
+        return None
+    return payload.get("result") if isinstance(payload, dict) and payload.get("ok") else None
+
+
 def bot_username():
     return State.objects.filter(pk=1).values_list("bot_username", flat=True).first() or ""
 

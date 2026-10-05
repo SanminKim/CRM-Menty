@@ -2,3 +2,4 @@ Django>=5.2,<5.3
 dj-database-url>=2.2
 psycopg[binary]>=3.2
 gunicorn>=23.0
+cryptography>=43

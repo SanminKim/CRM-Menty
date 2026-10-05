@@ -29,6 +29,24 @@ services:
       db:
         condition: service_healthy
 
+  scheduler:
+    # Дела по расписанию: утренняя сводка, напоминания о встречах и копия базы в Telegram
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DEBUG: "0"
+      ALLOWED_HOSTS: ${DOMAIN}
+      CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
+      PUBLIC_URL: https://${DOMAIN}
+    entrypoint: ["python", "manage.py", "tick", "--loop"]
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+
   caddy:
     # Веб-сервер с автоматическим HTTPS-сертификатом Let's Encrypt
     image: caddy:2-alpine
