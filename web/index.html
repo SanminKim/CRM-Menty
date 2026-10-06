@@ -926,7 +926,7 @@ function navHTML() {
   if (S.mode === "partner") return `<button class="on" aria-current="page">${ico("report")}Отчёт</button>${S.server ? `<button data-act="password">${ico("password")}Сменить пароль</button><button data-act="logout">${ico("logout")}Выйти</button>` : ""}`;
   const ag = agenda(D().students), late = ag.pays.filter(p => p.due < today()).length;
   const meetsToday = events(today(), today()).filter(e => e.status === "planned").length;
-  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи", late, true], ["payouts", "Выплаты"], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"], ["help", "Справка"]];
+  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи студентов", late, true], ["payouts", "Выплаты"], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"], ["help", "Справка"]];
   const cur = S.view === "partner" ? "partners" : S.view === "cohort" ? "cohorts" : S.view;
   if (S.limited) items.splice(items.findIndex(i => i[0] === "partners"), 1);
   const GROUPS = { cohorts: "Обучение", payments: "Деньги", analytics: "Итоги", settings: "Система" };
@@ -1012,7 +1012,7 @@ function todayView() {
       ${ag.week.length ? panel("На неделе", ag.week.length, `<ul class="rows">${ag.week.map(stepRow).join("")}</ul>`) : ""}
     </div>
     <div class="stack">
-      ${panel("Платежи", ag.pays.length ? money(sum(ag.pays, p => p.amount)) : "", ag.pays.length ? `<ul class="rows">${ag.pays.map(p => `<li class="click" data-act="open" data-id="${esc(p.s.id)}">
+      ${panel("Платежи студентов", ag.pays.length ? money(sum(ag.pays, p => p.amount)) : "", ag.pays.length ? `<ul class="rows">${ag.pays.map(p => `<li class="click" data-act="open" data-id="${esc(p.s.id)}">
           <span class="who"><strong>${esc(p.s.name)}</strong><span>${esc(p.comment || "Платёж")}</span></span>
           <span class="amt">${money(p.amount)}</span><span class="when${p.due < t ? " late" : ""}">${dueLabel(p.due)}</span>
           <span class="acts"><button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button><button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button></span></li>`).join("")}</ul>`
@@ -1032,7 +1032,7 @@ function helpView() {
     ["board", "Воронка", "Все люди по этапам. Карточку можно перетащить в следующую колонку."],
     ["students", "Студенты", "Поиск и список всех людей, выгрузка в файл, действия сразу над несколькими."],
     ["cohorts", "Потоки", "Группы, программа и прогресс по модулям."],
-    ["payments", "Платежи", "Кто должен заплатить и кто опаздывает."],
+    ["payments", "Платежи студентов", "Кто должен заплатить и кто опаздывает."],
     ["payouts", "Выплаты", adm ? "Сколько причитается блогеру и менторам, расходы и записанные выплаты." : "Ваши начисления и выплаты."],
     ["analytics", "Аналитика", "Конверсия по этапам и время до первого ответа на заявку."],
     ...(adm ? [["partners", "Партнёры", "Откуда приходят заявки и что из них получается."]] : []),
@@ -1235,7 +1235,7 @@ function dayHTML(d) {
       ${S.readOnly ? "" : `<div><button class="btn primary" data-act="meet-new" data-date="${esc(d)}">+ Встреча на этот день</button></div>`}
       ${sec("Встречи", evs.length, evs.map(e => evRow(e)).join(""), "Встреч и собеседований нет.")}
       ${sec("Шаги по студентам", steps.length, steps.map(stepRow).join(""), "На этот день шагов не назначено.")}
-      ${sec("Платежи", pays.length, pays.map(payRow).join(""), "Платежей с этим сроком нет.")}
+      ${sec("Платежи студентов", pays.length, pays.map(payRow).join(""), "Платежей с этим сроком нет.")}
     </div></aside>`;
 }
 function calendarView() {
@@ -1836,7 +1836,7 @@ function directionForm(d) {
 function paymentsView() {
   const t = today(), all = D().students.flatMap(s => (s.payments || []).filter(isObj).map(p => ({ ...p, s })));
   const tab = (k, l) => `<button data-act="paytab" data-v="${k}" class="${S.payTab === k ? "on" : ""}">${l}</button>`;
-  const head = headHTML("Платежи") + `<nav class="tabs">${tab("overdue", "Просроченные")}${tab("upcoming", "Ожидаются")}${tab("paid", "Оплаченные")}${tab("history", "Кто как платит")}</nav>`;
+  const head = headHTML("Платежи студентов") + `<nav class="tabs">${tab("overdue", "Просроченные")}${tab("upcoming", "Ожидаются")}${tab("paid", "Оплаченные")}${tab("history", "Кто как платит")}</nav>`;
   if (S.payTab === "history") {
     // Сначала те, у кого просрочка сейчас, затем те, кто чаще опаздывал
     const rows = D().students.map(s => ({ s, h: payHistory(s) })).filter(r => r.h.paid || r.h.overdue)
