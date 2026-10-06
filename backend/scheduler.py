@@ -151,7 +151,9 @@ def _reminders(now):
 
 PAY_TEXT = "сегодня срок платежа за обучение — {amount}."
 ASK_TEXT = ("сегодня день расчёта за обучение: {percent}% от вашего дохода за прошедший месяц. "
-            "Напишите, пожалуйста, сколько вы заработали, — ментор посчитает сумму платежа.")
+            "Напишите, пожалуйста, сколько вы заработали, и пришлите сюда фото начисления зарплаты "
+            "и отработанных часов — ментор посчитает сумму платежа.")
+SLIP_TEXT = "Пришлите, пожалуйста, сюда фото расчётного листка за месяц."
 PAID_TEXT = "Если уже оплатили, напишите об этом сюда — я передам ментору."
 
 
@@ -185,7 +187,10 @@ def _pay_reminders(now):
             + ([ASK_TEXT.format(percent=" и ".join(f"{float(r):g}".replace(".", ",") for r in rates))] if rates else [])
         if not parts:
             continue
-        text = "Здравствуйте! Напоминаю: " + " Также ".join(parts) + ("\n" + PAID_TEXT if total > 0 else "")
+        # Платёж с оклада: просим подтверждение начисления. При почасовой оплате фото уже запрошено в вопросе о доходе
+        salary = any(p.get("salary") is True or str(p.get("comment") or "").startswith("С зарплаты") for p in due)
+        text = "Здравствуйте! Напоминаю: " + " Также ".join(parts) + (" " + SLIP_TEXT if salary and not rates else "") \
+            + ("\n" + PAID_TEXT if total > 0 else "")
         key = f"sched:pay:{student_id}:{today}"
         # Отметка ставится после отправки: если Telegram был недоступен, напоминание уйдёт позже в тот же день
         if not cache.get(key) and telegram.send(chat_id, text):

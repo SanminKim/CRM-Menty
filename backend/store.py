@@ -133,6 +133,7 @@ class Access:
             if not self.link_id or new.get("mentorId") != self.link_id:
                 raise Denied  # ментор не может забрать чужого студента или отдать своего
             self._check_partner_fields(old, new)
+            self._check_proofs(old, new)
             return
         if collection == "meetings":
             for data in (old, new):
@@ -147,6 +148,19 @@ class Access:
                     raise Denied  # занятие группы правит тот, кто его проводит
             return
         raise Denied
+
+    @staticmethod
+    def _check_proofs(old, new):
+        """Файлы от студента в карточку добавляет только бот: ментор может убрать запись, но не вписать свою."""
+        def ids(data):
+            proofs = (data or {}).get("proofs")
+            return {p.get("fileId") for p in proofs if isinstance(p, dict)} if isinstance(proofs, list) else set()
+        try:
+            extra = ids(new) - ids(old)
+        except TypeError:
+            raise Denied  # вместо идентификатора файла что-то несуразное
+        if extra:
+            raise Denied
 
     def _check_partner_fields(self, old, new):
         """От источника и доли партнёра зависят выплаты, поэтому ментор их не меняет."""

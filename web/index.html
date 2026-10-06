@@ -1305,8 +1305,8 @@ const salaryCheck = (salary, percent, months, first, kind = "salary") => kind !=
 function salaryItems(salary, percent, months, first, kind = "salary") {
   const amount = Math.round(salary * percent / 100), items = [];
   for (let i = 0; i < months; i++) items.push(kind === "income"
-    ? { id: newId("x"), amount: null, percent, due: addMonths(first, i), paid: null, comment: `С дохода ${i + 1}/${months}` }
-    : { id: newId("x"), amount, due: addMonths(first, i), paid: null, comment: `С зарплаты ${i + 1}/${months}` });
+    ? { id: newId("x"), amount: null, percent, salary: true, due: addMonths(first, i), paid: null, comment: `С дохода ${i + 1}/${months}` }
+    : { id: newId("x"), amount, salary: true, due: addMonths(first, i), paid: null, comment: `С зарплаты ${i + 1}/${months}` });
   return items;
 }
 // Стоимость с учётом платежей с зарплаты. Если стоимость не была задана, за основу берутся уже записанные платежи,
@@ -1332,7 +1332,7 @@ function salaryPlanForm(s) {
     fields: [{ k: "kind", label: "Как платят студенту", type: "select", options: SALARY_KINDS, wide: true },
       { k: "salary", label: "Зарплата, ₽", type: "number", help: "При почасовой оплате оставьте пустым" }, { k: "percent", label: "Процент, %", type: "number", req: true },
       { k: "months", label: "Сколько месяцев", type: "number", req: true }, { k: "first", label: "Первый платёж", type: "date", req: true, help: "Следующие — в тот же день каждого месяца" }],
-    extra: `<p><strong id="m-sum">${esc(salarySum(s.jobSalary, d.percent, d.months))}</strong></p><p class="hint">При окладе стоимость обучения в карточке вырастет на сумму платежей. При почасовой оплате сумма появляется каждый месяц: бот в день расчёта спросит у студента доход, вы внесёте его кнопкой «Указать доход».</p>`,
+    extra: `<p><strong id="m-sum">${esc(salarySum(s.jobSalary, d.percent, d.months))}</strong></p><p class="hint">При окладе стоимость обучения в карточке вырастет на сумму платежей. При почасовой оплате сумма появляется каждый месяц: бот в день расчёта спросит у студента доход, вы внесёте его кнопкой «Указать доход». В обоих случаях бот просит прислать фото начисления, при почасовой — ещё и отработанных часов; файлы появятся в карточке.</p>`,
     onInput: () => { const el = $("#m-sum"); if (el) el.textContent = salarySum(val("salary"), val("percent"), val("months"), kind()); },
     onSubmit: v => {
       const k = v.kind === "income" ? "income" : "salary", err = salaryCheck(v.salary, v.percent, v.months, v.first, k); if (err) return err;
@@ -1367,6 +1367,17 @@ function botLine(s) {
   if (!S.server || !tg?.enabled || !tg.bot) return "";
   return `<p class="hint" style="margin-top:6px">${s.tgId ? "Студент подключён к боту: в день платежа бот ему напомнит." : `Студент не подключён к боту и напоминаний о платежах не получит. ${S.readOnly ? "" : `<button class="link" data-act="tg-student" data-id="${esc(s.id)}">Получить ссылку для студента</button>`}`}</p>`;
 }
+// Файлы, которые студент прислал боту: фото начисления зарплаты, отработанных часов. Сам файл лежит в Telegram
+function proofSection(s) {
+  const list = sortBy((Array.isArray(s.proofs) ? s.proofs : []).filter(isObj), x => String(x.at || "")).reverse();
+  if (!list.length) return "";
+  return `<section class="sec"><header><h3>Файлы от студента</h3><span class="sub">${list.length}</span></header>
+    <div class="box"><ul class="feed" id="proofs">${list.map(x => `<li><div class="feed-head"><strong>${x.kind === "photo" ? "Фото" : esc(x.name || "Документ")}</strong><span class="muted">${fDT(x.at)}</span><span class="right"></span>
+        ${SRV?.telegram?.fileUrl ? `<a class="link" href="${esc(SRV.telegram.fileUrl(s.id, x.id))}" target="_blank" rel="noopener">Открыть</a>` : ""}
+        ${S.readOnly ? "" : `<button class="btn small ghost" data-act="proof-del" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Убрать</button>`}</div>
+      ${x.caption ? `<p class="pre">${esc(x.caption)}</p>` : ""}</li>`).join("")}</ul>
+      <p class="hint" style="padding-bottom:8px">Студент присылает их боту. В CRM хранится только ссылка: файл открывается из Telegram и виден тем, кто ведёт студента.</p></div></section>`;
+}
 function paySection(s) {
   const t = today(), pays = sortBy(s.payments || [], x => x.due);
   return `<section class="sec"><header><h3>Платежи</h3><span class="sub">${s.price ? `${money(paidSum(s))} из ${money(s.price)}` : pays.length ? money(paidSum(s)) : ""}</span><span class="right"></span>
@@ -1375,7 +1386,7 @@ function paySection(s) {
       ${pays.map(x => { const od = !x.paid && x.due < t; return `<tr><td>${fShort(x.due)}${x.comment ? `<div class="sub">${esc(x.comment)}</div>` : ""}</td><td class="num">${isPending(x) ? `<span class="sub">${esc(pctText(x.percent))} от дохода</span>` : money(x.amount)}</td>
         <td>${x.paid ? `<span class="tag ok">оплачен ${fDay(x.paid)}</span>` : isPending(x) ? `<span class="tag ${od ? "danger" : "warn"}">${od ? "ждём доход" : "сумма по доходу"}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
         <td class="row-actions">${x.paid ? "" : isPending(x) ? `<button class="btn small" data-act="pay-income" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Указать доход</button> ` : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(s.id)}" data-pid="${esc(x.id)}" title="Скопировать текст напоминания">Напомнить</button> <button class="btn small" data-act="pay-done" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Оплачен</button> `}<button class="btn small ghost" data-act="pay-edit" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Изменить</button></td></tr>`; }).join("")}
-    </tbody></table></div>` : `<p class="empty">Платежей пока нет</p>`}</div>${pays.some(x => !x.paid) ? botLine(s) : ""}</section>`;
+    </tbody></table></div>` : `<p class="empty">Платежей пока нет</p>`}</div>${pays.some(x => !x.paid) ? botLine(s) : ""}</section>${proofSection(s)}`;
 }
 function appSection(s) {
   const apps = sortBy(s.apps || [], a => a.date || "").reverse();
@@ -2284,6 +2295,7 @@ function paymentForm(s, p) {
       if (!pending && !(v.amount > 0)) return "Сумма должна быть больше нуля";
       const item = pending ? { id: p.id, amount: null, percent: p.percent, due: v.due, paid: null, comment: v.comment }
         : { id: p?.id || newId("x"), amount: v.amount, due: v.due, paid: v.paid || null, comment: v.comment };
+      if (p?.salary === true) item.salary = true; // по этой отметке бот просит у студента фото начисления
       return save(() => patchStudent(s.id, cur => {
         const list = cur.payments || [], old = p ? list.find(x => x.id === p.id) : null;
         if (p && !old) throw { code: "gone-item" };
@@ -2728,6 +2740,10 @@ const ACT = {
     });
   },
   "pay-salary": d => { const x = stu(d.id); if (x) salaryPlanForm(x); },
+  "proof-del": (d, el) => {
+    if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Точно убрать?"; return; }
+    return save(() => patchStudent(d.id, cur => ({ proofs: (Array.isArray(cur.proofs) ? cur.proofs : []).filter(x => !x || x.id !== d.pid) })), "Файл убран из карточки");
+  },
   "pay-income": d => { const x = stu(d.id), pay = (x?.payments || []).find(y => y.id === d.pid); if (pay && isPending(pay)) incomeForm(x, pay); },
   "tg-student": async d => {
     let url;

@@ -847,6 +847,93 @@ class TelegramTests(BaseCase):
         self.assertNotIn("tgId", Doc.objects.get(doc_id="s1").data)          # в прежней карточке отметка о чате снята
         self.assertEqual(Doc.objects.get(doc_id="s5").data["tgId"], 713)
 
+    def bound_student(self, chat=720):
+        from backend.models import TgChat
+        TgChat.objects.create(chat_id=901, user=self.mentor)
+        store.system_write("students", "s1", student("t1", name="Иванов Пётр", tgId=chat, stage="offer"))
+        TgChat.objects.create(chat_id=chat, student_id="s1", state="done")
+
+    def test_student_sends_payslip_photo_and_hours_document(self):
+        self.bound_student()
+        photo = [{"file_id": "small", "file_size": 900, "width": 90, "height": 90}, {"file_id": "BIG-file_id", "file_size": 90000, "width": 1280, "height": 960}]
+        with self.captureOnCommitCallbacks(execute=True):
+            self.say("", chat=720, photo=photo, caption="Расчётный лист за сентябрь, тел. +7 900 111-22-33")
+        doc = Doc.objects.get(doc_id="s1").data
+        self.assertEqual(len(doc["proofs"]), 1)
+        proof = doc["proofs"][0]
+        self.assertEqual((proof["fileId"], proof["kind"], proof["caption"]), ("BIG-file_id", "photo", "Расчётный лист за сентябрь, тел. +7 900 111-22-33"))
+        self.assertTrue(proof["id"] and proof["at"])
+        self.assertIn("фото", doc["notes"][-1]["text"])                     # в ленте карточки видно, что пришёл файл
+        self.assertIn("Получил", self.texts(720)[-1])
+        notice = self.texts(901)
+        self.assertEqual(len(notice), 1)
+        self.assertIn("Иванов Пётр", notice[0])
+        self.assertNotIn("111-22", notice[0])                               # подпись к фото в уведомление не попадает
+        self.say("", chat=720, document={"file_id": "PDF1", "file_name": "часы <b>.pdf", "mime_type": "application/pdf", "file_size": 50000})
+        self.say("", chat=720, document={"file_id": "EXE1", "file_name": "virus.exe", "mime_type": "application/x-msdownload", "file_size": 5})
+        self.say("", chat=720, document={"file_id": "HUGE", "file_name": "a.pdf", "mime_type": "application/pdf", "file_size": 30 * 1024 * 1024})
+        self.say("", chat=720, photo="мусор")
+        self.say("", chat=720, sticker={"file_id": "st"})
+        proofs = Doc.objects.get(doc_id="s1").data["proofs"]
+        self.assertEqual([(p["fileId"], p["kind"], p["mime"]) for p in proofs[1:]], [("PDF1", "document", "application/pdf")])
+        self.assertIn("фото или PDF", self.texts(720)[-2])                   # на неподходящий файл бот объясняет, что прислать
+
+    def test_photo_from_a_stranger_or_unfinished_lead_is_not_stored(self):
+        self.bound_student()
+        photo = [{"file_id": "X", "file_size": 10}]
+        self.say("/start", chat=730)
+        self.say("", chat=730, photo=photo)                                 # ещё не нажал «Продолжить»
+        self.press(chat=730); self.say("Вера Сайтова", chat=730); self.say("цель", chat=730)
+        lead = self.lead()
+        self.say("", chat=730, photo=photo)                                 # заявка есть, но это не студент на оплате: файл всё равно его
+        self.assertEqual(len(Doc.objects.get(doc_id=lead.doc_id).data.get("proofs", [])), 1)
+        self.say("", chat=901, photo=photo)                                 # сотрудник
+        self.assertEqual(Doc.objects.get(doc_id="s1").data.get("proofs", []), [])
+        for i in range(70):
+            cache.clear()
+            self.say("", chat=720, photo=[{"file_id": f"F{i}", "file_size": 10}])
+        proofs = Doc.objects.get(doc_id="s1").data["proofs"]
+        self.assertEqual((len(proofs), proofs[-1]["fileId"]), (60, "F69"))    # хранятся последние шестьдесят
+
+    def test_only_those_who_lead_the_student_open_the_file(self):
+        from unittest import mock
+        from backend import telegram
+        self.bound_student()
+        self.say("", chat=720, photo=[{"file_id": "BIG", "file_size": 10}])
+        self.say("", chat=720, document={"file_id": "SVG", "file_name": "x.pdf", "mime_type": "application/pdf", "file_size": 10})
+        pid, did = [p["id"] for p in Doc.objects.get(doc_id="s1").data["proofs"]]
+        url = f"/api/telegram/file/s1/{pid}/"
+        with mock.patch.object(telegram, "fetch_file", return_value=b"\xff\xd8JPEG") as fetch:
+            for who in ("blogger", "other"):
+                self.login(who)
+                self.assertEqual(self.client.get(url).status_code, 403)
+            self.assertEqual(fetch.call_count, 0)                           # чужому файл даже не запрашивается у Telegram
+            self.login("mentor")
+            self.assertEqual(self.client.get("/api/telegram/file/s1/nope/").status_code, 403)
+            self.assertEqual(self.client.get(f"/api/telegram/file/s2/{pid}/").status_code, 403)
+            res = self.client.get(url)
+            self.assertEqual((res.status_code, res.content, res["Content-Type"]), (200, b"\xff\xd8JPEG", "image/jpeg"))
+            self.assertEqual(res["X-Content-Type-Options"], "nosniff")
+            self.assertIn("sandbox", res["Content-Security-Policy"])        # даже если в файле разметка, она не выполнится
+            self.assertIn("no-store", res["Cache-Control"])
+            fetch.assert_called_with("BIG")
+            pdf = self.client.get(f"/api/telegram/file/s1/{did}/")
+            self.assertEqual((pdf["Content-Type"], pdf["Content-Disposition"]), ("application/pdf", 'attachment; filename="file.pdf"'))
+            self.assertEqual(res["Content-Disposition"], "inline")
+            self.login("admin")
+            self.assertEqual(self.client.get(url).status_code, 200)
+        with mock.patch.object(telegram, "fetch_file", return_value=None):
+            self.assertEqual(self.client.get(url).status_code, 404)         # файл в Telegram больше недоступен
+        # Ментор не может вписать в карточку чужой файл, но убрать запись может
+        self.login("mentor")
+        proofs = Doc.objects.get(doc_id="s1").data["proofs"]
+        forged = proofs + [{"id": "x", "fileId": "ЧУЖОЙ-ФАЙЛ", "kind": "photo", "mime": "image/jpeg"}]
+        self.assertEqual(self.send("patch", "students", "s1", {"proofs": forged}).status_code, 403)
+        self.assertEqual(self.send("patch", "students", "s1", {"proofs": [{"id": "x", "fileId": ["x"]}]}).status_code, 403)
+        self.assertEqual(self.send("put", "students", "n7", student("t1", proofs=[{"id": "x", "fileId": "F"}])).status_code, 403)
+        self.assertEqual(self.send("patch", "students", "s1", {"proofs": proofs[:1], "city": "Тверь"}).status_code, 200)
+        self.assertEqual(len(Doc.objects.get(doc_id="s1").data["proofs"]), 1)
+
     def test_staff_links_telegram_and_gets_assignment_notice(self):
         from backend.models import TgChat
         self.login("blogger")
@@ -1276,6 +1363,7 @@ class SchedulerTests(BaseCase):
         self.run_at(10, 1)
         self.assertEqual(len(self.texts(777)), 1)
         self.assertIn("20 000 ₽", self.texts(777)[0])                               # два неоплаченных платежа с сегодняшним сроком
+        self.assertIn("расчётного листка", self.texts(777)[0])                      # платёж с зарплаты: просим фото начисления
         self.assertEqual(self.texts(778), [])
         self.run_at(10, 2)
         self.run_at(18, 0)
@@ -1314,6 +1402,8 @@ class SchedulerTests(BaseCase):
         self.assertEqual(len(ask), 1)
         self.assertIn("15%", ask[0])
         self.assertIn("сколько вы заработали", ask[0])
+        self.assertIn("фото", ask[0])                                               # просим подтверждение: начисление и часы
+        self.assertIn("часов", ask[0])
         self.assertNotIn("₽", ask[0])                                               # суммы ещё нет: бот её не выдумывает
         both = self.texts(781)
         self.assertEqual(len(both), 1)                                              # одно сообщение: и сумма, и вопрос о доходе

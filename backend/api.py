@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
@@ -94,6 +94,32 @@ def telegram_student_link(request, access):
     if not url:
         raise store.Invalid("Telegram-бот не настроен на сервере")
     return JsonResponse({"url": url})
+
+
+@require_GET
+@api
+def telegram_file(request, access, student_id, proof_id):
+    """Файл, который студент прислал боту (начисление зарплаты, отработанные часы). Открывает тот, кто ведёт студента."""
+    doc = Doc.objects.filter(collection="students", doc_id=student_id).first()
+    if access.role == Account.Role.PARTNER or doc is None or not access.can_read("students", doc.data):
+        raise store.Denied
+    proofs = doc.data.get("proofs")
+    proof = next((p for p in proofs if isinstance(p, dict) and p.get("id") == proof_id), None) if isinstance(proofs, list) else None
+    if proof is None or not isinstance(proof.get("fileId"), str):
+        raise store.Denied  # чужой студент и несуществующий файл отвечают одинаково
+    content = telegram.fetch_file(proof["fileId"])
+    if content is None:
+        raise store.NotFound
+    mime = proof.get("mime") if proof.get("mime") in telegram.PROOF_TYPES else "application/octet-stream"
+    response = HttpResponse(content, content_type=mime)
+    # Файл прислал посторонний человек: браузер не должен выполнять его содержимое или угадывать тип
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Content-Security-Policy"] = "default-src 'none'; sandbox"
+    # Картинка открывается во вкладке, остальное скачивается: встроенный просмотр PDF под такой защитой не работает
+    response["Content-Disposition"] = "inline" if mime.startswith("image/") else 'attachment; filename="file.pdf"' \
+        if mime == "application/pdf" else "attachment"
+    response["Cache-Control"] = "private, no-store"
+    return response
 
 
 @require_GET

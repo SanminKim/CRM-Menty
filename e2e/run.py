@@ -514,6 +514,15 @@ try:
       check("income entered: amount is the percent of income, price grows, change is logged", first["amount"] == 10000 and first["income"] == 80000 and done["price"] == after["price"] + 10000 and "Доход за месяц" in done["log"][-1]["text"] and pg.locator("[data-act=pay-income]").count() == 2, (first, done["price"], done["log"][-1]))
       pg.click("[data-act=pay-salary]"); pg.wait_for_selector("#mform"); check("next form is prefilled with the remembered percent and period", pg.input_value("#m-percent") == "12.5" and pg.input_value("#m-months") == "3")
       pg.click("[data-act=m-close]"); pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+      # файлы, которые студент прислал боту
+      check("salary plan payments are marked for the bot", all(p.get("salary") is True for p in pg.evaluate("window.__store")["students/" + sid]["payments"] if str(p.get("comment", "")).startswith(("С зарплаты", "С дохода"))))
+      pg.evaluate(f"updDoc('students', {json.dumps(sid)}, {{ proofs: [{{ id: 'pr1', at: '2026-10-05T10:00:00.000Z', kind: 'photo', mime: 'image/jpeg', fileId: 'F1', name: '', caption: 'Лист <b>за сентябрь</b>' }}, {{ id: 'pr2', at: '2026-10-06T10:00:00.000Z', kind: 'document', mime: 'application/pdf', fileId: 'F2', name: 'часы.pdf', caption: '' }}] }})")
+      pg.evaluate(f"openStudent({json.dumps(sid)})"); pg.wait_for_selector("#proofs li")
+      hrefs = [a.get_attribute("href") for a in pg.locator("#proofs a").all()]
+      check("card lists files from the student, newest first, with safe links", hrefs == [f"/api/telegram/file/{sid}/pr2/", f"/api/telegram/file/{sid}/pr1/"] and "часы.pdf" in pg.text_content("#proofs") and pg.locator("#proofs b").count() == 0, hrefs)
+      pg.locator("#proofs li", has_text="часы.pdf").locator("[data-act=proof-del]").click(); pg.locator("#proofs li", has_text="часы.pdf").locator("[data-act=proof-del]").click(); pg.wait_for_timeout(500)
+      check("a file can be removed from the card", [p["id"] for p in pg.evaluate("window.__store")["students/" + sid]["proofs"]] == ["pr1"])
+      pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
       # тема и раскладка настроек
       pg.click(".nav >> text=Настройки"); pg.wait_for_selector(".cols2")
       tops = pg.evaluate("[...document.querySelectorAll('.cols2 > .stack')].map(e => Math.round(e.getBoundingClientRect().top))")

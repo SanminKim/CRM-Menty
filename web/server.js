@@ -141,6 +141,8 @@
     telegram: {
       link: () => call("POST", "/api/telegram/link/"), unlink: () => call("DELETE", "/api/telegram/link/"),
       student: id => call("POST", "/api/telegram/student-link/", { studentId: id }),
+      // Адрес файла, который студент прислал боту: открывается в новой вкладке, права проверяет сервер
+      fileUrl: (studentId, proofId) => `/api/telegram/file/${encodeURIComponent(studentId)}/${encodeURIComponent(proofId)}/`,
     },
     logout: () => {
       const f = document.createElement("form"); f.method = "post"; f.action = "/logout/";

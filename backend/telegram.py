@@ -15,6 +15,7 @@ import logging
 import re
 import secrets
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from django.conf import settings
@@ -38,6 +39,9 @@ STUDENT_LINK_DAYS = 7     # ссылку студенту отправляют �
 NOTE_NOTICE_MINUTES = 10  # о сообщениях одного человека сотруднику сообщаем не чаще
 PAUSE_SECONDS = 60        # сколько не обращаться к Telegram после сбоя, чтобы не занимать сервер ожиданием
 MAX_UPDATE_BYTES = 64 * 1024
+MAX_FILE_BYTES = 20 * 1024 * 1024   # больше Telegram боту и не отдаёт
+MAX_PROOFS = 60                     # сколько последних файлов от студента помнит карточка
+PROOF_TYPES = ("image/jpeg", "image/png", "image/webp", "application/pdf")
 
 HELLO = ("Здравствуйте! Здесь можно оставить заявку на обучение профессии аналитика 1С с ментором.\n\n"
          "Я задам два коротких вопроса и передам заявку ментору — он напишет вам лично.\n\n"
@@ -57,6 +61,8 @@ STAFF_LINKED = "Готово. Уведомления CRM будут приход
 STAFF_HELLO = "Этот чат подключён к CRM: сюда приходят уведомления. Заявки оставляют люди по ссылке от партнёра."
 STUDENT_LINKED = ("Готово, чат подключён. В день платежа я пришлю напоминание.\n"
                   "Если хотите что-то передать ментору, напишите сюда.")
+GOT_FILE = "Получил, передал ментору."
+BAD_FILE = "Пришлите, пожалуйста, фото или PDF размером до 20 МБ."
 STUDENT_UNLINKED = "Напоминания о платежах теперь приходят в другой чат. Если это ошибка, напишите ментору."
 STUDENT_LINK_EXPIRED = "Ссылка для подключения устарела. Попросите у ментора новую."
 LINK_EXPIRED = "Ссылка для подключения устарела. Откройте CRM: Настройки → Учётная запись → «Подключить Telegram»."
@@ -295,6 +301,16 @@ def handle(update):
         return _finish(record, text[:1000])
     if record.state == "done":
         _keep(record)
+        attached = any(isinstance(message.get(key), (dict, list)) for key in ("photo", "document"))
+        if attached and record.student_id:
+            # Фото начисления зарплаты или отработанных часов: в карточке остаётся ссылка на файл в Telegram
+            media = _media(message)
+            if not media:
+                return send(chat_id, BAD_FILE)
+            if _add_proof(record, media, _clean(message.get("caption"), 300)):
+                _tell_staff_about_message(record, "Файл")
+                return send(chat_id, GOT_FILE)
+            return send(chat_id, RECEIVED)  # карточки уже нет: файл не сохраняем
         if not text:
             return
         # Заметки пишем только в карточку, которая точно принадлежит этому чату
@@ -370,14 +386,71 @@ def _link_student(record, code):
     return send(record.chat_id, STUDENT_LINKED if linked else STUDENT_LINK_EXPIRED)
 
 
-def _tell_staff_about_message(record):
+def _media(message):
+    """Фото или документ из сообщения в виде записи для карточки; None, если прислано что-то другое."""
+    photo, document = message.get("photo"), message.get("document")
+    if isinstance(photo, list):
+        sizes = [p for p in photo if isinstance(p, dict) and isinstance(p.get("file_id"), str) and p["file_id"]]
+        if sizes:  # Telegram присылает несколько размеров одного снимка: берём самый большой
+            best = max(sizes, key=lambda p: p.get("file_size") if isinstance(p.get("file_size"), int) else 0)
+            return {"fileId": best["file_id"][:250], "kind": "photo", "mime": "image/jpeg", "name": ""}
+    if isinstance(document, dict) and isinstance(document.get("file_id"), str) and document["file_id"]:
+        size = document.get("file_size")
+        if document.get("mime_type") in PROOF_TYPES and isinstance(size, int) and 0 < size <= MAX_FILE_BYTES:
+            return {"fileId": document["file_id"][:250], "kind": "document", "mime": document["mime_type"],
+                    "name": _clean(document.get("file_name"), 100)}
+    return None
+
+
+def _add_proof(record, media, caption):
+    """Запоминает в карточке файл, присланный студентом. Сам файл остаётся в Telegram."""
+    with transaction.atomic():
+        store.lock()
+        doc = Doc.objects.filter(collection="students", doc_id=record.student_id).first()
+        if doc is None or doc.data.get("deletedAt"):
+            return False
+        proofs = [p for p in doc.data.get("proofs") or [] if isinstance(p, dict)]
+        proofs.append({"id": leads.new_id(), "at": leads.stamp(), "caption": caption, **media})
+        notes = list(doc.data.get("notes") or [])
+        if len(notes) < leads.MAX_AUTO_NOTES:
+            what = "фото" if media["kind"] == "photo" else f"документ {media['name']}".strip()
+            notes.append({"id": leads.new_id(), "text": f"Прислал в бот {what}" + (f": {caption}" if caption else ""),
+                          "at": leads.stamp(), "by": None, "kind": "step"})
+        store.system_write("students", doc.doc_id, {**doc.data, "proofs": proofs[-MAX_PROOFS:], "notes": notes})
+    return True
+
+
+def fetch_file(file_id):
+    """Содержимое файла из Telegram или None. Файлы студентов на сервере не хранятся: читаются по запросу сотрудника."""
+    if not enabled() or cache.get("tg-down"):
+        return None
+    info = call("getFile", file_id=file_id)
+    path = info.get("file_path") if isinstance(info, dict) else None
+    size = info.get("file_size") if isinstance(info, dict) else None
+    if not isinstance(path, str) or not path or (isinstance(size, int) and size > MAX_FILE_BYTES):
+        return None
+    url = f"https://api.telegram.org/file/bot{settings.TELEGRAM_BOT_TOKEN}/{urllib.parse.quote(path)}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            content = response.read(MAX_FILE_BYTES + 1)
+    except urllib.error.HTTPError as exc:
+        log.warning("Telegram: файл не отдан: %s", exc.code)
+        return None
+    except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as exc:
+        log.warning("Telegram: файл не получен: %s", type(exc).__name__)  # в тексте ошибки может быть адрес с токеном
+        cache.set("tg-down", 1, PAUSE_SECONDS)  # при сбое связи минуту не занимаем сервер ожиданием
+        return None
+    return content if len(content) <= MAX_FILE_BYTES else None
+
+
+def _tell_staff_about_message(record, what="Сообщение"):
     """Сотруднику: человек написал в бот. Сам текст лежит в карточке и в Telegram не дублируется."""
     if not cache.add(f"tgnote:{record.chat_id}", 1, NOTE_NOTICE_MINUTES * 60):
         return
     doc = Doc.objects.filter(collection="students", doc_id=record.student_id).first()
     if doc is None:
         return
-    text = f"Сообщение в боте от {leads.plain(doc.data.get('name'))}. Текст — в карточке, раздел «Заметки»."
+    text = f"{what} в боте от {leads.plain(doc.data.get('name'))}. Смотрите в карточке студента."
     mentor = doc.data.get("mentorId")
     if isinstance(mentor, str) and mentor and _staff_chats(user__account__link_id=mentor).exists():
         notify_team(mentor, text)
