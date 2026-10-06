@@ -75,15 +75,18 @@ try:
       pg.wait_for_selector("text=CRM готова к работе"); shot(pg, "s0_welcome.png")
       pg.click("text=Посмотреть на примере"); pg.wait_for_function("() => !S.busy && D().students.length >= 30 && D().meetings.length >= 8", timeout=60000); pg.wait_for_selector(".today"); pg.wait_for_timeout(400)
       shot(pg, "s1_today.png", full_page=True)
-      check("today panels", pg.locator(".panel").count() >= 3)
-      check("today starts with a summary and explains its blocks", pg.locator("#today-kpis .kpi").count() == 4 and pg.locator(".panel-note").count() >= 3 and pg.locator(".rows-h").count() >= 1)
+      check("today shows one list at a time", pg.locator(".today .panel").count() <= 2 and pg.locator("#today-kpis .kpi.on").count() == 1)
+      check("today starts with a summary and explains its blocks", pg.locator("#today-kpis .kpi").count() == 4 and pg.locator(".panel-note").count() >= 1 and pg.locator(".rows-h").count() >= 1)
       check("nav counter", pg.locator(".nav .n").count() >= 1)
       check("logged in as admin, server mode", pg.evaluate("S.server && S.isOwner && !S.limited && S.me.name === 'Анна Владелец'"))
+      pg.click("#today-kpis [data-v=pays]"); pg.wait_for_timeout(150)
+      check("tile switches the list to payments", pg.locator(".today .panel").count() == 1 and "Платежи студентов" in pg.text_content(".today .panel h2"))
       pg.locator(".today [data-act=pay-remind]").first.click(); pg.wait_for_timeout(300)
       clip = pg.evaluate("navigator.clipboard.readText()")
       check("payment reminder copied", "Напоминаю про платёж" in clip and "₽" in clip and "добрый день" in clip.lower(), clip)
       print("   reminder:", clip)
       # шаг выполнен -> что дальше
+      pg.click("#today-kpis [data-v=steps]"); pg.wait_for_timeout(150)
       row = pg.locator(".today .rows li.click").first; sid = row.get_attribute("data-id"); old = store()["students/" + sid]["next"]["text"]
       row.locator(".chk").click(); pg.wait_for_selector("#mform")
       check("after-step modal", "Что дальше" in pg.inner_text("#mform h2"))
@@ -297,6 +300,7 @@ try:
       pg.click(".cal-bar >> text=Сегодня"); pg.wait_for_timeout(150)
       check("month navigation", h2 != h and pg.locator(".cal-cell.now.sel").count() == 1, (h, h2))
       pg.click(".nav >> text=Сегодня"); pg.wait_for_timeout(200)
+      pg.click("#today-kpis [data-v=meets]"); pg.wait_for_timeout(150)
       check("today shows meetings panel", pg.locator(".panel", has_text="Встречи на неделе").locator("li").count() >= 3)
       # карточка: раздел встреч и новая встреча из карточки
       pg.click(".nav >> text=Студенты"); pg.wait_for_timeout(150); pg.fill("#f-q", ""); pg.wait_for_timeout(250)

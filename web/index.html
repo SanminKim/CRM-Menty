@@ -238,6 +238,12 @@ td.clip { white-space: nowrap; max-width: 170px; overflow: hidden; text-overflow
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; }
 .kpi { padding: 14px 16px; display: flex; flex-direction: column; gap: 1px; box-shadow: 1px 0 0 var(--border), 0 1px 0 var(--border); min-width: 0; }
 .kpi.accent { background: var(--brand-soft); }
+button.kpi { font: inherit; color: inherit; text-align: left; border: 0; background: none; cursor: pointer; align-items: flex-start; }
+button.kpi:hover:not(:disabled) { background: var(--surface-2); }
+button.kpi:disabled { cursor: default; opacity: .55; }
+button.kpi.on, button.kpi.on:hover { background: var(--brand-soft); box-shadow: inset 0 -3px 0 var(--brand), 1px 0 0 var(--border), 0 1px 0 var(--border); }
+.today.one { grid-template-columns: minmax(0, 1fr); max-width: 920px; }
+.today.one > .stack:empty { display: none; }
 .kpi-label { color: var(--muted); font-size: 13px; }
 .kpi-value { font-size: 24px; line-height: 1.25; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .kpi-sub { color: var(--muted); font-size: 12px; }
@@ -928,7 +934,7 @@ function navHTML() {
   if (S.mode === "partner") return `<button class="on" aria-current="page">${ico("report")}Отчёт</button>${S.server ? `<button data-act="password">${ico("password")}Сменить пароль</button><button data-act="logout">${ico("logout")}Выйти</button>` : ""}`;
   const ag = agenda(D().students), late = ag.pays.filter(p => p.due < today()).length;
   const meetsToday = events(today(), today()).filter(e => e.status === "planned").length;
-  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи студентов", late, true], ["payouts", "Выплаты"], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"], ["help", "Справка"]];
+  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи студентов", late, true], ["payouts", "Выплаты менторам"], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"], ["help", "Справка"]];
   const cur = S.view === "partner" ? "partners" : S.view === "cohort" ? "cohorts" : S.view;
   if (S.limited) items.splice(items.findIndex(i => i[0] === "partners"), 1);
   const GROUPS = { cohorts: "Обучение", payments: "Деньги", analytics: "Итоги", settings: "Система" };
@@ -996,44 +1002,50 @@ function todayView() {
   const act = list.filter(isActive), g = k => act.filter(s => SGROUP[s.stage] === k).length;
   const dateLine = new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
   const sub = `${dateLine} · в продажах ${g("sales")} · учатся ${g("study")} · ищут работу ${g("job")}`;
-  const noStep = S.moreNoStep ? ag.noStep : ag.noStep.slice(0, 6);
+  const noStep = S.moreNoStep ? ag.noStep : ag.noStep.slice(0, 12);
   const meets = [...unmarked(), ...events(t, daysAhead(7)).filter(e => e.status === "planned")];
   // Заявки, за которые пока никто не отвечает: с сайта они приходят без ментора
   const orphans = !S.limited && !S.readOnly && D().team.length > 0 && !S.f.mentor ? sortBy(D().students.filter(s => isActive(s) && !teamName(s.mentorId)), s => s.createdAt || "").reverse() : [];
   const lateSteps = ag.due.filter(stepLate), nowSteps = ag.due.filter(x => !stepLate(x)), latePays = ag.pays.filter(p => p.due < t), meetsToday = events(t, t).filter(e => e.status === "planned");
   const week = S.moreWeek ? ag.week : ag.week.slice(0, 5);
   const grp = (label, l, cls = "") => l.length ? `<li class="rows-h ${cls}">${label} · ${l.length}</li>` + l.map(stepRow).join("") : "";
-  const tile = (label, value, note, hot = false) => `<div class="kpi"><span class="kpi-label">${label}</span><span class="kpi-value${hot ? " danger-text" : ""}">${value}</span><span class="kpi-sub">${note}</span></div>`;
-  const summary = `<section class="kpis" id="today-kpis">
-    ${tile("Шагов на сегодня", ag.due.length, lateSteps.length ? `из них просрочено ${lateSteps.length}` : ag.due.length ? "просроченных нет" : "всё сделано", lateSteps.length > 0)}
-    ${tile("Просрочено платежей", latePays.length, latePays.length ? money(sum(latePays, p => nnum(p.amount))) : "все платят вовремя", latePays.length > 0)}
-    ${tile("Встреч сегодня", meetsToday.length, meetsToday.length ? "ближайшая в " + esc(meetsToday[0].time || "течение дня") : "встреч нет")}
-    ${tile("Без следующего шага", ag.noStep.length, ag.noStep.length ? "о них легко забыть" : "у всех есть шаг", false)}</section>`;
+  // На экране один список: плитки сверху показывают, сколько чего, и переключают списки
+  const counts = { new: orphans.length, steps: ag.due.length, pays: ag.pays.length, meets: meets.length, nostep: ag.noStep.length };
+  // Пока человек сам не выбрал список, первыми показываются новые заявки без ответственного
+  const want = S.todayTab || (orphans.length ? "new" : "steps");
+  const tab = counts[want] || ["steps", "pays"].includes(want) ? want : "steps";
+  const tile = (k, label, note, hot = false) => `<button class="kpi${tab === k ? " on" : ""}" data-act="today-tab" data-v="${k}" role="tab" aria-selected="${tab === k}"${counts[k] || k === "steps" || k === "pays" ? "" : " disabled"}><span class="kpi-label">${label}</span><span class="kpi-value${hot ? " danger-text" : ""}">${counts[k]}</span><span class="kpi-sub">${note}</span></button>`;
+  const summary = `<section class="kpis" id="today-kpis" role="tablist" aria-label="Что показать">
+    ${orphans.length ? tile("new", "Новые заявки", "ждут ответственного", true) : ""}
+    ${tile("steps", "Сделать", lateSteps.length ? `просрочено ${lateSteps.length}` : ag.due.length ? "на сегодня" : ag.week.length ? `на неделе ещё ${ag.week.length}` : "всё сделано", lateSteps.length > 0)}
+    ${tile("pays", "Платежи студентов", latePays.length ? `просрочено ${latePays.length} · ${money(sum(latePays, p => nnum(p.amount)))}` : ag.pays.length ? "срок в ближайшие три дня" : "ближайших нет", latePays.length > 0)}
+    ${tile("meets", "Встречи", meetsToday.length ? `сегодня ${meetsToday.length}, ближайшая в ${esc(meetsToday[0].time || "течение дня")}` : meets.length ? "на этой неделе" : "на неделе нет")}
+    ${tile("nostep", "Без следующего шага", ag.noStep.length ? "о них легко забыть" : "у всех есть шаг")}</section>`;
   const dueBody = ag.due.length ? `<ul class="rows">${grp("Просрочено", lateSteps, "danger-text")}${grp("Сегодня", nowSteps)}</ul>`
     : `<div class="allclear"><strong>На сегодня шагов нет</strong>${ag.noStep.length ? "Назначьте следующий шаг студентам из списка «Без следующего шага»." : "Все студенты под контролем."}</div>`;
   return headHTML("Сегодня", "", mentorSelect() + addBtn, sub) + demoBanner() + backupBanner() + summary + `
-  <div class="today">
+  <div class="today one">
     <div class="stack">
-      ${orphans.length ? panel("Без ментора", orphans.length, `<ul class="rows">${orphans.slice(0, 8).map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
+      ${tab === "new" && orphans.length ? panel("Без ментора", orphans.length, `<ul class="rows">${orphans.slice(0, 8).map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
           <span class="who"><strong>${esc(s.name)}</strong><span>${s.source === "site" ? "заявка с сайта · " : s.source === "telegram" ? "заявка из Telegram · " : ""}${fShort(isoDay(s.createdAt))}${partnerById(s.partnerId) ? " · " + esc(partnerById(s.partnerId).name) : ""}</span>${s.comment ? `<span>${esc(s.comment)}</span>` : ""}</span>
           ${badge(s.stage)}${waitHours(s) !== null ? `<span class="when${waitHours(s) >= 1 ? " late" : ""}">${waitLabel(waitHours(s))}</span>` : ""}<span class="acts">${tgUser(s) ? `<a class="btn small ghost" data-stop href="https://t.me/${esc(tgUser(s))}" target="_blank" rel="noopener">Написать</a>` : ""}${myTeam() || (S.server && S.isOwner) ? `<button class="btn small primary" data-act="take" data-id="${esc(s.id)}">Взять себе</button>` : ""}<button class="btn small" data-act="assign" data-id="${esc(s.id)}">${myTeam() || (S.server && S.isOwner) ? "Назначить" : "Назначить ментора"}</button></span></li>`).join("")}
           ${orphans.length > 8 ? `<li><button class="link" data-act="list-nomentor">Показать всех: ${orphans.length}</button></li>` : ""}</ul>
           ${S.server && S.isOwner && !myTeam() ? `<p class="hint pad">Чтобы ваши заявки сразу были закреплены за вами, <button class="link" data-act="nav" data-v="settings">добавьте себя в команду</button> в настройках.</p>` : ""}`) : ""}
-      ${panel("Сделать", ag.due.length || "", dueBody, "", "Шаги по студентам. Нажмите кружок, когда шаг выполнен.")}
-      ${ag.week.length ? panel("На неделе", ag.week.length, `<ul class="rows">${week.map(stepRow).join("")}
+      ${tab !== "steps" ? "" : panel("Сделать", ag.due.length || "", dueBody, "", "Шаги по студентам. Нажмите кружок, когда шаг выполнен.")}
+      ${tab === "steps" && ag.week.length ? panel("На неделе", ag.week.length, `<ul class="rows">${week.map(stepRow).join("")}
           ${ag.week.length > 5 ? `<li><button class="link" data-act="more-week">${S.moreWeek ? "Свернуть" : `Показать все: ещё ${ag.week.length - 5}`}</button></li>` : ""}</ul>`, "", "Шаги на ближайшие семь дней.") : ""}
     </div>
     <div class="stack">
-      ${panel("Платежи студентов", ag.pays.length ? money(sum(ag.pays, p => p.amount)) : "", ag.pays.length ? `<ul class="rows">${ag.pays.map(p => `<li class="click" data-act="open" data-id="${esc(p.s.id)}">
+      ${tab !== "pays" ? "" : panel("Платежи студентов", ag.pays.length ? money(sum(ag.pays, p => p.amount)) : "", ag.pays.length ? `<ul class="rows">${ag.pays.map(p => `<li class="click" data-act="open" data-id="${esc(p.s.id)}">
           <span class="who"><strong>${esc(p.s.name)}</strong><span>${esc(p.comment || "Платёж")}</span></span>
           <span class="amt">${money(p.amount)}</span><span class="when${p.due < t ? " late" : ""}">${dueLabel(p.due)}</span>
           <span class="acts"><button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button><button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button></span></li>`).join("")}</ul>`
         : `<p class="empty">Просрочек и платежей на ближайшие три дня нет</p>`, "", "Просроченные и те, что подходят в ближайшие три дня.")}
-      ${meets.length ? panel("Встречи на неделе", meets.length, `<ul class="rows">${meets.map(e => evRow(e, true)).join("")}</ul>`, `<button class="btn small ghost" data-act="nav" data-v="calendar">Календарь</button>`) : ""}
-      ${ag.noStep.length ? panel("Без следующего шага", ag.noStep.length, `<ul class="rows">${noStep.map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
+      ${tab === "meets" && meets.length ? panel("Встречи на неделе", meets.length, `<ul class="rows">${meets.map(e => evRow(e, true)).join("")}</ul>`, `<button class="btn small ghost" data-act="nav" data-v="calendar">Календарь</button>`) : ""}
+      ${tab === "nostep" && ag.noStep.length ? panel("Без следующего шага", ag.noStep.length, `<ul class="rows">${noStep.map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
           <span class="who"><strong>${esc(s.name)}</strong><span>${days(daysSince(s.stageAt))} на этапе</span></span>
           ${badge(s.stage)}<button class="btn small" data-act="step-edit" data-id="${esc(s.id)}">Назначить</button></li>`).join("")}
-          ${ag.noStep.length > 6 ? `<li><button class="link" data-act="more-nostep">${S.moreNoStep ? "Свернуть" : `Показать всех: ещё ${ag.noStep.length - 6}`}</button></li>` : ""}</ul>`, "", "У этих людей не назначено дело с датой.") : ""}
+          ${ag.noStep.length > 12 ? `<li><button class="link" data-act="more-nostep">${S.moreNoStep ? "Свернуть" : `Показать всех: ещё ${ag.noStep.length - 12}`}</button></li>` : ""}</ul>`, "", "У этих людей не назначено дело с датой.") : ""}
     </div>
   </div>`;
 }
@@ -1045,7 +1057,7 @@ function helpView() {
     ["students", "Студенты", "Поиск и список всех людей, выгрузка в файл, действия сразу над несколькими."],
     ["cohorts", "Потоки", "Группы, программа и прогресс по модулям."],
     ["payments", "Платежи студентов", "Кто должен заплатить и кто опаздывает."],
-    ["payouts", "Выплаты", adm ? "Сколько причитается блогеру и менторам, расходы и записанные выплаты." : "Ваши начисления и выплаты."],
+    ["payouts", "Выплаты менторам", adm ? "Сколько причитается блогеру и менторам, расходы и записанные выплаты." : "Ваши начисления и выплаты."],
     ["analytics", "Аналитика", "Конверсия по этапам и время до первого ответа на заявку."],
     ...(adm ? [["partners", "Партнёры", "Откуда приходят заявки и что из них получается."]] : []),
     ["settings", "Настройки", adm ? "Команда, доступы, направления и доли, бот, резервная копия." : "Пароль, уведомления в Telegram, оформление."]];
@@ -1736,14 +1748,14 @@ function moneyHTML(r) {
 function payoutsView() {
   if (S.limited) {
     const me = myTeam(), r = me && D().reports.find(x => x.id === me.id);
-    if (!me) return headHTML("Выплаты") + `<div class="card welcome"><p>Ваша учётная запись не связана с записью в команде. Попросите администратора связать их в разделе «Доступ».</p></div>`;
-    if (!r) return headHTML("Выплаты") + (S.loaded.reports ? `<div class="card welcome"><p>Отчёт о начислениях пока не готов. Он появится после первой оплаты в направлении с вашим участием.</p></div>` : `<p class="loading">Загружаю отчёт…</p>`);
-    return headHTML("Выплаты", "", "", `Ваши начисления и выплаты · данные на ${fDT(r.updatedAt)}`) + moneyHTML(r);
+    if (!me) return headHTML("Выплаты менторам") + `<div class="card welcome"><p>Ваша учётная запись не связана с записью в команде. Попросите администратора связать их в разделе «Доступ».</p></div>`;
+    if (!r) return headHTML("Выплаты менторам") + (S.loaded.reports ? `<div class="card welcome"><p>Отчёт о начислениях пока не готов. Он появится после первой оплаты в направлении с вашим участием.</p></div>` : `<p class="loading">Загружаю отчёт…</p>`);
+    return headHTML("Выплаты менторам", "", "", `Ваши начисления и выплаты · данные на ${fDT(r.updatedAt)}`) + moneyHTML(r);
   }
   const months = lastMonths(12), month = months.includes(S.payMonth) ? S.payMonth : months[0];
   const sel = `<select id="pay-month" aria-label="Месяц">${months.map(k => opt(k, monthName(k), month)).join("")}</select>`;
   const addExp = S.readOnly ? "" : `<button class="btn" data-act="expense-new">+ Расход</button>`;
-  if (!D().directions.length) return headHTML("Выплаты") + `<div class="card welcome"><h2>Сначала создайте направление</h2>
+  if (!D().directions.length) return headHTML("Выплаты менторам") + `<div class="card welcome"><h2>Сначала создайте направление</h2>
     <p>Направление — это продукт школы со своим составом сторон: кто участвует и какой процент чистой выручки получает. Потоки привязываются к направлению, и оплаты их студентов делятся по его условиям.</p>
     <div class="actions">${S.readOnly ? "" : `<button class="btn primary" data-act="direction-new">Создать направление</button>`}</div></div>`;
   const cells = settle().filter(c => c.month === month);
@@ -1765,7 +1777,7 @@ function payoutsView() {
     ${d ? "" : `<p class="hint pad">Оплаты студентов без потока и потоков без направления. Они ни с кем не делятся. Привяжите потоки к направлению в их настройках.</p>`}`);
   };
   const exps = sortBy(D().expenses.filter(e => dayOf(e.date).slice(0, 7) === month), e => String(e.date)).reverse();
-  return headHTML("Выплаты", "", sel + addExp, "Чистая выручка направлений, доли сторон и остатки к выплате") + `<section class="kpis">
+  return headHTML("Выплаты менторам", "", sel + addExp, "Чистая выручка направлений, доли сторон и остатки к выплате") + `<section class="kpis">
     ${kpiHTML(`Получено за ${esc(monthName(month).toLowerCase())}`, money(got))}
     ${kpiHTML("Расходы", money(exp), `записей: ${exps.length}`)}
     ${kpiHTML("Чистая выручка", signed(net), "получено минус расходы")}
@@ -2802,7 +2814,7 @@ function renderSearch() {
 function closeSearch() { $("#gq").value = ""; $("#gq-res").hidden = true; }
 
 // ---------- События ----------
-function go(view) { S.navMore = false; S.view = view; S.openId = null; S.openDay = null; S.sel.clear(); S.sort = null; if (VIEWS.includes(view)) lsSet("crm-menti-view", view); render(); window.scrollTo(0, 0); }
+function go(view) { S.navMore = false; S.view = view; S.openId = null; S.openDay = null; S.todayTab = null; S.sel.clear(); S.sort = null; if (VIEWS.includes(view)) lsSet("crm-menti-view", view); render(); window.scrollTo(0, 0); }
 function openStudent(id) {
   const was = S.openId; S.openId = id; S.histOpen = false; S.logOpen = false; closeSearch(); render();
   const el = $(".drawer"); if (el && !was) el.classList.add("enter");
@@ -2878,6 +2890,7 @@ const ACT = {
   },
   "more-nostep": () => { S.moreNoStep = !S.moreNoStep; render(); },
   "more-week": () => { S.moreWeek = !S.moreWeek; render(); },
+  "today-tab": d => { S.todayTab = d.v; render(); },
   qdate: d => { const el = document.getElementById(d.target); if (el) el.value = daysAhead(+d.days); },
   copy: d => copyText(d.text, "Скопировано"),
   "pay-remind": d => { const s = stu(d.id), p = (s?.payments || []).find(x => x.id === d.pid); if (p) copyText(remindText(s, p), "Напоминание скопировано. Вставьте его в переписку"); },
