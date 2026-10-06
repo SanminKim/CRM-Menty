@@ -205,6 +205,8 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .rows { list-style: none; margin: 0; padding: 0; }
 .rows li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 8px 16px; border-top: 1px solid var(--border); min-width: 0; }
 .rows li.click { cursor: pointer; }
+.rows li.rows-h { padding: 6px 16px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); }
+.panel-note { margin: 0; padding: 0 16px 10px; color: var(--muted); font-size: 13px; }
 .rows li.click:hover { background: var(--surface-2); }
 .rows li:last-child { border-radius: 0 0 var(--radius) var(--radius); }
 .rows .who { min-width: 0; flex: 1 1 150px; display: flex; flex-direction: column; }
@@ -602,7 +604,7 @@ const S = {
   server: false, limited: false, offline: false, me: null, accounts: [],
   data: { students: [], cohorts: [], partners: [], payouts: [], team: [], reports: [], meetings: [], directions: [], expenses: [] }, loaded: {}, trash: [],
   view: "today", openId: null, partnerId: null, cohortId: null, reportId: null, pipe: "sales", anTab: "funnel", sel: new Set(), visible: [],
-  f: { q: "", cohort: "", mentor: "", partner: "", stage: "" }, showLost: false, payTab: "overdue",
+  f: { q: "", cohort: "", mentor: "", partner: "", stage: "" }, showLost: false, payTab: "upcoming",
   config: {}, moreNoStep: false, histOpen: false, logOpen: false, sort: null, cal: { ym: today().slice(0, 7), day: today() }, pending: 0, names: {}, drag: null, busy: false,
 };
 {
@@ -978,7 +980,7 @@ function backupBanner() {
   if (age !== null && age < BACKUP_DAYS) return "";
   return `<div class="banner"><p>${age === null ? "Резервной копии ещё нет." : `Последняя резервная копия сделана ${days(age)} назад.`} Копия на вашем компьютере не зависит от доступа к Claude.</p><button class="btn small" data-act="backup">Скачать копию</button></div>`;
 }
-const panel = (title, count, body, extra = "") => `<section class="panel"><header><h2>${title}</h2>${count !== "" ? `<span class="cnt">${count}</span>` : ""}<span class="right"></span>${extra}</header>${body}</section>`;
+const panel = (title, count, body, extra = "", note = "") => `<section class="panel"><header><h2>${title}</h2>${count !== "" ? `<span class="cnt">${count}</span>` : ""}<span class="right"></span>${extra}</header>${note ? `<p class="panel-note">${note}</p>` : ""}${body}</section>`;
 
 // ----- Сегодня -----
 function stepRow(s) {
@@ -998,9 +1000,18 @@ function todayView() {
   const meets = [...unmarked(), ...events(t, daysAhead(7)).filter(e => e.status === "planned")];
   // Заявки, за которые пока никто не отвечает: с сайта они приходят без ментора
   const orphans = !S.limited && !S.readOnly && D().team.length > 0 && !S.f.mentor ? sortBy(D().students.filter(s => isActive(s) && !teamName(s.mentorId)), s => s.createdAt || "").reverse() : [];
-  const dueBody = ag.due.length ? `<ul class="rows">${ag.due.map(stepRow).join("")}</ul>`
+  const lateSteps = ag.due.filter(stepLate), nowSteps = ag.due.filter(x => !stepLate(x)), latePays = ag.pays.filter(p => p.due < t), meetsToday = events(t, t).filter(e => e.status === "planned");
+  const week = S.moreWeek ? ag.week : ag.week.slice(0, 5);
+  const grp = (label, l, cls = "") => l.length ? `<li class="rows-h ${cls}">${label} · ${l.length}</li>` + l.map(stepRow).join("") : "";
+  const tile = (label, value, note, hot = false) => `<div class="kpi"><span class="kpi-label">${label}</span><span class="kpi-value${hot ? " danger-text" : ""}">${value}</span><span class="kpi-sub">${note}</span></div>`;
+  const summary = `<section class="kpis" id="today-kpis">
+    ${tile("Шагов на сегодня", ag.due.length, lateSteps.length ? `из них просрочено ${lateSteps.length}` : ag.due.length ? "просроченных нет" : "всё сделано", lateSteps.length > 0)}
+    ${tile("Просрочено платежей", latePays.length, latePays.length ? money(sum(latePays, p => nnum(p.amount))) : "все платят вовремя", latePays.length > 0)}
+    ${tile("Встреч сегодня", meetsToday.length, meetsToday.length ? "ближайшая в " + esc(meetsToday[0].time || "течение дня") : "встреч нет")}
+    ${tile("Без следующего шага", ag.noStep.length, ag.noStep.length ? "о них легко забыть" : "у всех есть шаг", false)}</section>`;
+  const dueBody = ag.due.length ? `<ul class="rows">${grp("Просрочено", lateSteps, "danger-text")}${grp("Сегодня", nowSteps)}</ul>`
     : `<div class="allclear"><strong>На сегодня шагов нет</strong>${ag.noStep.length ? "Назначьте следующий шаг студентам из списка «Без следующего шага»." : "Все студенты под контролем."}</div>`;
-  return headHTML("Сегодня", "", mentorSelect() + addBtn, sub) + demoBanner() + backupBanner() + `
+  return headHTML("Сегодня", "", mentorSelect() + addBtn, sub) + demoBanner() + backupBanner() + summary + `
   <div class="today">
     <div class="stack">
       ${orphans.length ? panel("Без ментора", orphans.length, `<ul class="rows">${orphans.slice(0, 8).map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
@@ -1008,20 +1019,21 @@ function todayView() {
           ${badge(s.stage)}${waitHours(s) !== null ? `<span class="when${waitHours(s) >= 1 ? " late" : ""}">${waitLabel(waitHours(s))}</span>` : ""}<span class="acts">${tgUser(s) ? `<a class="btn small ghost" data-stop href="https://t.me/${esc(tgUser(s))}" target="_blank" rel="noopener">Написать</a>` : ""}${myTeam() || (S.server && S.isOwner) ? `<button class="btn small primary" data-act="take" data-id="${esc(s.id)}">Взять себе</button>` : ""}<button class="btn small" data-act="assign" data-id="${esc(s.id)}">${myTeam() || (S.server && S.isOwner) ? "Назначить" : "Назначить ментора"}</button></span></li>`).join("")}
           ${orphans.length > 8 ? `<li><button class="link" data-act="list-nomentor">Показать всех: ${orphans.length}</button></li>` : ""}</ul>
           ${S.server && S.isOwner && !myTeam() ? `<p class="hint pad">Чтобы ваши заявки сразу были закреплены за вами, <button class="link" data-act="nav" data-v="settings">добавьте себя в команду</button> в настройках.</p>` : ""}`) : ""}
-      ${panel("Сделать", ag.due.length || "", dueBody)}
-      ${ag.week.length ? panel("На неделе", ag.week.length, `<ul class="rows">${ag.week.map(stepRow).join("")}</ul>`) : ""}
+      ${panel("Сделать", ag.due.length || "", dueBody, "", "Шаги по студентам. Нажмите кружок, когда шаг выполнен.")}
+      ${ag.week.length ? panel("На неделе", ag.week.length, `<ul class="rows">${week.map(stepRow).join("")}
+          ${ag.week.length > 5 ? `<li><button class="link" data-act="more-week">${S.moreWeek ? "Свернуть" : `Показать все: ещё ${ag.week.length - 5}`}</button></li>` : ""}</ul>`, "", "Шаги на ближайшие семь дней.") : ""}
     </div>
     <div class="stack">
       ${panel("Платежи студентов", ag.pays.length ? money(sum(ag.pays, p => p.amount)) : "", ag.pays.length ? `<ul class="rows">${ag.pays.map(p => `<li class="click" data-act="open" data-id="${esc(p.s.id)}">
           <span class="who"><strong>${esc(p.s.name)}</strong><span>${esc(p.comment || "Платёж")}</span></span>
           <span class="amt">${money(p.amount)}</span><span class="when${p.due < t ? " late" : ""}">${dueLabel(p.due)}</span>
           <span class="acts"><button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button><button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button></span></li>`).join("")}</ul>`
-        : `<p class="empty">Просрочек и платежей на ближайшие три дня нет</p>`)}
+        : `<p class="empty">Просрочек и платежей на ближайшие три дня нет</p>`, "", "Просроченные и те, что подходят в ближайшие три дня.")}
       ${meets.length ? panel("Встречи на неделе", meets.length, `<ul class="rows">${meets.map(e => evRow(e, true)).join("")}</ul>`, `<button class="btn small ghost" data-act="nav" data-v="calendar">Календарь</button>`) : ""}
       ${ag.noStep.length ? panel("Без следующего шага", ag.noStep.length, `<ul class="rows">${noStep.map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
           <span class="who"><strong>${esc(s.name)}</strong><span>${days(daysSince(s.stageAt))} на этапе</span></span>
           ${badge(s.stage)}<button class="btn small" data-act="step-edit" data-id="${esc(s.id)}">Назначить</button></li>`).join("")}
-          ${ag.noStep.length > 6 ? `<li><button class="link" data-act="more-nostep">${S.moreNoStep ? "Свернуть" : `Показать всех: ещё ${ag.noStep.length - 6}`}</button></li>` : ""}</ul>`) : ""}
+          ${ag.noStep.length > 6 ? `<li><button class="link" data-act="more-nostep">${S.moreNoStep ? "Свернуть" : `Показать всех: ещё ${ag.noStep.length - 6}`}</button></li>` : ""}</ul>`, "", "У этих людей не назначено дело с датой.") : ""}
     </div>
   </div>`;
 }
@@ -1836,19 +1848,13 @@ function directionForm(d) {
 function paymentsView() {
   const t = today(), all = D().students.flatMap(s => (s.payments || []).filter(isObj).map(p => ({ ...p, s })));
   const tab = (k, l) => `<button data-act="paytab" data-v="${k}" class="${S.payTab === k ? "on" : ""}">${l}</button>`;
-  const head = headHTML("Платежи студентов") + `<nav class="tabs">${tab("overdue", "Просроченные")}${tab("upcoming", "Ожидаются")}${tab("paid", "Оплаченные")}${tab("history", "Кто как платит")}</nav>`;
-  if (S.payTab === "history") {
-    // Сначала те, у кого просрочка сейчас, затем те, кто чаще опаздывал
-    const rows = D().students.map(s => ({ s, h: payHistory(s) })).filter(r => r.h.paid || r.h.overdue)
-      .sort((a, b) => b.h.overdue - a.h.overdue || b.h.overdueDays - a.h.overdueDays || b.h.late - a.h.late || b.h.avgLate - a.h.avgLate || String(a.s.name || "").localeCompare(String(b.s.name || ""), "ru"));
-    return head + `<div class="panel table-wrap"><table id="pay-hist">
-      <thead><tr><th>Студент</th><th>Поток</th><th class="num">Оплачено платежей</th><th class="num">Вовремя</th><th class="num">С опозданием</th><th class="num">Средняя задержка</th><th class="num">Сейчас просрочено</th><th class="num">Дней просрочки</th></tr></thead>
-      <tbody>${rows.map(({ s, h }) => `<tr class="click" data-act="open" data-id="${esc(s.id)}"><td><strong>${esc(s.name)}</strong></td><td>${esc(cohortName(s.cohortId) || "—")}</td>
-        <td class="num">${h.paid}</td><td class="num">${h.onTime}</td><td class="num${h.late ? " warn-text" : ""}">${h.late}</td><td class="num">${h.late ? days(h.avgLate) : "—"}</td>
-        <td class="num${h.overdue ? " danger-text" : ""}">${h.overdue ? `${h.overdue}${h.overdueSum ? " · " + money(h.overdueSum) : ""}` : "—"}</td><td class="num${h.overdue ? " danger-text" : ""}">${h.overdue ? h.overdueDays : "—"}</td></tr>`).join("")
-        || `<tr><td colspan="8" class="empty">Оплат и просрочек пока не было</td></tr>`}</tbody></table></div>
-    <p class="hint" style="margin-top:12px">Платёж считается оплаченным вовремя, если дата оплаты не позже срока. Задержка — разница между сроком и датой оплаты; если срок платежа потом перенесли, считается от нового срока.</p>`;
-  }
+  const open = all.filter(p => !p.paid && p.s.stage !== "lost"), od = open.filter(p => p.due < t), up = open.filter(p => p.due >= t), paidM = all.filter(p => p.paid && String(p.paid).slice(0, 7) === t.slice(0, 7));
+  const amt = l => money(sum(l, p => nnum(p.amount)));
+  const head = headHTML("Платежи студентов") + `<section class="kpis" id="pay-kpis">
+    <div class="kpi"><span class="kpi-label">Ожидается</span><span class="kpi-value">${amt(up)}</span><span class="kpi-sub">${up.length ? plural(up.length, "платёж", "платежа", "платежей").replace(/^/, up.length + " ") + ", срок ещё не наступил" : "ближайших платежей нет"}</span></div>
+    <div class="kpi"><span class="kpi-label">Просрочено</span><span class="kpi-value${od.length ? " danger-text" : ""}">${amt(od)}</span><span class="kpi-sub">${od.length ? `${od.length} ${plural(od.length, "платёж", "платежа", "платежей")}: напомните студентам` : "просрочек нет"}</span></div>
+    <div class="kpi"><span class="kpi-label">Получено в этом месяце</span><span class="kpi-value">${amt(paidM)}</span><span class="kpi-sub">${paidM.length ? `${paidM.length} ${plural(paidM.length, "платёж", "платежа", "платежей")}` : "оплат пока не было"}</span></div></section>
+  <nav class="tabs">${tab("upcoming", `Ожидаются${up.length ? ` · ${up.length}` : ""}`)}${tab("overdue", `Просроченные${od.length ? ` · ${od.length}` : ""}`)}${tab("paid", "Оплаченные")}</nav>`;
   let list;
   if (S.payTab === "overdue") list = sortBy(all.filter(p => !p.paid && p.due < t), p => p.due);
   else if (S.payTab === "upcoming") list = sortBy(all.filter(p => !p.paid && p.due >= t), p => p.due);
@@ -2871,6 +2877,7 @@ const ACT = {
     try { if (myTeam()) await mine(myTeam().id); else if (S.server && S.isOwner) await selfTeam(mine); } finally { S.taking = false; }
   },
   "more-nostep": () => { S.moreNoStep = !S.moreNoStep; render(); },
+  "more-week": () => { S.moreWeek = !S.moreWeek; render(); },
   qdate: d => { const el = document.getElementById(d.target); if (el) el.value = daysAhead(+d.days); },
   copy: d => copyText(d.text, "Скопировано"),
   "pay-remind": d => { const s = stu(d.id), p = (s?.payments || []).find(x => x.id === d.pid); if (p) copyText(remindText(s, p), "Напоминание скопировано. Вставьте его в переписку"); },
