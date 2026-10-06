@@ -1367,6 +1367,27 @@ function botLine(s) {
   if (!S.server || !tg?.enabled || !tg.bot) return "";
   return `<p class="hint" style="margin-top:6px">${s.tgId ? "Студент подключён к боту: в день платежа бот ему напомнит." : `Студент не подключён к боту и напоминаний о платежах не получит. ${S.readOnly ? "" : `<button class="link" data-act="tg-student" data-id="${esc(s.id)}">Получить ссылку для студента</button>`}`}</p>`;
 }
+// ----- История оплат: вовремя или с опозданием. Считается из срока и даты оплаты каждого платежа -----
+const payDelay = x => { if (!isObj(x) || !isDay(x.due) || !isDay(x.paid)) return null; const d = daysBetween(x.due.slice(0, 10), x.paid.slice(0, 10)); return Number.isNaN(d) ? null : Math.max(d, 0); }; // дата вроде 2026-13-45 не считается
+function payHistory(s) {
+  const t = today(), pays = (Array.isArray(s.payments) ? s.payments : []).filter(x => isObj(x) && isDay(x.due));
+  const delays = pays.map(payDelay).filter(d => d !== null), late = delays.filter(d => d > 0);
+  const open = pays.filter(x => !x.paid && x.due.slice(0, 10) < t && !Number.isNaN(daysBetween(x.due.slice(0, 10), t)));
+  return {
+    total: pays.length, paid: delays.length, onTime: delays.length - late.length, late: late.length,
+    avgLate: late.length ? Math.round(sum(late, d => d) / late.length) : 0, maxLate: late.length ? Math.max(...late) : 0,
+    overdue: open.length, overdueSum: sum(open, x => nnum(x.amount)), overdueDays: open.length ? Math.max(...open.map(x => daysBetween(x.due.slice(0, 10), t))) : 0,
+  };
+}
+function payHistoryLine(s) {
+  const h = payHistory(s);
+  if (!h.paid && !h.overdue) return "";
+  const parts = [];
+  if (h.paid) parts.push(`вовремя ${h.onTime} из ${h.paid}`);
+  if (h.late) parts.push(`<span class="warn-text">с опозданием ${h.late}: в среднем на ${days(h.avgLate)}${h.late > 1 ? `, самое долгое ${days(h.maxLate)}` : ""}</span>`);
+  if (h.overdue) parts.push(`<span class="danger-text">сейчас просрочено ${h.overdue}, уже ${days(h.overdueDays)}</span>`);
+  return `<p class="hint" id="pay-history" style="margin:0 0 6px">История оплат: ${parts.join(" · ")}</p>`;
+}
 // Файлы, которые студент прислал боту: фото начисления зарплаты, отработанных часов. Сам файл лежит в Telegram
 function proofSection(s) {
   const list = sortBy((Array.isArray(s.proofs) ? s.proofs : []).filter(isObj), x => String(x.at || "")).reverse();
@@ -1382,9 +1403,9 @@ function paySection(s) {
   const t = today(), pays = sortBy(s.payments || [], x => x.due);
   return `<section class="sec"><header><h3>Платежи</h3><span class="sub">${s.price ? `${money(paidSum(s))} из ${money(s.price)}` : pays.length ? money(paidSum(s)) : ""}</span><span class="right"></span>
       <button class="btn small" data-act="pay-new" data-id="${esc(s.id)}">+ Платёж</button><button class="btn small" data-act="pay-plan" data-id="${esc(s.id)}">+ Рассрочка</button>${SGROUP[s.stage] === "job" ? `<button class="btn small" data-act="pay-salary" data-id="${esc(s.id)}">+ С зарплаты</button>` : ""}</header>
-    <div class="box">${pays.length ? `<div class="table-wrap"><table class="compact"><tbody>
+    ${payHistoryLine(s)}<div class="box">${pays.length ? `<div class="table-wrap"><table class="compact"><tbody>
       ${pays.map(x => { const od = !x.paid && x.due < t; return `<tr><td>${fShort(x.due)}${x.comment ? `<div class="sub">${esc(x.comment)}</div>` : ""}</td><td class="num">${isPending(x) ? `<span class="sub">${esc(pctText(x.percent))} от дохода</span>` : money(x.amount)}</td>
-        <td>${x.paid ? `<span class="tag ok">оплачен ${fDay(x.paid)}</span>` : isPending(x) ? `<span class="tag ${od ? "danger" : "warn"}">${od ? "ждём доход" : "сумма по доходу"}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
+        <td>${x.paid ? (payDelay(x) > 0 ? `<span class="tag warn" title="Срок был ${esc(fDate(x.due))}">оплачен ${fDay(x.paid)} · на ${days(payDelay(x))} позже</span>` : `<span class="tag ok">оплачен ${fDay(x.paid)}</span>`) : isPending(x) ? `<span class="tag ${od ? "danger" : "warn"}">${od ? "ждём доход" : "сумма по доходу"}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
         <td class="row-actions">${x.paid ? "" : isPending(x) ? `<button class="btn small" data-act="pay-income" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Указать доход</button> ` : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(s.id)}" data-pid="${esc(x.id)}" title="Скопировать текст напоминания">Напомнить</button> <button class="btn small" data-act="pay-done" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Оплачен</button> `}<button class="btn small ghost" data-act="pay-edit" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Изменить</button></td></tr>`; }).join("")}
     </tbody></table></div>` : `<p class="empty">Платежей пока нет</p>`}</div>${pays.some(x => !x.paid) ? botLine(s) : ""}</section>${proofSection(s)}`;
 }
@@ -1730,20 +1751,35 @@ function directionForm(d) {
   });
 }
 function paymentsView() {
-  const t = today(), all = D().students.flatMap(s => (s.payments || []).map(p => ({ ...p, s })));
+  const t = today(), all = D().students.flatMap(s => (s.payments || []).filter(isObj).map(p => ({ ...p, s })));
+  const tab = (k, l) => `<button data-act="paytab" data-v="${k}" class="${S.payTab === k ? "on" : ""}">${l}</button>`;
+  const head = headHTML("Платежи") + `<nav class="tabs">${tab("overdue", "Просроченные")}${tab("upcoming", "Ожидаются")}${tab("paid", "Оплаченные")}${tab("history", "Кто как платит")}</nav>`;
+  if (S.payTab === "history") {
+    // Сначала те, у кого просрочка сейчас, затем те, кто чаще опаздывал
+    const rows = D().students.map(s => ({ s, h: payHistory(s) })).filter(r => r.h.paid || r.h.overdue)
+      .sort((a, b) => b.h.overdue - a.h.overdue || b.h.overdueDays - a.h.overdueDays || b.h.late - a.h.late || b.h.avgLate - a.h.avgLate || String(a.s.name || "").localeCompare(String(b.s.name || ""), "ru"));
+    return head + `<div class="panel table-wrap"><table id="pay-hist">
+      <thead><tr><th>Студент</th><th>Поток</th><th class="num">Оплачено платежей</th><th class="num">Вовремя</th><th class="num">С опозданием</th><th class="num">Средняя задержка</th><th class="num">Сейчас просрочено</th><th class="num">Дней просрочки</th></tr></thead>
+      <tbody>${rows.map(({ s, h }) => `<tr class="click" data-act="open" data-id="${esc(s.id)}"><td><strong>${esc(s.name)}</strong></td><td>${esc(cohortName(s.cohortId) || "—")}</td>
+        <td class="num">${h.paid}</td><td class="num">${h.onTime}</td><td class="num${h.late ? " warn-text" : ""}">${h.late}</td><td class="num">${h.late ? days(h.avgLate) : "—"}</td>
+        <td class="num${h.overdue ? " danger-text" : ""}">${h.overdue ? `${h.overdue}${h.overdueSum ? " · " + money(h.overdueSum) : ""}` : "—"}</td><td class="num${h.overdue ? " danger-text" : ""}">${h.overdue ? h.overdueDays : "—"}</td></tr>`).join("")
+        || `<tr><td colspan="8" class="empty">Оплат и просрочек пока не было</td></tr>`}</tbody></table></div>
+    <p class="hint" style="margin-top:12px">Платёж считается оплаченным вовремя, если дата оплаты не позже срока. Задержка — разница между сроком и датой оплаты; если срок платежа потом перенесли, считается от нового срока.</p>`;
+  }
   let list;
   if (S.payTab === "overdue") list = sortBy(all.filter(p => !p.paid && p.due < t), p => p.due);
   else if (S.payTab === "upcoming") list = sortBy(all.filter(p => !p.paid && p.due >= t), p => p.due);
   else list = sortBy(all.filter(p => p.paid), p => p.paid).reverse();
-  const tab = (k, l) => `<button data-act="paytab" data-v="${k}" class="${S.payTab === k ? "on" : ""}">${l}</button>`;
-  const emptyText = { overdue: "Просроченных платежей нет", upcoming: "Ожидаемых платежей нет. График рассрочки создаётся в карточке студента.", paid: "Оплат пока не было" }[S.payTab];
-  return headHTML("Платежи") + `<nav class="tabs">${tab("overdue", "Просроченные")}${tab("upcoming", "Ожидаются")}${tab("paid", "Оплаченные")}</nav>
-  <div class="panel table-wrap"><table>
-    <thead><tr><th>Студент</th><th>Поток</th><th>${S.payTab === "paid" ? "Оплачен" : "Срок"}</th><th class="num">Сумма</th><th>Комментарий</th><th></th></tr></thead>
+  const paidTab = !["overdue", "upcoming"].includes(S.payTab);
+  const emptyText = { overdue: "Просроченных платежей нет", upcoming: "Ожидаемых платежей нет. График рассрочки создаётся в карточке студента.", paid: "Оплат пока не было" }[S.payTab] || "";
+  return head + `<div class="panel table-wrap"><table>
+    <thead><tr><th>Студент</th><th>Поток</th><th>${paidTab ? "Оплачен" : "Срок"}</th>${paidTab ? "<th>Срок был</th><th>Вовремя</th>" : ""}<th class="num">Сумма</th><th>Комментарий</th><th></th></tr></thead>
     <tbody>${list.map(p => `<tr class="click" data-act="open" data-id="${esc(p.s.id)}"><td><strong>${esc(p.s.name)}</strong></td>
-      <td>${esc(cohortName(p.s.cohortId) || "—")}</td><td${!p.paid && p.due < t ? ' class="danger-text"' : ""}>${fDate(S.payTab === "paid" ? p.paid : p.due)}</td><td class="num">${money(p.amount)}</td><td class="muted">${esc(p.comment)}</td>
-      <td class="row-actions">${p.paid ? "" : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button> <button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button>`}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">${emptyText}</td></tr>`}</tbody>
-    ${list.length ? `<tfoot><tr><td colspan="3">Итого</td><td class="num">${money(sum(list, p => p.amount))}</td><td colspan="2"></td></tr></tfoot>` : ""}
+      <td>${esc(cohortName(p.s.cohortId) || "—")}</td><td${!p.paid && p.due < t ? ' class="danger-text"' : ""}>${fDate(paidTab ? p.paid : p.due)}</td>
+      ${paidTab ? `<td class="muted">${fDate(p.due)}</td><td>${payDelay(p) > 0 ? `<span class="tag warn">на ${days(payDelay(p))} позже</span>` : payDelay(p) === 0 ? `<span class="tag ok">вовремя</span>` : ""}</td>` : ""}
+      <td class="num">${isPending(p) ? `<span class="sub">${esc(pctText(p.percent))} от дохода</span>` : money(p.amount)}</td><td class="muted">${esc(p.comment)}</td>
+      <td class="row-actions">${p.paid ? "" : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button> <button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">${isPending(p) ? "Указать доход" : "Оплачен"}</button>`}</td></tr>`).join("") || `<tr><td colspan="${paidTab ? 8 : 6}" class="empty">${emptyText}</td></tr>`}</tbody>
+    ${list.length ? `<tfoot><tr><td colspan="${paidTab ? 5 : 3}">Итого</td><td class="num">${money(sum(list, p => p.amount))}</td><td colspan="2"></td></tr></tfoot>` : ""}
   </table></div>`;
 }
 
