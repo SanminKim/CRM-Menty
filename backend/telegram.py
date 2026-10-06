@@ -34,6 +34,8 @@ MESSAGES_PER_MINUTE = 20
 LEADS_PER_MINUTE = 20     # заявок через бота со всех чатов вместе
 LEADS_PER_DAY = 300
 LINK_MINUTES = 15
+STUDENT_LINK_DAYS = 7     # ссылку студенту отправляют лично, открыть её он может не сразу
+NOTE_NOTICE_MINUTES = 10  # о сообщениях одного человека сотруднику сообщаем не чаще
 PAUSE_SECONDS = 60        # сколько не обращаться к Telegram после сбоя, чтобы не занимать сервер ожиданием
 MAX_UPDATE_BYTES = 64 * 1024
 
@@ -53,6 +55,10 @@ PRESS_BUTTON = "Чтобы продолжить, нажмите кнопку «�
 TOO_SHORT = "Напишите, пожалуйста, имя текстом."
 STAFF_LINKED = "Готово. Уведомления CRM будут приходить в этот чат. Отключить их можно в CRM: Настройки → Учётная запись."
 STAFF_HELLO = "Этот чат подключён к CRM: сюда приходят уведомления. Заявки оставляют люди по ссылке от партнёра."
+STUDENT_LINKED = ("Готово, чат подключён. В день платежа я пришлю напоминание.\n"
+                  "Если хотите что-то передать ментору, напишите сюда.")
+STUDENT_UNLINKED = "Напоминания о платежах теперь приходят в другой чат. Если это ошибка, напишите ментору."
+STUDENT_LINK_EXPIRED = "Ссылка для подключения устарела. Попросите у ментора новую."
 LINK_EXPIRED = "Ссылка для подключения устарела. Откройте CRM: Настройки → Учётная запись → «Подключить Telegram»."
 
 
@@ -156,6 +162,20 @@ def link_url(user):
     code = secrets.token_urlsafe(18)
     cache.set(f"tglink:{code}", user.pk, LINK_MINUTES * 60)
     return f"https://t.me/{bot}?start=link_{code}"
+
+
+def student_link_url(student_id):
+    """Одноразовая ссылка, по которой студент подключает свой чат к карточке: по ней бот напоминает о платежах."""
+    bot = bot_username()
+    if not enabled() or not bot:
+        return None
+    # Пока ссылкой не воспользовались, для студента выдаётся одна и та же: повторные нажатия не плодят записи в кэше
+    code = cache.get(f"tgstu-of:{student_id}")
+    if not code or cache.get(f"tgstu:{code}") != student_id:
+        code = secrets.token_urlsafe(18)
+        cache.set(f"tgstu-of:{student_id}", code, STUDENT_LINK_DAYS * 86400)
+    cache.set(f"tgstu:{code}", student_id, STUDENT_LINK_DAYS * 86400)
+    return f"https://t.me/{bot}?start=stu_{code}"
 
 
 def unlink(user):
@@ -279,6 +299,7 @@ def handle(update):
             return
         # Заметки пишем только в карточку, которая точно принадлежит этому чату
         if record.student_id and _add_note(record, text[:1000]):
+            _tell_staff_about_message(record)
             return send(chat_id, PASSED)
         return send(chat_id, RECEIVED)
     return _on_start(record, "")
@@ -302,7 +323,9 @@ def _on_start(record, payload):
         return send(record.chat_id, STAFF_LINKED)
     if record.user_id:
         _keep(record)
-        return send(record.chat_id, STAFF_HELLO)
+        return send(record.chat_id, STAFF_HELLO)  # чат сотрудника к карточке студента не привязывается
+    if payload.startswith("stu_"):
+        return _link_student(record, payload[4:][:64])
     if record.state == "done":
         _keep(record)
         return send(record.chat_id, ALREADY if record.student_id else RECEIVED)
@@ -310,6 +333,56 @@ def _on_start(record, payload):
     record.data = {"promo": payload if PROMO_RE.match(payload) else ""}
     _keep(record)
     return send(record.chat_id, HELLO, reply_markup={"inline_keyboard": [[{"text": "Продолжить", "callback_data": "consent"}]]})
+
+
+def _link_student(record, code):
+    """Привязывает чат к карточке по ссылке от ментора. Ссылка одноразовая: кто первым открыл, тот и подключён,
+    поэтому ментор отправляет её студенту лично."""
+    key, used = f"tgstu:{code}", f"tgstu-used:{code}"
+    student_id = cache.get(key)
+    linked, dropped = False, []
+    if isinstance(student_id, str) and cache.add(used, 1, STUDENT_LINK_DAYS * 86400):
+        try:
+            with transaction.atomic():
+                store.lock()
+                doc = Doc.objects.filter(collection="students", doc_id=student_id).first()
+                if doc is not None and not doc.data.get("deletedAt"):
+                    # Этот чат мог быть привязан к другой карточке: там отметка о чате снимается, иначе CRM обещала бы напоминания
+                    for other in Doc.objects.filter(collection="students", data__tgId=record.chat_id).exclude(doc_id=student_id):
+                        store.system_write("students", other.doc_id, {k: v for k, v in other.data.items() if k != "tgId"})
+                    data = {**doc.data, "tgId": record.chat_id}
+                    if not data.get("telegram") and record.username:
+                        data["telegram"] = f"@{record.username}"
+                    store.system_write("students", student_id, data)
+                    old = TgChat.objects.filter(student_id=student_id).exclude(pk=record.pk)  # один чат на студента
+                    dropped = list(old.values_list("chat_id", flat=True))
+                    old.update(student_id="")
+                    record.state, record.student_id, record.data = "done", student_id, {}
+                    linked = True
+        except Exception:
+            cache.delete(used)  # запись не удалась: ссылка остаётся рабочей
+            raise
+        cache.delete(key)
+        cache.delete(f"tgstu-of:{student_id}")
+    _keep(record)
+    for chat_id in dropped:
+        send(chat_id, STUDENT_UNLINKED)
+    return send(record.chat_id, STUDENT_LINKED if linked else STUDENT_LINK_EXPIRED)
+
+
+def _tell_staff_about_message(record):
+    """Сотруднику: человек написал в бот. Сам текст лежит в карточке и в Telegram не дублируется."""
+    if not cache.add(f"tgnote:{record.chat_id}", 1, NOTE_NOTICE_MINUTES * 60):
+        return
+    doc = Doc.objects.filter(collection="students", doc_id=record.student_id).first()
+    if doc is None:
+        return
+    text = f"Сообщение в боте от {leads.plain(doc.data.get('name'))}. Текст — в карточке, раздел «Заметки»."
+    mentor = doc.data.get("mentorId")
+    if isinstance(mentor, str) and mentor and _staff_chats(user__account__link_id=mentor).exists():
+        notify_team(mentor, text)
+    else:
+        notify_admins(text)
 
 
 def _on_button(query):

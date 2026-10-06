@@ -797,6 +797,56 @@ class TelegramTests(BaseCase):
         self.say("/start <b>x</b> ../../etc", chat=556)           # неподходящий промокод отбрасывается
         self.assertEqual(TgChat.objects.get(chat_id=556).data, {"promo": ""})
 
+    def test_student_is_connected_to_the_bot_by_a_personal_link(self):
+        from backend.models import TgChat
+        TgChat.objects.create(chat_id=901, user=self.mentor)
+        TgChat.objects.create(chat_id=902, user=self.admin)
+        store.system_write("students", "s1", student("t1", name="Иванов Пётр", telegram=""))
+        post = lambda sid: self.client.post("/api/telegram/student-link/", data=json.dumps({"studentId": sid}), content_type="application/json")
+        self.login("blogger")
+        self.assertEqual(post("s1").status_code, 403)
+        self.login("other")
+        self.assertEqual(post("s1").status_code, 403)                       # чужого студента подключить нельзя
+        self.login("mentor")
+        self.assertEqual(post("s2").status_code, 403)
+        self.assertEqual(post("nope").status_code, 403)
+        url = post("s1").json()["url"]
+        self.assertTrue(url.startswith("https://t.me/menti_bot?start=stu_"))
+        code = url.split("start=")[1]
+        self.say("/start stu_wrong", chat=710)
+        self.assertIn("устарела", self.texts(710)[-1])
+        self.say("/start " + code, chat=901)                                # сотрудник случайно открыл ссылку сам
+        self.assertNotIn("tgId", Doc.objects.get(doc_id="s1").data)
+        self.say("/start " + code, chat=711, username="petr_i")
+        doc = Doc.objects.get(doc_id="s1").data
+        self.assertEqual((doc["tgId"], doc["telegram"]), (711, "@petr_i"))
+        self.assertEqual((TgChat.objects.get(chat_id=711).student_id, TgChat.objects.get(chat_id=711).state), ("s1", "done"))
+        self.assertIn("напомин", self.texts(711)[-1])
+        self.say("/start " + code, chat=712)                                # ссылка одноразовая
+        self.assertEqual(Doc.objects.get(doc_id="s1").data["tgId"], 711)
+        self.assertIn("устарела", self.texts(712)[-1])
+        self.sent.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.say("Оплатил вчера, +7 900 111-22-33", chat=711, username="petr_i")
+        self.assertIn("Оплатил вчера", Doc.objects.get(doc_id="s1").data["notes"][-1]["text"])
+        notice = self.texts(901)
+        self.assertEqual(len(notice), 1)                                    # ментор узнаёт о сообщении студента
+        self.assertIn("Иванов Пётр", notice[0])
+        self.assertNotIn("111-22", notice[0])                               # сам текст в Telegram не дублируется
+        self.assertEqual(self.texts(902), [])                               # у студента есть ментор: администратору не шлём
+        self.say("И ещё вопрос", chat=711, username="petr_i")
+        self.assertEqual(len(self.texts(901)), 1)                           # не чаще раза в десять минут
+        url2 = post("s1").json()["url"]                                     # студент сменил аккаунт: новая ссылка перепривязывает чат
+        self.say("/start " + url2.split("start=")[1], chat=713)
+        self.assertEqual(Doc.objects.get(doc_id="s1").data["tgId"], 713)
+        self.assertEqual(TgChat.objects.get(chat_id=711).student_id, "")
+        self.assertIn("в другой чат", self.texts(711)[-1])                   # прежний чат узнаёт, что отключён
+        self.assertEqual(post("s1").json()["url"], post("s1").json()["url"])  # неиспользованная ссылка выдаётся та же
+        store.system_write("students", "s5", student("t1", name="Другой Студент"))
+        self.say("/start " + post("s5").json()["url"].split("start=")[1], chat=713)   # тот же чат подключили к другой карточке
+        self.assertNotIn("tgId", Doc.objects.get(doc_id="s1").data)          # в прежней карточке отметка о чате снята
+        self.assertEqual(Doc.objects.get(doc_id="s5").data["tgId"], 713)
+
     def test_staff_links_telegram_and_gets_assignment_notice(self):
         from backend.models import TgChat
         self.login("blogger")
@@ -1207,6 +1257,46 @@ class SchedulerTests(BaseCase):
         with override_settings(BACKUP_PASSPHRASE=""):
             self.login("admin")
             self.assertFalse(self.client.get("/api/me/").json()["telegram"]["backup"])
+
+    def test_student_gets_a_payment_reminder_on_the_due_day(self):
+        from backend.models import TgChat
+        TgChat.objects.create(chat_id=777, student_id="s1", state="done")
+        TgChat.objects.create(chat_id=778, student_id="s9", state="done")          # чат привязан к другой карточке
+        pay = lambda sid, tg, **extra: store.system_write("students", sid, student("t1", tgId=tg, stage="offer", payments=[
+            {"id": "a", "amount": 15000, "due": "2026-10-06", "paid": None, "comment": "С зарплаты 2/6"},
+            {"id": "b", "amount": 5000, "due": "2026-10-06", "paid": None},
+            {"id": "c", "amount": 15000, "due": "2026-10-06", "paid": "2026-10-05"},
+            {"id": "d", "amount": 15000, "due": "2026-11-06", "paid": None}], **extra))
+        pay("s1", 777)
+        pay("s6", 778)                                                              # tgId указывает на чужой чат: не пишем
+        pay("s7", 777, deletedAt="2026-10-01T00:00:00Z")
+        pay("s8", [777])
+        self.run_at(9, 59)
+        self.assertEqual(self.texts(777), [])
+        self.run_at(10, 1)
+        self.assertEqual(len(self.texts(777)), 1)
+        self.assertIn("20 000 ₽", self.texts(777)[0])                               # два неоплаченных платежа с сегодняшним сроком
+        self.assertEqual(self.texts(778), [])
+        self.run_at(10, 2)
+        self.run_at(18, 0)
+        self.assertEqual(len(self.texts(777)), 1)                                   # раз в день
+        from unittest import mock
+        from backend import telegram
+        TgChat.objects.create(chat_id=779, student_id="s10", state="done")
+        pay("s10", 779)
+        with mock.patch.object(telegram, "send", return_value=None):                # Telegram недоступен
+            self.run_at(18, 5)
+        self.run_at(18, 6)
+        self.assertEqual(len(self.texts(779)), 1)                                   # напоминание ушло при следующем проходе
+        import datetime
+        self.run_at(10, 5, day=self.day + datetime.timedelta(days=1))
+        self.assertEqual(len(self.texts(777)), 1)                                   # на следующий день срока нет — тишина
+        self.sent.clear()
+        store.system_write("students", "s1", student("t1", tgId=777, stage="lost", payments=[{"id": "a", "amount": 1, "due": "2026-11-06", "paid": None}]))
+        self.run_at(10, 5, day=datetime.date(2026, 11, 6))
+        self.assertEqual(self.texts(777), [])                                       # выбывшему не напоминаем
+        self.run_at(22, 0, day=datetime.date(2026, 11, 6))
+        self.assertEqual(self.texts(777), [])
 
     def test_scheduler_is_silent_without_the_bot(self):
         with override_settings(TELEGRAM_BOT_TOKEN=""):

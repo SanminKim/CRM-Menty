@@ -138,7 +138,10 @@
       create: data => call("POST", "/api/accounts/", data),
       update: (id, data) => call("PATCH", `/api/accounts/${id}/`, data),
     },
-    telegram: { link: () => call("POST", "/api/telegram/link/"), unlink: () => call("DELETE", "/api/telegram/link/") },
+    telegram: {
+      link: () => call("POST", "/api/telegram/link/"), unlink: () => call("DELETE", "/api/telegram/link/"),
+      student: id => call("POST", "/api/telegram/student-link/", { studentId: id }),
+    },
     logout: () => {
       const f = document.createElement("form"); f.method = "post"; f.action = "/logout/";
       const i = document.createElement("input"); i.type = "hidden"; i.name = "csrfmiddlewaretoken"; i.value = csrf();

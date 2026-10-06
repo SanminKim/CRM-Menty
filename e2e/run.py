@@ -476,6 +476,24 @@ try:
       shot(pg, "s28_finance.png", full_page=True)
       pg.click(".tabs >> text=Воронка и этапы"); pg.wait_for_selector("#chart-leads"); check("analytics: leads by month and mentors table", pg.locator("#chart-leads rect, #chart-leads path").count() > 0 and pg.locator("#an-mentors tbody tr").count() >= 1)
       shot(pg, "s29_analytics.png", full_page=True)
+      # оплата с зарплаты: процент, период, дата первого платежа
+      sid = pg.evaluate("D().students.find(s => s.stage === 'offer' && s.jobSalary).id")
+      before = pg.evaluate("window.__store")["students/" + sid]
+      pg.evaluate(f"openStudent({json.dumps(sid)})"); pg.wait_for_selector("[data-act=pay-salary]"); pg.click("[data-act=pay-salary]"); pg.wait_for_selector("#mform")
+      pg.fill("#m-salary", "100000"); pg.fill("#m-percent", "15"); pg.fill("#m-months", "6"); pg.fill("#m-first", "2027-01-31")
+      check("salary plan form shows the totals", "6 платежей по 15" in pg.inner_text("#m-sum") and "90" in pg.inner_text("#m-sum"), pg.inner_text("#m-sum"))
+      pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(500)
+      after = pg.evaluate("window.__store")["students/" + sid]
+      added = [p for p in after["payments"] if str(p.get("comment", "")).startswith("С зарплаты")]
+      check("salary plan: six monthly payments of 15% of salary", [p["amount"] for p in added] == [15000] * 6 and [p["due"] for p in added] == ["2027-01-31", "2027-02-28", "2027-03-31", "2027-04-30", "2027-05-31", "2027-06-30"]
+            and [p["comment"] for p in added][::5] == ["С зарплаты 1/6", "С зарплаты 6/6"] and all(p["paid"] is None for p in added), added)
+      check("salary plan: price grows, change is logged, defaults are remembered", after["price"] == (before.get("price") or 0) + 90000 and "Оплата с зарплаты: 15% от 100" in after["log"][-1]["text"]
+            and pg.evaluate("window.__store")["config/main"].get("salaryPlan") == {"percent": 15, "months": 6}, (after.get("price"), after["log"][-1], pg.evaluate("window.__store")["config/main"]))
+      check("card says whether the bot will remind the student", "не подключён к боту" in pg.text_content(".drawer") and pg.locator("[data-act=tg-student]").count() == 1)
+      link = pg.evaluate(f"SRV.telegram.student({json.dumps(sid)}).then(r => r.url)")
+      check("personal bot link for the student", link.startswith("https://t.me/menti_e2e_bot?start=stu_"), link)
+      pg.click("[data-act=pay-salary]"); pg.wait_for_selector("#mform"); check("next form is prefilled with the remembered percent and period", pg.input_value("#m-percent") == "15" and pg.input_value("#m-months") == "6")
+      pg.click("[data-act=m-close]"); pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
       # тема и раскладка настроек
       pg.click(".nav >> text=Настройки"); pg.wait_for_selector(".cols2")
       tops = pg.evaluate("[...document.querySelectorAll('.cols2 > .stack')].map(e => Math.round(e.getBoundingClientRect().top))")

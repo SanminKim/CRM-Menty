@@ -13,12 +13,13 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from . import backup, leads, reports, telegram
-from .models import Account, Doc
+from .models import Account, Doc, TgChat
 
 log = logging.getLogger(__name__)
 
 DIGEST_HOURS = range(9, 12)   # сводка приходит утром; если сервер в это время не работал, днём её уже не шлём
 BACKUP_FROM_HOUR = 4
+PAY_HOURS = range(10, 21)     # студентам пишем днём
 REMIND_MINUTES = 60
 RETRY_MINUTES = 60
 KEEP_SECONDS = 3 * 86400      # сколько помнить, что дело за этот день сделано
@@ -30,7 +31,7 @@ def run(now=None):
     if not telegram.enabled():
         return
     now = timezone.localtime(now) if now else timezone.localtime()
-    for job in (_reminders, _digests, _backup):
+    for job in (_reminders, _digests, _pay_reminders, _backup):
         try:
             job(now)
         except Exception:  # одно сорвавшееся дело не должно останавливать остальные и сам планировщик
@@ -139,6 +140,33 @@ def _reminders(now):
         title = PHONE_RE.sub("…", leads.plain(m.get("title") if isinstance(m.get("title"), str) else "", 80)) or "встреча"
         for chat_id in to:
             telegram.send(chat_id, f"Через {max(round(left), 1)} мин, в {clock}: {title}\n{settings.PUBLIC_URL}/")
+
+
+# ---------- Напоминание студенту о платеже ----------
+
+PAY_TEXT = ("Здравствуйте! Напоминаю: сегодня срок платежа за обучение — {amount}.\n"
+            "Если уже оплатили, напишите об этом сюда — я передам ментору.")
+
+
+def _pay_reminders(now):
+    """В день платежа бот пишет студенту, чей чат подключён к карточке. Одно сообщение в день на общую сумму."""
+    if now.hour not in PAY_HOURS:
+        return
+    today = now.date().isoformat()
+    # Пишем только в чат, который сам привязан к этой карточке: одного tgId в записи студента недостаточно
+    bound = {c.chat_id: c.student_id for c in TgChat.objects.filter(user__isnull=True).exclude(student_id="")}
+    for student_id, s in _docs("students"):
+        chat_id = s.get("tgId")
+        if s.get("deletedAt") or s.get("stage") == "lost" or isinstance(chat_id, bool) or not isinstance(chat_id, int) \
+                or bound.get(chat_id) != student_id:
+            continue
+        due = [reports._number(p.get("amount")) for p in reports._list(s.get("payments"))
+               if not p.get("paid") and reports._day(p.get("due")) == today]
+        total = reports._total(a for a in due if a > 0)
+        key = f"sched:pay:{student_id}:{today}"
+        # Отметка ставится после отправки: если Telegram был недоступен, напоминание уйдёт позже в тот же день
+        if total > 0 and not cache.get(key) and telegram.send(chat_id, PAY_TEXT.format(amount=_money(total))):
+            cache.set(key, 1, KEEP_SECONDS)
 
 
 # ---------- Копия базы вне сервера ----------

@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from . import backup, reports, store, telegram
 from .models import Account, Doc, TgChat
@@ -77,6 +77,20 @@ def telegram_link(request, access):
         telegram.unlink(request.user)
         return JsonResponse({"linked": False})
     url = telegram.link_url(request.user)
+    if not url:
+        raise store.Invalid("Telegram-бот не настроен на сервере")
+    return JsonResponse({"url": url})
+
+
+@require_POST
+@api
+def telegram_student_link(request, access):
+    """Ссылка, по которой студент подключает свой чат к карточке. Выдаётся тому, кто ведёт этого студента."""
+    student_id = body(request).get("studentId")
+    doc = Doc.objects.filter(collection="students", doc_id=student_id).first() if isinstance(student_id, str) else None
+    if access.role == Account.Role.PARTNER or doc is None or doc.data.get("deletedAt") or not access.can_read("students", doc.data):
+        raise store.Denied  # чужой и несуществующий студент отвечают одинаково
+    url = telegram.student_link_url(student_id)
     if not url:
         raise store.Invalid("Telegram-бот не настроен на сервере")
     return JsonResponse({"url": url})

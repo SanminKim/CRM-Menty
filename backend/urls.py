@@ -19,4 +19,5 @@ urlpatterns = [
     path("api/leads/", leads.api_lead, name="api_lead"),
     path("api/telegram/", telegram.webhook),
     path("api/telegram/link/", api.telegram_link),
+    path("api/telegram/student-link/", api.telegram_student_link),
 ]
