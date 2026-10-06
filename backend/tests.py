@@ -1298,6 +1298,36 @@ class SchedulerTests(BaseCase):
         self.run_at(22, 0, day=datetime.date(2026, 11, 6))
         self.assertEqual(self.texts(777), [])
 
+    def test_hourly_student_is_asked_for_income_on_the_settlement_day(self):
+        from backend.models import TgChat
+        TgChat.objects.create(chat_id=780, student_id="s11", state="done")
+        TgChat.objects.create(chat_id=781, student_id="s12", state="done")
+        # почасовая оплата: сумма неизвестна, в платеже записан только процент
+        store.system_write("students", "s11", student("t1", tgId=780, stage="offer", payments=[
+            {"id": "a", "amount": None, "percent": 15, "due": "2026-10-06", "paid": None, "comment": "С дохода 1/6"}]))
+        store.system_write("students", "s12", student("t1", tgId=781, stage="offer", payments=[
+            {"id": "a", "amount": None, "percent": 12.5, "due": "2026-10-06", "paid": None},
+            {"id": "b", "amount": 7000, "due": "2026-10-06", "paid": None},
+            {"id": "c", "amount": None, "percent": "мусор", "due": "2026-10-06", "paid": None}]))
+        self.run_at(10, 1)
+        ask = self.texts(780)
+        self.assertEqual(len(ask), 1)
+        self.assertIn("15%", ask[0])
+        self.assertIn("сколько вы заработали", ask[0])
+        self.assertNotIn("₽", ask[0])                                               # суммы ещё нет: бот её не выдумывает
+        both = self.texts(781)
+        self.assertEqual(len(both), 1)                                              # одно сообщение: и сумма, и вопрос о доходе
+        self.assertIn("7 000 ₽", both[0])
+        self.assertIn("12,5%", both[0])
+        self.run_at(12, 0)
+        self.assertEqual((len(self.texts(780)), len(self.texts(781))), (1, 1))
+        import datetime
+        self.sent.clear()
+        self.run_at(9, 1, day=self.day + datetime.timedelta(days=1))
+        # платежи без суммы в сводке идут отдельной строкой
+        self.assertIn("просрочено платежей: 3 на 57 000 ₽", self.texts(200)[0])
+        self.assertIn("ждут сведений о доходе: 2", self.texts(200)[0])
+
     def test_scheduler_is_silent_without_the_bot(self):
         with override_settings(TELEGRAM_BOT_TOKEN=""):
             self.run_at(9, 1)

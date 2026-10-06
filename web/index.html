@@ -1296,18 +1296,28 @@ function cohortView() {
 // ----- Панель студента -----
 // ----- Оплата с зарплаты: после трудоустройства студент платит процент с зарплаты заданное число месяцев -----
 const salaryDefaults = () => { const c = S.config.salaryPlan || {}; return { percent: nnum(c.percent) > 0 ? nnum(c.percent) : null, months: nnum(c.months) >= 1 ? Math.round(nnum(c.months)) : null }; };
-const salaryCheck = (salary, percent, months, first) => !(salary > 0) ? "Укажите зарплату" : !(percent > 0 && percent <= 100) ? "Процент с зарплаты — больше 0 и не больше 100"
+// Платёж от дохода: при почасовой оплате сумма заранее неизвестна, в платеже записан только процент
+const isPending = x => !!x && typeof x === "object" && (x.amount === null || x.amount === undefined || x.amount === "") && nnum(x.percent) > 0;
+const SALARY_KINDS = [["salary", "Оклад: сумма известна заранее"], ["income", "Почасовая или сдельная: сумма каждый месяц разная"]];
+const pctText = v => String(nnum(v)).replace(".", ",") + "%";
+const salaryCheck = (salary, percent, months, first, kind = "salary") => kind !== "income" && !(salary > 0) ? "Укажите зарплату" : !(percent > 0 && percent <= 100) ? "Процент с зарплаты — больше 0 и не больше 100"
   : !(Math.round(months) >= 1 && Math.round(months) <= 60) ? "Период — от 1 до 60 месяцев" : !isDay(first) ? "Укажите дату первого платежа" : "";
-function salaryItems(salary, percent, months, first) {
+function salaryItems(salary, percent, months, first, kind = "salary") {
   const amount = Math.round(salary * percent / 100), items = [];
-  for (let i = 0; i < months; i++) items.push({ id: newId("x"), amount, due: addMonths(first, i), paid: null, comment: `С зарплаты ${i + 1}/${months}` });
+  for (let i = 0; i < months; i++) items.push(kind === "income"
+    ? { id: newId("x"), amount: null, percent, due: addMonths(first, i), paid: null, comment: `С дохода ${i + 1}/${months}` }
+    : { id: newId("x"), amount, due: addMonths(first, i), paid: null, comment: `С зарплаты ${i + 1}/${months}` });
   return items;
 }
 // Стоимость с учётом платежей с зарплаты. Если стоимость не была задана, за основу берутся уже записанные платежи,
 // иначе «оплачено» оказалось бы больше стоимости
 const priceWith = (cur, items) => (nnum(cur.price) > 0 ? nnum(cur.price) : (Array.isArray(cur.payments) ? cur.payments : []).reduce((a, x) => a + (x && typeof x === "object" ? nnum(x.amount) : 0), 0)) + sum(items, x => x.amount);
-const salaryLog = (salary, percent, first, items) => logItem(`Оплата с зарплаты: ${percent}% от ${money(salary)}, ${items.length} ${plural(items.length, "платёж", "платежа", "платежей")} по ${money(items[0].amount)}, первый ${fDate(first)}`);
-const salarySum = (salary, percent, months) => salary > 0 && percent > 0 && months >= 1 ? `${Math.round(months)} ${plural(Math.round(months), "платёж", "платежа", "платежей")} по ${money(Math.round(salary * percent / 100))}, всего ${money(Math.round(salary * percent / 100) * Math.round(months))}` : "";
+const salaryLog = (salary, percent, first, items) => isPending(items[0])
+  ? logItem(`Оплата с дохода: ${pctText(percent)} от дохода за месяц, ${items.length} ${plural(items.length, "платёж", "платежа", "платежей")}, первый расчёт ${fDate(first)}`)
+  : logItem(`Оплата с зарплаты: ${percent}% от ${money(salary)}, ${items.length} ${plural(items.length, "платёж", "платежа", "платежей")} по ${money(items[0].amount)}, первый ${fDate(first)}`);
+const salarySum = (salary, percent, months, kind = "salary") => kind === "income"
+  ? (percent > 0 && months >= 1 ? `${Math.round(months)} ${plural(Math.round(months), "платёж", "платежа", "платежей")} по ${pctText(percent)} от дохода за месяц. Сумму каждого вы вносите, когда студент сообщит доход` : "")
+  : salary > 0 && percent > 0 && months >= 1 ? `${Math.round(months)} ${plural(Math.round(months), "платёж", "платежа", "платежей")} по ${money(Math.round(salary * percent / 100))}, всего ${money(Math.round(salary * percent / 100) * Math.round(months))}` : "";
 // Процент и период запоминаются: в следующей форме они уже подставлены
 function rememberSalary(percent, months) {
   const d = salaryDefaults();
@@ -1315,19 +1325,39 @@ function rememberSalary(percent, months) {
   enqueue("config/main", () => S.db.doc("config/main").set(clean({ ...S.config, salaryPlan: { percent, months } }))).catch(e => console.warn("config", e));
 }
 function salaryPlanForm(s) {
-  const d = salaryDefaults(), val = k => +($("#m-" + k)?.value) || 0;
+  const d = salaryDefaults(), val = k => +($("#m-" + k)?.value) || 0, kind = () => $("#m-kind")?.value === "income" ? "income" : "salary";
   openModal({
     title: `Оплата с зарплаты: ${s.name}`, submit: "Создать платежи",
-    values: { salary: s.jobSalary || null, percent: d.percent, months: d.months, first: addMonths(today(), 1) },
-    fields: [{ k: "salary", label: "Зарплата, ₽", type: "number", req: true }, { k: "percent", label: "Процент с зарплаты, %", type: "number", req: true },
+    values: { kind: "salary", salary: s.jobSalary || null, percent: d.percent, months: d.months, first: addMonths(today(), 1) },
+    fields: [{ k: "kind", label: "Как платят студенту", type: "select", options: SALARY_KINDS, wide: true },
+      { k: "salary", label: "Зарплата, ₽", type: "number", help: "При почасовой оплате оставьте пустым" }, { k: "percent", label: "Процент, %", type: "number", req: true },
       { k: "months", label: "Сколько месяцев", type: "number", req: true }, { k: "first", label: "Первый платёж", type: "date", req: true, help: "Следующие — в тот же день каждого месяца" }],
-    extra: `<p><strong id="m-sum">${esc(salarySum(s.jobSalary, d.percent, d.months))}</strong></p><p class="hint">Стоимость обучения в карточке вырастет на сумму этих платежей. Платежи появятся в карточке и на экране «Платежи». В день платежа бот напомнит студенту, если его чат подключён.</p>`,
-    onInput: () => { const el = $("#m-sum"); if (el) el.textContent = salarySum(val("salary"), val("percent"), val("months")); },
+    extra: `<p><strong id="m-sum">${esc(salarySum(s.jobSalary, d.percent, d.months))}</strong></p><p class="hint">При окладе стоимость обучения в карточке вырастет на сумму платежей. При почасовой оплате сумма появляется каждый месяц: бот в день расчёта спросит у студента доход, вы внесёте его кнопкой «Указать доход».</p>`,
+    onInput: () => { const el = $("#m-sum"); if (el) el.textContent = salarySum(val("salary"), val("percent"), val("months"), kind()); },
     onSubmit: v => {
-      const err = salaryCheck(v.salary, v.percent, v.months, v.first); if (err) return err;
-      const n = Math.round(v.months), items = salaryItems(v.salary, v.percent, n, v.first);
-      return save(() => patchStudent(s.id, cur => ({ payments: [...(cur.payments || []), ...items], price: priceWith(cur, items), ...(cur.jobSalary ? {} : { jobSalary: v.salary }), log: withLog(cur, salaryLog(v.salary, v.percent, v.first, items)) })), `Создано платежей: ${n}`)
+      const k = v.kind === "income" ? "income" : "salary", err = salaryCheck(v.salary, v.percent, v.months, v.first, k); if (err) return err;
+      const n = Math.round(v.months), items = salaryItems(v.salary, v.percent, n, v.first, k);
+      return save(() => patchStudent(s.id, cur => ({ payments: [...(cur.payments || []), ...items], ...(k === "income" ? {} : { price: priceWith(cur, items) }), ...(cur.jobSalary || !(v.salary > 0) ? {} : { jobSalary: v.salary }), log: withLog(cur, salaryLog(v.salary, v.percent, v.first, items)) })), `Создано платежей: ${n}`)
         .then(ok => { if (ok) rememberSalary(v.percent, n); return ok; });
+    },
+  });
+}
+// Доход за месяц при почасовой оплате: из него считается сумма платежа
+function incomeForm(s, p) {
+  const due = (income) => Math.round(income * nnum(p.percent) / 100);
+  openModal({
+    title: `Доход за месяц: ${s.name}`, submit: "Посчитать платёж", values: {},
+    fields: [{ k: "income", label: "Сколько студент заработал, ₽", type: "number", req: true, wide: true, help: `Платёж — ${pctText(p.percent)} от этой суммы, срок ${fDate(p.due)}` }],
+    extra: `<p><strong id="m-sum"></strong></p>`,
+    onInput: () => { const el = $("#m-sum"), v = +($("#m-income")?.value) || 0; if (el) el.textContent = v > 0 ? `К оплате: ${money(due(v))}` : ""; },
+    onSubmit: v => {
+      const amount = due(v.income);
+      if (!(amount > 0)) return "Укажите доход больше нуля";
+      return save(() => patchStudent(s.id, cur => {
+        const old = (cur.payments || []).find(x => x.id === p.id); if (!old || !isPending(old)) return null;
+        return { payments: cur.payments.map(x => x.id === p.id ? { ...x, amount, income: v.income } : x), price: priceWith(cur, [{ amount }]),
+          log: withLog(cur, logItem(`Доход за месяц ${money(v.income)}: платёж ${pctText(old.percent)} — ${money(amount)}, срок ${fDate(old.due)}`)) };
+      }), `К оплате ${money(amount)}. Сообщите сумму студенту кнопкой «Напомнить»`);
     },
   });
 }
@@ -1342,9 +1372,9 @@ function paySection(s) {
   return `<section class="sec"><header><h3>Платежи</h3><span class="sub">${s.price ? `${money(paidSum(s))} из ${money(s.price)}` : pays.length ? money(paidSum(s)) : ""}</span><span class="right"></span>
       <button class="btn small" data-act="pay-new" data-id="${esc(s.id)}">+ Платёж</button><button class="btn small" data-act="pay-plan" data-id="${esc(s.id)}">+ Рассрочка</button>${SGROUP[s.stage] === "job" ? `<button class="btn small" data-act="pay-salary" data-id="${esc(s.id)}">+ С зарплаты</button>` : ""}</header>
     <div class="box">${pays.length ? `<div class="table-wrap"><table class="compact"><tbody>
-      ${pays.map(x => { const od = !x.paid && x.due < t; return `<tr><td>${fShort(x.due)}${x.comment ? `<div class="sub">${esc(x.comment)}</div>` : ""}</td><td class="num">${money(x.amount)}</td>
-        <td>${x.paid ? `<span class="tag ok">оплачен ${fDay(x.paid)}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
-        <td class="row-actions">${x.paid ? "" : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(s.id)}" data-pid="${esc(x.id)}" title="Скопировать текст напоминания">Напомнить</button> <button class="btn small" data-act="pay-done" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Оплачен</button> `}<button class="btn small ghost" data-act="pay-edit" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Изменить</button></td></tr>`; }).join("")}
+      ${pays.map(x => { const od = !x.paid && x.due < t; return `<tr><td>${fShort(x.due)}${x.comment ? `<div class="sub">${esc(x.comment)}</div>` : ""}</td><td class="num">${isPending(x) ? `<span class="sub">${esc(pctText(x.percent))} от дохода</span>` : money(x.amount)}</td>
+        <td>${x.paid ? `<span class="tag ok">оплачен ${fDay(x.paid)}</span>` : isPending(x) ? `<span class="tag ${od ? "danger" : "warn"}">${od ? "ждём доход" : "сумма по доходу"}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
+        <td class="row-actions">${x.paid ? "" : isPending(x) ? `<button class="btn small" data-act="pay-income" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Указать доход</button> ` : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(s.id)}" data-pid="${esc(x.id)}" title="Скопировать текст напоминания">Напомнить</button> <button class="btn small" data-act="pay-done" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Оплачен</button> `}<button class="btn small ghost" data-act="pay-edit" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Изменить</button></td></tr>`; }).join("")}
     </tbody></table></div>` : `<p class="empty">Платежей пока нет</p>`}</div>${pays.some(x => !x.paid) ? botLine(s) : ""}</section>`;
 }
 function appSection(s) {
@@ -1415,7 +1445,8 @@ function advanceForm(s) {
     studying: [...(unpaid ? [{ k: "paid", label: `Платёж получен: ${payText(unpaid)}`, type: "checkbox" }] : []),
       { k: "cohortId", label: "Поток", type: "select", options: cohortOpts() }, ...(S.limited ? [] : [{ k: "mentorId", label: "Ментор", type: "select", options: teamOpts() }])],
     offer: [{ k: "jobCompany", label: "Компания", req: true }, { k: "jobPosition", label: "Должность" }, { k: "jobSalary", label: "Зарплата, ₽", type: "number" }, { k: "offerDate", label: "Дата оффера", type: "date" },
-      { section: "Оплата с зарплаты" }, { k: "splan", label: "Создать платежи с зарплаты", type: "checkbox" }, { k: "spct", label: "Процент с зарплаты, %", type: "number" },
+      { section: "Оплата с зарплаты" }, { k: "splan", label: "Создать платежи с зарплаты", type: "checkbox" }, { k: "skind", label: "Как платят", type: "select", options: SALARY_KINDS },
+      { k: "spct", label: "Процент, %", type: "number" },
       { k: "smonths", label: "Сколько месяцев", type: "number" }, { k: "sfirst", label: "Первый платёж", type: "date", help: "Можно пропустить и создать позже кнопкой «+ С зарплаты» в карточке" }],
   }[to] || [];
   const stepFields = def ? [{ section: "Следующий шаг" }, { k: "text", label: "Что сделать", req: true, wide: true, list: STEP_HINTS }, { k: "date", label: "Когда", type: "date", req: true, wide: true, quick: true }] : [];
@@ -1423,7 +1454,7 @@ function advanceForm(s) {
     title: `${s.name}: ${SLABEL[to]}`, submit: `Перевести в «${SLABEL[to]}»`,
     values: { text: def?.[0], date: daysAhead(def?.[1] || 0), mdate: daysAhead(1), mtime: "12:00", price: s.price || c?.price || null, parts: 1, first: daysAhead(2), paid: true,
       cohortId: s.cohortId || "", mentorId: teamName(s.mentorId) ? s.mentorId : (myTeam()?.id || ""), jobCompany: s.jobCompany || "", jobPosition: s.jobPosition || "", jobSalary: s.jobSalary ?? null, offerDate: s.offerDate || today(),
-      splan: false, spct: salaryDefaults().percent, smonths: salaryDefaults().months, sfirst: addMonths(today(), 1) },
+      splan: false, skind: "salary", spct: salaryDefaults().percent, smonths: salaryDefaults().months, sfirst: addMonths(today(), 1) },
     fields: [...own, ...stepFields],
     extra: to === "call" ? `<p class="hint">Следующим шагом станет «Созвон» в этот день.</p>` : to === "probation_passed" ? `<p class="done-note">Путь пройден. Студент уйдёт из списков активных, карточка останется в разделе «Студенты».</p>` : "",
     onSubmit: v => {
@@ -1433,7 +1464,7 @@ function advanceForm(s) {
       if (to === "waiting_payment" && !unpaid && !(Math.round(v.parts) >= 1 && Math.round(v.parts) <= 24)) return "Платежей должно быть от 1 до 24";
       if (to === "waiting_payment" && !unpaid && !isDay(v.first)) return "Укажите срок первого платежа";
       if (def && !isDay(v.date)) return "Укажите дату следующего шага";
-      if (to === "offer" && v.splan) { const err = salaryCheck(v.jobSalary, v.spct, v.smonths, v.sfirst); if (err) return err; }
+      if (to === "offer" && v.splan) { const err = salaryCheck(v.jobSalary, v.spct, v.smonths, v.sfirst, v.skind); if (err) return err; }
       return advance(s.id, to, v).then(ok => { if (ok && to === "offer" && v.splan) rememberSalary(v.spct, Math.round(v.smonths)); return ok; });
     },
   });
@@ -1469,9 +1500,10 @@ async function advance(id, to, v) {
       if (to === "offer") {
         set("jobCompany", v.jobCompany); set("jobPosition", v.jobPosition || ""); set("jobSalary", v.jobSalary ?? null); set("offerDate", v.offerDate || today());
         if (v.splan) {
-          const items = salaryItems(v.jobSalary, v.spct, Math.round(v.smonths), v.sfirst);
+          const items = salaryItems(v.jobSalary, v.spct, Math.round(v.smonths), v.sfirst, v.skind);
           p.payments = [...(cur.payments || []), ...items]; m.pays = items.map(x => x.id);
-          set("price", priceWith(cur, items)); log.push(salaryLog(v.jobSalary, v.spct, v.sfirst, items));
+          if (!isPending(items[0])) set("price", priceWith(cur, items));
+          log.push(salaryLog(v.jobSalary, v.spct, v.sfirst, items));
         }
       }
       if (log.length) { p.log = [...(cur.log || []), ...log].slice(-LOG_MAX); m.logs = log.map(l => l.id); }
@@ -1928,6 +1960,7 @@ async function stepDone(id) {
 // Готовый текст напоминания об оплате: копируется в буфер, остаётся вставить в Telegram
 function remindText(s, p) {
   const parts = String(s.name || "").split(/\s+/).filter(Boolean), first = parts[1] || parts[0] || "";
+  if (isPending(p)) return `${first ? first + ", д" : "Д"}обрый день! Подошёл день расчёта за обучение (${fDate(p.due)}): ${pctText(p.percent)} от дохода за месяц. Подскажите, пожалуйста, сколько вы заработали, — посчитаю сумму платежа.`;
   const late = p.due < today();
   return `${first ? first + ", д" : "Д"}обрый день! Напоминаю про платёж за обучение: ${money(p.amount).replace(/[\u00a0\u202f]/g, " ")}, срок ${late ? "был " : ""}${fDate(p.due)}. ${late ? "Подскажите, пожалуйста, когда получится оплатить?" : "Если уже оплатили, дайте знать, я отмечу."}`;
 }
@@ -1944,6 +1977,8 @@ function toggleModule(id, mid) {
 }
 async function payDone(id, pid) {
   const s = stu(id); if (!s) return;
+  const first = (s.payments || []).find(x => x.id === pid);
+  if (isPending(first)) return incomeForm(s, first); // сумма ещё неизвестна: сначала доход за месяц
   const mark = paid => cur => (cur.payments || []).map(p => p.id === pid ? { ...p, paid } : p);
   let item = null;
   const ok = await save(() => patchStudent(id, cur => {
@@ -2237,15 +2272,18 @@ async function saveStudent(s, v, orig = {}) {
 function paymentForm(s, p) {
   openModal({
     title: p ? "Платёж" : "Новый платёж", values: p ? { ...p } : { due: today() },
-    fields: [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }, { k: "due", label: "Срок оплаты", type: "date", req: true },
-      { k: "paid", label: "Дата оплаты", type: "date", help: "Пусто, если ещё не оплачен" }, { k: "comment", label: "Комментарий", ph: "Например, «Рассрочка 1/3, СБП»", wide: true }],
+    // У платежа от дохода суммы ещё нет: здесь меняются только срок и комментарий, сумму вносит «Указать доход»
+    fields: [...(isPending(p) ? [] : [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }]), { k: "due", label: isPending(p) ? "День расчёта" : "Срок оплаты", type: "date", req: true },
+      ...(isPending(p) ? [] : [{ k: "paid", label: "Дата оплаты", type: "date", help: "Пусто, если ещё не оплачен" }]), { k: "comment", label: "Комментарий", ph: "Например, «Рассрочка 1/3, СБП»", wide: true }],
     onDelete: p ? () => save(() => patchStudent(s.id, cur => {
       const old = (cur.payments || []).find(x => x.id === p.id); if (!old) return null;
       return { payments: cur.payments.filter(x => x.id !== p.id), log: withLog(cur, logItem(`Платёж удалён: ${payText(old)}${old.paid ? `, был оплачен ${fDate(old.paid)}` : ""}`)) };
     }), "Платёж удалён") : null,
     onSubmit: v => {
-      if (!(v.amount > 0)) return "Сумма должна быть больше нуля";
-      const item = { id: p?.id || newId("x"), amount: v.amount, due: v.due, paid: v.paid || null, comment: v.comment };
+      const pending = isPending(p);
+      if (!pending && !(v.amount > 0)) return "Сумма должна быть больше нуля";
+      const item = pending ? { id: p.id, amount: null, percent: p.percent, due: v.due, paid: null, comment: v.comment }
+        : { id: p?.id || newId("x"), amount: v.amount, due: v.due, paid: v.paid || null, comment: v.comment };
       return save(() => patchStudent(s.id, cur => {
         const list = cur.payments || [], old = p ? list.find(x => x.id === p.id) : null;
         if (p && !old) throw { code: "gone-item" };
@@ -2690,6 +2728,7 @@ const ACT = {
     });
   },
   "pay-salary": d => { const x = stu(d.id); if (x) salaryPlanForm(x); },
+  "pay-income": d => { const x = stu(d.id), pay = (x?.payments || []).find(y => y.id === d.pid); if (pay && isPending(pay)) incomeForm(x, pay); },
   "tg-student": async d => {
     let url;
     try { url = (await SRV.telegram.student(d.id)).url; } catch (e) { return toast(e?.message || "Не удалось получить ссылку. Попробуйте ещё раз"); }

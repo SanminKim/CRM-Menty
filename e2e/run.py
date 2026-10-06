@@ -492,7 +492,27 @@ try:
       check("card says whether the bot will remind the student", "не подключён к боту" in pg.text_content(".drawer") and pg.locator("[data-act=tg-student]").count() == 1)
       link = pg.evaluate(f"SRV.telegram.student({json.dumps(sid)}).then(r => r.url)")
       check("personal bot link for the student", link.startswith("https://t.me/menti_e2e_bot?start=stu_"), link)
-      pg.click("[data-act=pay-salary]"); pg.wait_for_selector("#mform"); check("next form is prefilled with the remembered percent and period", pg.input_value("#m-percent") == "15" and pg.input_value("#m-months") == "6")
+      # почасовая оплата: сумма неизвестна, платёж считается от дохода за месяц
+      pg.click("[data-act=pay-salary]"); pg.wait_for_selector("#mform"); pg.select_option("#m-kind", "income"); pg.fill("#m-salary", ""); pg.fill("#m-percent", "12.5"); pg.fill("#m-months", "3"); pg.fill("#m-first", "2027-08-15")
+      check("income plan form explains itself", "по 12,5% от дохода" in pg.inner_text("#m-sum"), pg.inner_text("#m-sum"))
+      pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(500)
+      hourly = pg.evaluate("window.__store")["students/" + sid]
+      pend = [p for p in hourly["payments"] if str(p.get("comment", "")).startswith("С дохода")]
+      check("income plan: payments carry the percent and no amount, price is untouched", [(p.get("amount"), p["percent"], p["due"]) for p in pend] == [(None, 12.5, "2027-08-15"), (None, 12.5, "2027-09-15"), (None, 12.5, "2027-10-15")] and hourly["price"] == after["price"], pend)
+      check("card offers to enter the income instead of marking as paid", pg.locator("[data-act=pay-income]").count() == 3 and "12,5% от дохода" in pg.text_content(".drawer"))
+      pg.locator("[data-act=pay-income]").first.click(); pg.wait_for_selector("#mform"); pg.fill("#m-income", "80000")
+      check("income form shows the amount due", "10" in pg.inner_text("#m-sum") and "К оплате" in pg.inner_text("#m-sum"), pg.inner_text("#m-sum"))
+      pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(500)
+      done = pg.evaluate("window.__store")["students/" + sid]
+      first = next(p for p in done["payments"] if p["id"] == pend[0]["id"])
+      check("reminder for a payment without amount asks for the income", "12,5% от дохода" in pg.evaluate(f"(() => {{ const s = stu({json.dumps(sid)}); return remindText(s, s.payments.find(isPending)); }})()"))
+      pg.locator("tr", has_text="С дохода 2/3").locator("[data-act=pay-edit]").click(); pg.wait_for_selector("#mform")
+      check("editing a payment without amount changes only the day", pg.locator("#m-amount").count() == 0 and pg.locator("#m-due").count() == 1)
+      pg.fill("#m-due", "2027-09-20"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(400)
+      moved = next(p for p in pg.evaluate("window.__store")["students/" + sid]["payments"] if p["id"] == pend[1]["id"])
+      check("moved settlement day keeps the percent", (moved["due"], moved["percent"], moved["amount"]) == ("2027-09-20", 12.5, None), moved)
+      check("income entered: amount is the percent of income, price grows, change is logged", first["amount"] == 10000 and first["income"] == 80000 and done["price"] == after["price"] + 10000 and "Доход за месяц" in done["log"][-1]["text"] and pg.locator("[data-act=pay-income]").count() == 2, (first, done["price"], done["log"][-1]))
+      pg.click("[data-act=pay-salary]"); pg.wait_for_selector("#mform"); check("next form is prefilled with the remembered percent and period", pg.input_value("#m-percent") == "12.5" and pg.input_value("#m-months") == "3")
       pg.click("[data-act=m-close]"); pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
       # тема и раскладка настроек
       pg.click(".nav >> text=Настройки"); pg.wait_for_selector(".cols2")

@@ -94,7 +94,10 @@ def _digest(today, is_admin, link_id, students, meetings, team):
     late = [d for d in due if d[:10] < today]
     unpaid = [p for _, s in mine if s.get("stage") != "lost" for p in reports._list(s.get("payments"))
               if not p.get("paid") and reports._day(p.get("due"))]
-    overdue = [p for p in unpaid if p["due"][:10] < today]
+    late_pays = [p for p in unpaid if p["due"][:10] < today]
+    overdue = [p for p in late_pays if reports._number(p.get("amount")) > 0]
+    # Платёж от дохода без суммы: студент ещё не сообщил, сколько заработал
+    no_income = [p for p in late_pays if reports._number(p.get("amount")) <= 0 and _percent(p.get("percent"))]
     pay_today = [p for p in unpaid if p["due"][:10] == today]
     meets = [m for m in meetings if reports._day(m.get("date")) == today and (m.get("status") or "planned") == "planned"
              and (is_admin or (link_id and m.get("mentorId") == link_id)
@@ -105,6 +108,8 @@ def _digest(today, is_admin, link_id, students, meetings, team):
         lines.append(f"• шагов: {len(due)}" + (f" (просрочено {len(late)})" if late else ""))
     if overdue:
         lines.append(f"• просрочено платежей: {len(overdue)} на {_money(reports._total(reports._number(p.get('amount')) for p in overdue))}")
+    if no_income:
+        lines.append(f"• ждут сведений о доходе: {len(no_income)}")
     if pay_today:
         lines.append(f"• срок оплаты сегодня: {len(pay_today)}")
     if meets:
@@ -144,12 +149,24 @@ def _reminders(now):
 
 # ---------- Напоминание студенту о платеже ----------
 
-PAY_TEXT = ("Здравствуйте! Напоминаю: сегодня срок платежа за обучение — {amount}.\n"
-            "Если уже оплатили, напишите об этом сюда — я передам ментору.")
+PAY_TEXT = "сегодня срок платежа за обучение — {amount}."
+ASK_TEXT = ("сегодня день расчёта за обучение: {percent}% от вашего дохода за прошедший месяц. "
+            "Напишите, пожалуйста, сколько вы заработали, — ментор посчитает сумму платежа.")
+PAID_TEXT = "Если уже оплатили, напишите об этом сюда — я передам ментору."
+
+
+def _percent(value):
+    """Процент с дохода для платежа без суммы (почасовая оплата) или 0."""
+    number = reports._number(value)
+    return number if 0 < number <= 100 else 0
 
 
 def _pay_reminders(now):
-    """В день платежа бот пишет студенту, чей чат подключён к карточке. Одно сообщение в день на общую сумму."""
+    """В день платежа бот пишет студенту, чей чат подключён к карточке. Одно сообщение в день.
+
+    Если сумма платежа известна, бот называет её. Если платёж считается от дохода (в нём записан только процент),
+    бот просит сообщить доход: сумму потом вносит ментор.
+    """
     if now.hour not in PAY_HOURS:
         return
     today = now.date().isoformat()
@@ -160,12 +177,18 @@ def _pay_reminders(now):
         if s.get("deletedAt") or s.get("stage") == "lost" or isinstance(chat_id, bool) or not isinstance(chat_id, int) \
                 or bound.get(chat_id) != student_id:
             continue
-        due = [reports._number(p.get("amount")) for p in reports._list(s.get("payments"))
-               if not p.get("paid") and reports._day(p.get("due")) == today]
-        total = reports._total(a for a in due if a > 0)
+        due = [p for p in reports._list(s.get("payments")) if not p.get("paid") and reports._day(p.get("due")) == today]
+        total = reports._total(a for a in (reports._number(p.get("amount")) for p in due) if a > 0)
+        rates = [_percent(p.get("percent")) for p in due if reports._number(p.get("amount")) <= 0]
+        rates = sorted({r for r in rates if r})
+        parts = ([PAY_TEXT.format(amount=_money(total))] if total > 0 else []) \
+            + ([ASK_TEXT.format(percent=" и ".join(f"{float(r):g}".replace(".", ",") for r in rates))] if rates else [])
+        if not parts:
+            continue
+        text = "Здравствуйте! Напоминаю: " + " Также ".join(parts) + ("\n" + PAID_TEXT if total > 0 else "")
         key = f"sched:pay:{student_id}:{today}"
         # Отметка ставится после отправки: если Telegram был недоступен, напоминание уйдёт позже в тот же день
-        if total > 0 and not cache.get(key) and telegram.send(chat_id, PAY_TEXT.format(amount=_money(total))):
+        if not cache.get(key) and telegram.send(chat_id, text):
             cache.set(key, 1, KEEP_SECONDS)
 
 
