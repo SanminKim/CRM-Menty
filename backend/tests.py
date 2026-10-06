@@ -1364,6 +1364,7 @@ class SchedulerTests(BaseCase):
         self.assertEqual(len(self.texts(777)), 1)
         self.assertIn("20 000 ₽", self.texts(777)[0])                               # два неоплаченных платежа с сегодняшним сроком
         self.assertIn("фото или документ с начислением зарплаты", self.texts(777)[0])   # платёж с оклада: просим подтверждение
+        self.assertNotIn("Если уже оплатили", self.texts(777)[0])
         self.assertEqual(self.texts(778), [])
         self.run_at(10, 2)
         self.run_at(18, 0)
