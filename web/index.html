@@ -107,6 +107,14 @@ p { margin: 0; }
 .nav { display: flex; flex-direction: column; gap: 1px; }
 .nav button { all: unset; box-sizing: border-box; cursor: pointer; padding: 6px 10px; min-height: 36px; border-radius: var(--r-ctl); color: var(--side-text); display: flex; align-items: center; gap: 10px; font-weight: 500; }
 .nav-rest { display: contents; }
+.nav-h { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--side-muted); padding: 12px 10px 4px; }
+.guide { max-width: 860px; display: flex; flex-direction: column; gap: 16px; }
+.guide h2 { font-size: 15px; font-weight: 650; margin: 0 0 8px; }
+.guide ol, .guide ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.guide dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; align-items: baseline; }
+.guide dd { margin: 0; color: var(--muted); }
+.day-sec h3 { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+.day-sec .rows { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .nav .more { display: none; }
 .nav .more .ico { stroke-width: 3; }
 .nav button:hover { background: var(--side-2); color: var(--side-ink); }
@@ -466,6 +474,8 @@ details + details { margin-top: 6px; }
   .nav .ico { width: 22px; height: 22px; }
   .nav .n { position: absolute; top: 3px; left: calc(50% + 6px); margin: 0; }
   .nav .more { display: flex; }
+  .nav-h { display: none; }
+  .guide dl { grid-template-columns: 1fr; gap: 2px; } .guide dd { margin-bottom: 8px; }
   .nav-rest { display: none; position: absolute; right: 8px; bottom: calc(100% + 8px); min-width: 220px; flex-direction: column; gap: 2px; padding: 6px; border-radius: 14px; background: var(--side); box-shadow: var(--pop); }
   .nav.open .nav-rest { display: flex; }
   .nav-rest button { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 8px 12px; min-height: 44px; font-size: 14px; }
@@ -525,7 +535,7 @@ const EMPLOYED = ["offer", "probation_passed"];
 const APP_ST = [["applied", "Отклик"], ["hr", "Скрининг HR"], ["test", "Тестовое"], ["interview", "Собеседование"], ["offer", "Оффер"], ["accepted", "Оффер принят"], ["rejected", "Отказ"]];
 const APPL = Object.fromEntries(APP_ST);
 const COLS = ["students", "cohorts", "partners", "payouts", "team", "reports", "meetings", "directions", "expenses"];
-const VIEWS = ["today", "calendar", "board", "students", "cohorts", "payments", "payouts", "analytics", "partners", "settings"];
+const VIEWS = ["today", "calendar", "board", "students", "cohorts", "payments", "payouts", "analytics", "partners", "settings", "help"];
 const STEP_HINTS = ["Связаться", "Созвон", "Написать про оплату", "Проверить домашку", "Ревью резюме", "Узнать итог собеседования", "Спросить, как дела"];
 const MEET_KINDS = [["call", "Созвон"], ["lesson", "Занятие"], ["consult", "Консультация"], ["other", "Другое"]];
 const MEET_ST = [["planned", "Запланирована"], ["done", "Состоялась"], ["missed", "Не состоялась"], ["cancelled", "Отменена"]];
@@ -869,9 +879,10 @@ function render() {
   $("#main").innerHTML = mainHTML();
   const open = ready && S.openId && stu(S.openId);
   if (S.openId && !open && S.loaded.students) S.openId = null;
-  $("#drawer").innerHTML = open ? drawerHTML(open) : "";
-  $("#drawer").hidden = !open;
-  document.documentElement.classList.toggle("locked", !!open);
+  const day = !open && ready && S.openDay;
+  $("#drawer").innerHTML = open ? drawerHTML(open) : day ? dayHTML(day) : "";
+  $("#drawer").hidden = !open && !day;
+  document.documentElement.classList.toggle("locked", !!open || !!day);
   for (const [id, v] of Object.entries(kept)) { const el = document.getElementById(id); if (el) el.value = v; }
   if (boardX && $("#board")) $("#board").scrollLeft = boardX;
   if (drawerY && $("#d-body")) $("#d-body").scrollTop = drawerY;
@@ -900,6 +911,7 @@ const ICONS = {
   analytics: "M4 20V10M10 20V4M16 20v-7M21 20H3",
   partners: "M4 10v4h3l6 4V6l-6 4zM17 9a4 4 0 0 1 0 6",
   settings: "M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4",
+  help: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01",
   more: "M5 12h.01M12 12h.01M19 12h.01",
   sun: "M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4l1.4-1.4M17 7l1.4-1.4",
   moon: "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z",
@@ -914,10 +926,11 @@ function navHTML() {
   if (S.mode === "partner") return `<button class="on" aria-current="page">${ico("report")}Отчёт</button>${S.server ? `<button data-act="password">${ico("password")}Сменить пароль</button><button data-act="logout">${ico("logout")}Выйти</button>` : ""}`;
   const ag = agenda(D().students), late = ag.pays.filter(p => p.due < today()).length;
   const meetsToday = events(today(), today()).filter(e => e.status === "planned").length;
-  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи", late, true], ["payouts", "Выплаты"], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"]];
+  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи", late, true], ["payouts", "Выплаты"], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"], ["help", "Справка"]];
   const cur = S.view === "partner" ? "partners" : S.view === "cohort" ? "cohorts" : S.view;
   if (S.limited) items.splice(items.findIndex(i => i[0] === "partners"), 1);
-  const btn = ([v, l, n, hot]) => `<button data-act="nav" data-v="${v}" class="${cur === v ? "on" : ""}"${cur === v ? ' aria-current="page"' : ""}>${ico(v)}${l}${n ? `<span class="n${hot ? " hot" : ""}">${n}</span>` : ""}</button>`;
+  const GROUPS = { cohorts: "Обучение", payments: "Деньги", analytics: "Итоги", settings: "Система" };
+  const btn = ([v, l, n, hot]) => `${GROUPS[v] ? `<span class="nav-h">${GROUPS[v]}</span>` : ""}<button data-act="nav" data-v="${v}" title="${esc(about(v))}" class="${cur === v ? "on" : ""}"${cur === v ? ' aria-current="page"' : ""}>${ico(v)}${l}${n ? `<span class="n${hot ? " hot" : ""}">${n}</span>` : ""}</button>`;
   const rest = items.slice(NAV_MAIN), inRest = rest.some(i => i[0] === cur);
   return items.slice(0, NAV_MAIN).map(btn).join("") + `<div class="nav-rest" id="nav-rest">${rest.map(btn).join("")}</div>`
     + `<button class="more${inRest ? " on" : ""}" data-act="nav-more" aria-expanded="${S.navMore ? "true" : "false"}" aria-controls="nav-rest">${ico("more")}Ещё</button>`;
@@ -932,10 +945,28 @@ function mainHTML() {
   if (!need.every(c => S.loaded[c])) return `<p class="loading">Загружаю базу…</p>`;
   const ro = S.readOnly ? `<div class="banner"><p>У вас доступ только для просмотра. Чтобы вносить изменения, попросите владельца выдать права редактора.</p></div>` : "";
   if (S.limited && (S.view === "partners" || S.view === "partner")) S.view = "today";
-  const v = { today: todayView, calendar: calendarView, board: boardView, students: listView, cohorts: cohortsView, cohort: cohortView, payments: paymentsView, payouts: payoutsView, analytics: analyticsView, partners: partnersView, partner: partnerView, settings: settingsView }[S.view] || todayView;
+  const v = { today: todayView, calendar: calendarView, board: boardView, students: listView, cohorts: cohortsView, cohort: cohortView, payments: paymentsView, payouts: payoutsView, analytics: analyticsView, partners: partnersView, partner: partnerView, settings: settingsView, help: helpView }[S.view] || todayView;
   return ro + v();
 }
+// Что делают в разделе: одна строка под заголовком и подсказка в меню
+const ABOUT = {
+  today: "Что нужно сделать сегодня: кому написать, чей платёж подошёл, какая встреча впереди",
+  calendar: "Встречи, занятия и собеседования по дням. Нажмите на день, чтобы открыть его карточку",
+  board: "Колонка — этап пути. Перетащите карточку в следующую колонку, чтобы перевести человека дальше. Нажмите на карточку, чтобы открыть её.",
+  students: "Все люди в базе одним списком. Отметьте несколько строк галочками, чтобы разом назначить им ментора, поток или следующий шаг.",
+  cohorts: "Группы обучения: программа по модулям, состав и прогресс студентов.",
+  payments: "Оплаты студентов: кто просрочил, кто платит на днях, кто уже заплатил. Новый платёж добавляется в карточке студента.",
+  payouts: "Сколько из полученных денег причитается блогеру, менторам и вам",
+  analytics: "Сколько заявок доходит до оплаты и оффера и на каком этапе люди теряются.",
+  partners: "Блогеры и каналы, откуда приходят заявки: сколько человек привели и сколько из них оплатили.",
+  settings: "Команда и доступы, направления и доли, бот в Telegram, резервная копия, оформление.",
+  help: "Короткая памятка: как вести человека от заявки до оффера и что где находится",
+};
+// Ментор видит раздел иначе: в подсказке только то, что ему доступно
+const ABOUT_LIMITED = { settings: "Пароль, уведомления в Telegram, оформление.", payouts: "Ваши начисления и выплаты", students: "Ваши студенты одним списком. Отметьте несколько строк галочками, чтобы разом назначить им следующий шаг." };
+const about = v => (S.limited && ABOUT_LIMITED[v]) || ABOUT[v] || "";
 function headHTML(title, extra = "", actions = "", sub = "") {
+  if (!sub && !extra) sub = about(S.view);
   return `<header class="page-head"><div>${extra}<h1>${title}</h1>${sub ? `<p class="muted">${sub}</p>` : ""}</div><div class="actions">${actions}</div></header>`;
 }
 const addBtn = `<button class="btn primary" data-act="quick">+ Заявка</button>`;
@@ -993,6 +1024,36 @@ function todayView() {
           ${ag.noStep.length > 6 ? `<li><button class="link" data-act="more-nostep">${S.moreNoStep ? "Свернуть" : `Показать всех: ещё ${ag.noStep.length - 6}`}</button></li>` : ""}</ul>`) : ""}
     </div>
   </div>`;
+}
+function helpView() {
+  const adm = !S.limited, to = (v, l) => `<button class="link" data-act="nav" data-v="${v}">${l}</button>`;
+  const secs = [["today", "Сегодня", "Начинайте день здесь. Список «Сделать» — шаги на сегодня: кружок слева отмечает шаг выполненным и сразу спрашивает следующий."],
+    ["calendar", "Календарь", "Встречи и собеседования. Нажмите на день, чтобы увидеть всё, что на него назначено, и добавить встречу."],
+    ["board", "Воронка", "Все люди по этапам. Карточку можно перетащить в следующую колонку."],
+    ["students", "Студенты", "Поиск и список всех людей, выгрузка в файл, действия сразу над несколькими."],
+    ["cohorts", "Потоки", "Группы, программа и прогресс по модулям."],
+    ["payments", "Платежи", "Кто должен заплатить и кто опаздывает."],
+    ["payouts", "Выплаты", adm ? "Сколько причитается блогеру и менторам, расходы и записанные выплаты." : "Ваши начисления и выплаты."],
+    ["analytics", "Аналитика", "Конверсия по этапам и время до первого ответа на заявку."],
+    ...(adm ? [["partners", "Партнёры", "Откуда приходят заявки и что из них получается."]] : []),
+    ["settings", "Настройки", adm ? "Команда, доступы, направления и доли, бот, резервная копия." : "Пароль, уведомления в Telegram, оформление."]];
+  return headHTML("Справка") + `<div class="guide">
+    <section class="card"><h2>Как вести человека</h2><ol>
+      <li><strong>Заявка.</strong> Приходит из бота или с сайта, либо добавляется кнопкой «+ Заявка». ${adm ? "Новые заявки без ответственного лежат на экране «Сегодня» в блоке «Без ментора»: нажмите «Взять себе» или «Назначить»." : "Заявка, которую вы добавили сами, сразу закреплена за вами."}</li>
+      <li><strong>Карточка.</strong> Нажмите на имя в любом списке. Вверху карточки — полоса пути и синяя кнопка «Дальше»: она переводит на следующий этап и спрашивает только то, что этому этапу нужно (дату созвона, стоимость, компанию).</li>
+      <li><strong>Следующий шаг.</strong> У каждого человека должно быть дело с датой: «написать», «проверить домашку». В нужный день оно появится на экране «Сегодня». Люди без шага собраны там же, в блоке «Без следующего шага».</li>
+      <li><strong>Оплата.</strong> Платёж создаётся при переходе в «Ждём оплату» или кнопкой «+ Платёж» в карточке. Когда деньги пришли, нажмите «Оплачен». Для тех, кто уже работает, есть «+ С зарплаты»: процент от дохода по месяцам.</li>
+      <li><strong>Обучение и работа.</strong> В карточке отмечаются пройденные модули, встречи, отклики на вакансии и собеседования.</li>
+      <li><strong>Отказ.</strong> Выберите этап «Отказ / выбыл» и укажите причину. Карточка остаётся в базе.</li>
+    </ol></section>
+    <section class="card"><h2>Что где находится</h2><dl>${secs.map(([v, l, d]) => `<dt>${to(v, l)}</dt><dd>${d}</dd>`).join("")}</dl></section>
+    <section class="card"><h2>Полезно знать</h2><ul>
+      <li>Почти любое действие можно вернуть: после него внизу экрана на несколько секунд появляется «Отменить».</li>
+      <li>Поиск по имени, телефону и Telegram — в левом верхнем углу; клавиша «/» ставит в него курсор.</li>
+      <li>Удалённый студент попадает в корзину в настройках, оттуда его можно вернуть.</li>
+      <li>${adm ? "Ментор видит только своих студентов и свои начисления, партнёр — только свой отчёт." : "Вы видите только своих студентов и свои начисления."}</li>
+      <li>Изменения сохраняются сами: внизу слева видно «Сохранено».</li>
+    </ul></section></div>`;
 }
 function welcomeView() {
   if (S.limited) return `<div class="card welcome"><h1>У вас пока нет студентов</h1><p>Здесь появятся студенты, которых закрепит за вами администратор. Новую заявку можно добавить самому: она сразу будет вашей.</p><div class="actions">${addBtn}</div></div>`;
@@ -1151,7 +1212,31 @@ function evRow(e, withDate = false) {
   return `<li class="click" data-act="meet-edit" data-id="${esc(m.id)}"><span class="evt${late ? " danger-text" : ""}">${esc(when)}</span>
     <span class="who"><strong>${esc(e.title)}</strong><span>${esc(sub)}</span></span>
     ${e.status !== "planned" ? `<span class="tag${e.status === "done" ? " ok" : ""}">${esc((MEETL[e.status] || e.status).toLowerCase())}</span>` : late ? `<span class="tag danger">не отмечена</span>` : ""}
-    <span class="acts">${/^https?:\/\//i.test(m.link || "") ? `<a class="btn small ghost" href="${esc(m.link)}" target="_blank" rel="noopener" data-stop>Ссылка</a>` : ""}${e.status === "planned" && e.date <= t && canMark(m) ? `<button class="btn small" data-act="meet-mark" data-id="${esc(m.id)}" data-st="done">Состоялась</button><button class="btn small ghost" data-act="meet-mark" data-id="${esc(m.id)}" data-st="missed">Нет</button>` : ""}</span></li>`;
+    <span class="acts">${/^https?:\/\//i.test(m.link || "") ? `<a class="btn small ghost" href="${esc(m.link)}" target="_blank" rel="noopener" data-stop>Ссылка</a>` : ""}${e.status === "planned" && e.date <= t && canMark(m) ? `<button class="btn small" data-act="meet-mark" data-id="${esc(m.id)}" data-st="done">Состоялась</button><button class="btn small ghost" data-act="meet-mark" data-id="${esc(m.id)}" data-st="missed" title="Встреча не состоялась">Не было</button>` : ""}</span></li>`;
+}
+// Карточка дня: всё, что назначено на дату — встречи, шаги и платежи
+function dayHTML(d) {
+  const list = filtered(["mentor"]), evs = events(d, d), t = today();
+  const steps = list.filter(s => isActive(s) && hasStep(s) && s.next.date === d);
+  const pays = list.filter(s => s.stage !== "lost").flatMap(s => (s.payments || []).filter(x => x.due === d || x.paid === d).map(x => ({ ...x, s })));
+  const title = new Date(d + "T12:00").toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const shift = n => { const x = new Date(d + "T12:00"); x.setDate(x.getDate() + n); return dstr(x); };
+  const sec = (name, n, body, empty) => `<section class="day-sec"><h3>${name}${n ? ` · ${n}` : ""}</h3>${n ? `<ul class="rows">${body}</ul>` : `<p class="hint">${empty}</p>`}</section>`;
+  const payRow = x => `<li class="click" data-act="open" data-id="${esc(x.s.id)}"><span class="who"><strong>${esc(x.s.name)}</strong><span>${esc(x.comment || "Платёж")}</span></span>
+    <span class="amt">${isPending(x) ? `${esc(pctText(x.percent))} от дохода` : money(x.amount)}</span>
+    ${x.paid ? `<span class="tag ok">оплачен${x.paid !== x.due ? " " + fDay(x.paid) : ""}</span>` : isPending(x) || S.readOnly ? `<span class="tag${x.due < t ? " danger" : ""}">${x.due < t ? "просрочен" : "ожидается"}</span>` : `${x.due < t ? `<span class="tag danger">просрочен</span>` : ""}<span class="acts"><button class="btn small" data-act="pay-done" data-id="${esc(x.s.id)}" data-pid="${esc(x.id)}">Оплачен</button></span>`}</li>`;
+  return `<div class="scrim" data-act="d-close"></div>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <header class="d-head"><h2 id="day-title">${esc(title[0].toUpperCase() + title.slice(1))}${d === t ? ` <span class="tag ok">сегодня</span>` : ""}</h2>
+      <button class="btn small" data-act="cal-day" data-d="${esc(shift(-1))}" aria-label="Предыдущий день" title="Предыдущий день">←</button>
+      <button class="btn small" data-act="cal-day" data-d="${esc(shift(1))}" aria-label="Следующий день" title="Следующий день">→</button>
+      <button class="x" id="d-x" data-act="d-close" aria-label="Закрыть">×</button></header>
+    <div class="d-body" id="d-body">
+      ${S.readOnly ? "" : `<div><button class="btn primary" data-act="meet-new" data-date="${esc(d)}">+ Встреча на этот день</button></div>`}
+      ${sec("Встречи", evs.length, evs.map(e => evRow(e)).join(""), "Встреч и собеседований нет.")}
+      ${sec("Шаги по студентам", steps.length, steps.map(stepRow).join(""), "На этот день шагов не назначено.")}
+      ${sec("Платежи", pays.length, pays.map(payRow).join(""), "Платежей с этим сроком нет.")}
+    </div></aside>`;
 }
 function calendarView() {
   const t = today(), [y, mo] = S.cal.ym.split("-").map(Number);
@@ -1173,7 +1258,7 @@ function calendarView() {
     <div class="stack">
       ${panel(esc(dayTitle[0].toUpperCase() + dayTitle.slice(1)), dayEvs.length || "", dayEvs.length ? `<ul class="rows">${dayEvs.map(e => evRow(e)).join("")}</ul>` : `<p class="empty">На этот день встреч нет</p>`, add)}
       ${late.length ? panel("Прошли и не отмечены", late.length, `<ul class="rows">${late.map(e => evRow(e, true)).join("")}</ul>`) : ""}
-      <p class="hint">Собеседования попадают сюда из откликов студентов. Состоявшаяся встреча со студентом записывается в его заметки.</p>
+      <p class="hint">Нажмите на день, чтобы открыть его карточку: встречи, шаги и платежи этого дня. Собеседования попадают сюда из откликов студентов. Состоявшаяся встреча со студентом записывается в его заметки.</p>
     </div>
   </div>`;
 }
@@ -1402,7 +1487,7 @@ function proofSection(s) {
 function paySection(s) {
   const t = today(), pays = sortBy(s.payments || [], x => x.due);
   return `<section class="sec"><header><h3>Платежи</h3><span class="sub">${s.price ? `${money(paidSum(s))} из ${money(s.price)}` : pays.length ? money(paidSum(s)) : ""}</span><span class="right"></span>
-      <button class="btn small" data-act="pay-new" data-id="${esc(s.id)}">+ Платёж</button><button class="btn small" data-act="pay-plan" data-id="${esc(s.id)}">+ Рассрочка</button>${SGROUP[s.stage] === "job" ? `<button class="btn small" data-act="pay-salary" data-id="${esc(s.id)}">+ С зарплаты</button>` : ""}</header>
+      <button class="btn small" data-act="pay-new" data-id="${esc(s.id)}">+ Платёж</button>${SGROUP[s.stage] === "job" ? `<button class="btn small" data-act="pay-salary" data-id="${esc(s.id)}">+ С зарплаты</button>` : ""}</header>
     ${payHistoryLine(s)}<div class="box">${pays.length ? `<div class="table-wrap"><table class="compact"><tbody>
       ${pays.map(x => { const od = !x.paid && x.due < t; return `<tr><td>${fShort(x.due)}${x.comment ? `<div class="sub">${esc(x.comment)}</div>` : ""}</td><td class="num">${isPending(x) ? `<span class="sub">${esc(pctText(x.percent))} от дохода</span>` : money(x.amount)}</td>
         <td>${x.paid ? (payDelay(x) > 0 ? `<span class="tag warn" title="Срок был ${esc(fDate(x.due))}">оплачен ${fDay(x.paid)} · на ${days(payDelay(x))} позже</span>` : `<span class="tag ok">оплачен ${fDay(x.paid)}</span>`) : isPending(x) ? `<span class="tag ${od ? "danger" : "warn"}">${od ? "ждём доход" : "сумма по доходу"}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
@@ -1473,7 +1558,7 @@ function advanceForm(s) {
     contacted: [{ k: "note", label: "О чём договорились", type: "textarea", wide: true, rows: 2, ph: "Хочет перейти в аналитики, готов начать в ноябре", help: "Попадёт в заметки" }],
     call: [{ k: "mdate", label: "Дата созвона", type: "date", req: true, quick: true }, { k: "mtime", label: "Время", type: "time", help: "Встреча появится в календаре" }],
     waiting_payment: [{ k: "price", label: "Стоимость, ₽", type: "number", req: true, wide: !!unpaid },
-      ...(unpaid ? [] : [{ k: "parts", label: "Платежей", type: "number", help: "1 — оплата целиком" }, { k: "first", label: "Срок первого платежа", type: "date", wide: true, quick: true, help: "Следующие идут раз в месяц" }])],
+      ...(unpaid ? [] : [{ k: "first", label: "Срок оплаты", type: "date", quick: true, help: "В этот день платёж появится на экране «Сегодня»" }])],
     studying: [...(unpaid ? [{ k: "paid", label: `Платёж получен: ${payText(unpaid)}`, type: "checkbox" }] : []),
       { k: "cohortId", label: "Поток", type: "select", options: cohortOpts() }, ...(S.limited ? [] : [{ k: "mentorId", label: "Ментор", type: "select", options: teamOpts() }])],
     offer: [{ k: "jobCompany", label: "Компания", req: true }, { k: "jobPosition", label: "Должность" }, { k: "jobSalary", label: "Зарплата, ₽", type: "number" }, { k: "offerDate", label: "Дата оффера", type: "date" },
@@ -1484,7 +1569,7 @@ function advanceForm(s) {
   const stepFields = def ? [{ section: "Следующий шаг" }, { k: "text", label: "Что сделать", req: true, wide: true, list: STEP_HINTS }, { k: "date", label: "Когда", type: "date", req: true, wide: true, quick: true }] : [];
   openModal({
     title: `${s.name}: ${SLABEL[to]}`, submit: `Перевести в «${SLABEL[to]}»`,
-    values: { text: def?.[0], date: daysAhead(def?.[1] || 0), mdate: daysAhead(1), mtime: "12:00", price: s.price || c?.price || null, parts: 1, first: daysAhead(2), paid: true,
+    values: { text: def?.[0], date: daysAhead(def?.[1] || 0), mdate: daysAhead(1), mtime: "12:00", price: s.price || c?.price || null, first: daysAhead(2), paid: true,
       cohortId: s.cohortId || "", mentorId: teamName(s.mentorId) ? s.mentorId : (myTeam()?.id || ""), jobCompany: s.jobCompany || "", jobPosition: s.jobPosition || "", jobSalary: s.jobSalary ?? null, offerDate: s.offerDate || today(),
       splan: false, skind: "salary", spct: salaryDefaults().percent, smonths: salaryDefaults().months, sfirst: addMonths(today(), 1) },
     fields: [...own, ...stepFields],
@@ -1493,8 +1578,7 @@ function advanceForm(s) {
       if (to === "call" && !isDay(v.mdate)) return "Укажите дату созвона";
       if (to === "call" && v.mtime && !/^\d{2}:\d{2}$/.test(v.mtime)) return "Время укажите в виде 15:30";
       if (to === "waiting_payment") { v.price = Math.round(v.price); if (!(v.price > 0)) return "Укажите стоимость в рублях"; }
-      if (to === "waiting_payment" && !unpaid && !(Math.round(v.parts) >= 1 && Math.round(v.parts) <= 24)) return "Платежей должно быть от 1 до 24";
-      if (to === "waiting_payment" && !unpaid && !isDay(v.first)) return "Укажите срок первого платежа";
+      if (to === "waiting_payment" && !unpaid && !isDay(v.first)) return "Укажите срок оплаты";
       if (def && !isDay(v.date)) return "Укажите дату следующего шага";
       if (to === "offer" && v.splan) { const err = salaryCheck(v.jobSalary, v.spct, v.smonths, v.sfirst, v.skind); if (err) return err; }
       return advance(s.id, to, v).then(ok => { if (ok && to === "offer" && v.splan) rememberSalary(v.spct, Math.round(v.smonths)); return ok; });
@@ -1517,10 +1601,9 @@ async function advance(id, to, v) {
       if (to === "waiting_payment") {
         if ((cur.price ?? null) !== v.price) { set("price", v.price); log.push(logItem(`Стоимость: ${money(v.price)}`)); }
         if (!firstUnpaid(cur)) {
-          const n = Math.round(v.parts) || 1, first = isDay(v.first) ? v.first : today(), base = Math.floor(v.price / n), items = [];
-          for (let i = 0; i < n; i++) items.push({ id: newId("x"), amount: i < n - 1 ? base : v.price - base * (n - 1), due: addMonths(first, i), paid: null, comment: n > 1 ? `Рассрочка ${i + 1}/${n}` : "Оплата" });
-          p.payments = [...(cur.payments || []), ...items]; m.pays = items.map(x => x.id);
-          log.push(logItem(n > 1 ? `Создана рассрочка: ${n} ${plural(n, "платёж", "платежа", "платежей")} на ${money(v.price)}, первый ${fDate(first)}` : `Создан платёж: ${payText(items[0])}`));
+          const item = { id: newId("x"), amount: v.price, due: isDay(v.first) ? v.first : today(), paid: null, comment: "Оплата" };
+          p.payments = [...(cur.payments || []), item]; m.pays = [item.id];
+          log.push(logItem(`Создан платёж: ${payText(item)}`));
         }
       }
       if (to === "studying") {
@@ -1771,7 +1854,7 @@ function paymentsView() {
   else if (S.payTab === "upcoming") list = sortBy(all.filter(p => !p.paid && p.due >= t), p => p.due);
   else list = sortBy(all.filter(p => p.paid), p => p.paid).reverse();
   const paidTab = !["overdue", "upcoming"].includes(S.payTab);
-  const emptyText = { overdue: "Просроченных платежей нет", upcoming: "Ожидаемых платежей нет. График рассрочки создаётся в карточке студента.", paid: "Оплат пока не было" }[S.payTab] || "";
+  const emptyText = { overdue: "Просроченных платежей нет", upcoming: "Ожидаемых платежей нет. Платёж добавляется в карточке студента кнопкой «+ Платёж».", paid: "Оплат пока не было" }[S.payTab] || "";
   return head + `<div class="panel table-wrap"><table>
     <thead><tr><th>Студент</th><th>Поток</th><th>${paidTab ? "Оплачен" : "Срок"}</th>${paidTab ? "<th>Срок был</th><th>Вовремя</th>" : ""}<th class="num">Сумма</th><th>Комментарий</th><th></th></tr></thead>
     <tbody>${list.map(p => `<tr class="click" data-act="open" data-id="${esc(p.s.id)}"><td><strong>${esc(p.s.name)}</strong></td>
@@ -2321,7 +2404,7 @@ function paymentForm(s, p) {
     title: p ? "Платёж" : "Новый платёж", values: p ? { ...p } : { due: today() },
     // У платежа от дохода суммы ещё нет: здесь меняются только срок и комментарий, сумму вносит «Указать доход»
     fields: [...(isPending(p) ? [] : [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }]), { k: "due", label: isPending(p) ? "День расчёта" : "Срок оплаты", type: "date", req: true },
-      ...(isPending(p) ? [] : [{ k: "paid", label: "Дата оплаты", type: "date", help: "Пусто, если ещё не оплачен" }]), { k: "comment", label: "Комментарий", ph: "Например, «Рассрочка 1/3, СБП»", wide: true }],
+      ...(isPending(p) ? [] : [{ k: "paid", label: "Дата оплаты", type: "date", help: "Пусто, если ещё не оплачен" }]), { k: "comment", label: "Комментарий", ph: "Например, «Вторая часть, СБП»", wide: true }],
     onDelete: p ? () => save(() => patchStudent(s.id, cur => {
       const old = (cur.payments || []).find(x => x.id === p.id); if (!old) return null;
       return { payments: cur.payments.filter(x => x.id !== p.id), log: withLog(cur, logItem(`Платёж удалён: ${payText(old)}${old.paid ? `, был оплачен ${fDate(old.paid)}` : ""}`)) };
@@ -2348,23 +2431,6 @@ function paymentForm(s, p) {
         if (text) patch.log = withLog(cur, logItem(text));
         return patch;
       }), "Сохранено");
-    },
-  });
-}
-function planForm(s) {
-  const c = D().cohorts.find(x => x.id === s.cohortId);
-  openModal({
-    title: "График рассрочки", values: { total: debt(s) || s.price || c?.price || null, parts: 3, first: today() },
-    fields: [{ k: "total", label: "Общая сумма, ₽", type: "number", req: true }, { k: "parts", label: "Платежей", type: "number", req: true },
-      { k: "first", label: "Первый платёж", type: "date", req: true, help: "Следующие идут раз в месяц" }],
-    submit: "Создать платежи",
-    onSubmit: v => {
-      const n = Math.round(v.parts);
-      if (!(v.total > 0)) return "Укажите сумму";
-      if (!(n >= 1 && n <= 24)) return "Платежей должно быть от 1 до 24";
-      const base = Math.floor(v.total / n), items = [];
-      for (let i = 0; i < n; i++) items.push({ id: newId("x"), amount: i < n - 1 ? base : v.total - base * (n - 1), due: addMonths(v.first, i), paid: null, comment: `Рассрочка ${i + 1}/${n}` });
-      return save(() => patchStudent(s.id, cur => { const patch = { payments: [...(cur.payments || []), ...items], log: withLog(cur, logItem(`Создана рассрочка: ${n} ${plural(n, "платёж", "платежа", "платежей")} на ${money(v.total)}, первый ${fDate(v.first)}`)) }; if (!cur.price) patch.price = v.total; return patch; }), `Создан график: ${n} ${plural(n, "платёж", "платежа", "платежей")}`);
     },
   });
 }
@@ -2660,7 +2726,7 @@ async function loadDemo() {
     const payments = [];
     if (top >= 4 && price) {
       const part = Math.floor(price / 3);
-      for (let n = 0; n < 3; n++) { const due = dAgo(ago - 5 - 30 * n); const paid = due <= today() && r() < .85; payments.push({ id: newId("x"), amount: n < 2 ? part : price - part * 2, due, paid: paid ? due : null, comment: `Рассрочка ${n + 1}/3` }); }
+      for (let n = 0; n < 3; n++) { const due = dAgo(ago - 5 - 30 * n); const paid = due <= today() && r() < .85; payments.push({ id: newId("x"), amount: n < 2 ? part : price - part * 2, due, paid: paid ? due : null, comment: `Платёж ${n + 1} из 3` }); }
     }
     const apps = [];
     const empl = !lost && (stage === "offer" || stage === "probation_passed");
@@ -2730,7 +2796,7 @@ function renderSearch() {
 function closeSearch() { $("#gq").value = ""; $("#gq-res").hidden = true; }
 
 // ---------- События ----------
-function go(view) { S.navMore = false; S.view = view; S.openId = null; S.sel.clear(); S.sort = null; if (VIEWS.includes(view)) lsSet("crm-menti-view", view); render(); window.scrollTo(0, 0); }
+function go(view) { S.navMore = false; S.view = view; S.openId = null; S.openDay = null; S.sel.clear(); S.sort = null; if (VIEWS.includes(view)) lsSet("crm-menti-view", view); render(); window.scrollTo(0, 0); }
 function openStudent(id) {
   const was = S.openId; S.openId = id; S.histOpen = false; S.logOpen = false; closeSearch(); render();
   const el = $(".drawer"); if (el && !was) el.classList.add("enter");
@@ -2741,7 +2807,7 @@ const ACT = {
   theme: d => setTheme(d.v),
   "nav-more": () => { S.navMore = !S.navMore; render(); $("#nav .more")?.focus(); },
   open: d => openStudent(d.id),
-  "d-close": () => { S.openId = null; render(); },
+  "d-close": () => { if (S.openId) S.openId = null; else S.openDay = null; render(); },
   pipe: d => { S.pipe = d.v; lsSet("crm-menti-pipe", d.v); render(); },
   quick: d => quickForm(d.st || "new"),
   import: () => importForm(),
@@ -2750,7 +2816,7 @@ const ACT = {
   "list-nocohort": () => { S.f = { q: "", cohort: "none", mentor: "", partner: "", stage: "" }; go("students"); },
   "mod-toggle": d => toggleModule(d.id, d.mid),
   sort: d => { const s = S.sort; S.sort = !s || s.k !== d.k ? { k: d.k, dir: 1 } : s.dir > 0 ? { k: d.k, dir: -1 } : null; render(); },
-  "cal-day": d => { S.cal.day = d.d; S.cal.ym = d.d.slice(0, 7); render(); },
+  "cal-day": d => { S.cal.day = d.d; S.cal.ym = d.d.slice(0, 7); S.openDay = d.d; render(); $("#d-x")?.focus({ preventScroll: true }); },
   "cal-go": d => {
     const n = +d.n, t = today();
     if (!n) S.cal = { ym: t.slice(0, 7), day: t };
@@ -2809,7 +2875,6 @@ const ACT = {
   copy: d => copyText(d.text, "Скопировано"),
   "pay-remind": d => { const s = stu(d.id), p = (s?.payments || []).find(x => x.id === d.pid); if (p) copyText(remindText(s, p), "Напоминание скопировано. Вставьте его в переписку"); },
   "pay-new": d => paymentForm(stu(d.id)),
-  "pay-plan": d => planForm(stu(d.id)),
   "pay-edit": d => { const s = stu(d.id); paymentForm(s, (s.payments || []).find(p => p.id === d.pid)); },
   "pay-done": d => payDone(d.id, d.pid),
   "app-new": d => appForm(stu(d.id)),
@@ -2895,6 +2960,7 @@ document.addEventListener("keydown", e => {
     if (MODAL) closeModal();
     else if (e.target.id === "gq") { closeSearch(); e.target.blur(); }
     else if (S.openId) { S.openId = null; render(); }
+    else if (S.openDay) { S.openDay = null; render(); }
   }
   if (e.key === "/" && !typing && !MODAL && !$("#gsearch").hidden) { e.preventDefault(); $("#gq").focus(); }
   if (e.key === "Enter" && e.target.id === "gq") { e.preventDefault(); const first = $("#gq-res button"); if (first) openStudent(first.dataset.id); }
