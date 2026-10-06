@@ -1363,7 +1363,7 @@ class SchedulerTests(BaseCase):
         self.run_at(10, 1)
         self.assertEqual(len(self.texts(777)), 1)
         self.assertIn("20 000 ₽", self.texts(777)[0])                               # два неоплаченных платежа с сегодняшним сроком
-        self.assertIn("расчётного листка", self.texts(777)[0])                      # платёж с зарплаты: просим фото начисления
+        self.assertIn("фото или документ с начислением зарплаты", self.texts(777)[0])   # платёж с оклада: просим подтверждение
         self.assertEqual(self.texts(778), [])
         self.run_at(10, 2)
         self.run_at(18, 0)
@@ -1404,6 +1404,7 @@ class SchedulerTests(BaseCase):
         self.assertIn("сколько вы заработали", ask[0])
         self.assertIn("фото", ask[0])                                               # просим подтверждение: начисление и часы
         self.assertIn("часов", ask[0])
+        self.assertNotIn("ментор посчитает", ask[0])
         self.assertNotIn("₽", ask[0])                                               # суммы ещё нет: бот её не выдумывает
         both = self.texts(781)
         self.assertEqual(len(both), 1)                                              # одно сообщение: и сумма, и вопрос о доходе
