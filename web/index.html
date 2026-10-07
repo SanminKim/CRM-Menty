@@ -854,19 +854,21 @@ function filtered(keys = ["q", "cohort", "mentor", "partner", "stage"]) {
     return true;
   });
 }
+const fsel = (key, label, options) => `<select id="f-${key}" data-filter="${key}" aria-label="${esc(label)}">${options.map(([v, l]) => opt(v, l, S.f[key] || "")).join("")}</select>`;
 const opt = (v, l, cur) => `<option value="${esc(v)}"${v === cur ? " selected" : ""}>${esc(l)}</option>`;
 function mentorSelect() {
   if (!D().team.length || S.limited) return ""; // ментор на сервере и так видит только своих
   return `<select id="f-mentor" data-filter="mentor" aria-label="Ментор">${opt("", "Все менторы", S.f.mentor)}${myTeam() ? opt("me", "Мои студенты", S.f.mentor) : ""}${D().team.map(m => opt(m.id, m.name, S.f.mentor)).join("")}${opt("none", "Без ментора", S.f.mentor)}</select>`;
 }
-function filtersHTML(keys, { lost = false } = {}) {
+function filtersHTML(keys, { lost = false, ph = "Имя, телефон, email", extra = "" } = {}) {
   const f = S.f, on = k => keys.includes(k), any = keys.some(k => f[k]);
   return `<div class="filters">
-    ${on("q") ? `<input type="search" id="f-q" placeholder="Имя, телефон, email" value="${esc(f.q)}" aria-label="Поиск по списку">` : ""}
+    ${on("q") ? `<input type="search" id="f-q" placeholder="${esc(ph)}" value="${esc(f.q)}" aria-label="Поиск по списку">` : ""}
     ${on("cohort") && D().cohorts.length ? `<select id="f-cohort" data-filter="cohort" aria-label="Поток">${opt("", "Все потоки", f.cohort)}${sortBy(D().cohorts, c => c.start || "").reverse().map(c => opt(c.id, c.name, f.cohort)).join("")}${opt("none", "Без потока", f.cohort)}</select>` : ""}
     ${on("mentor") ? mentorSelect() : ""}
     ${on("partner") && D().partners.length ? `<select id="f-partner" data-filter="partner" aria-label="Источник">${opt("", "Все источники", f.partner)}${D().partners.map(p => opt(p.id, p.name, f.partner)).join("")}${opt("none", "Без партнёра", f.partner)}</select>` : ""}
     ${on("stage") ? `<select id="f-stage" data-filter="stage" aria-label="Этап">${opt("", "Все этапы", f.stage)}${STAGES.map(s => opt(s[0], s[1], f.stage)).join("")}</select>` : ""}
+    ${extra}
     ${lost ? `<label class="check"><input type="checkbox" id="f-lost" data-act="toggle-lost"${S.showLost ? " checked" : ""}> Выбывшие</label>` : ""}
     ${any ? `<button class="btn ghost" data-act="freset">Сбросить</button>` : ""}
   </div>`;
@@ -1806,17 +1808,27 @@ function payoutsView() {
   const view = ["parties", "calc", "expenses"].includes(S.payView) ? S.payView : "parties";
   const mName = esc(monthName(month).toLowerCase()), owing = prow.filter(r => r.st.balance > 0).length;
   const tab = (k, l) => `<button data-act="payview" data-v="${k}" class="${view === k ? "on" : ""}">${l}</button>`;
+  const f = S.f, q = f.q.trim().toLowerCase(), has = v => !q || String(v || "").toLowerCase().includes(q);
+  const dirOpts = [["", "Все направления"], ...D().directions.map(d => [d.id, d.name])];
+  const inDir = id => !f.dir || (dirById(id)?.id || "") === f.dir;
+  const prowAll = prow.length, cellsAll = cells.length, expsAll = exps.length;
+  const prowF = prow.filter(r => has(partyName(r)) && (!f.pkind || r.kind === f.pkind)), cellsF = cells.filter(c => inDir(c.directionId)), expsF = exps.filter(e => (has(e.comment) || has(dirById(e.directionId)?.name)) && inDir(e.directionId));
+  const none = `<p class="empty">По этому отбору ничего нет. Нажмите «Сбросить».</p>`;
+  const bar = view === "parties" ? filtersHTML(["q", "pkind"], { ph: "Имя ментора или партнёра", extra: fsel("pkind", "Кто", [["", "Все стороны"], ["mentor", "Менторы"], ["partner", "Партнёры"]]) })
+    : view === "calc" ? (D().directions.length > 1 ? filtersHTML(["dir"], { extra: fsel("dir", "Направление", dirOpts) }) : "")
+    : filtersHTML(["q", "dir"], { ph: "Что за расход", extra: D().directions.length > 1 ? fsel("dir", "Направление", dirOpts) : "" });
   const partiesHTML = panel("Кому сколько выплатить", prow.length || "", prow.length ? `<div class="table-wrap"><table id="pay-parties"><thead><tr><th>Кому</th><th class="num">Начислено за ${mName}</th><th class="num">Начислено всего</th><th class="num">Уже выплачено</th><th class="num">Осталось выплатить</th><th></th></tr></thead>
-    <tbody>${prow.map(r => `<tr class="click${open === r ? " sel" : ""}" data-act="pay-open" data-id="${esc(r.kind + ":" + r.id)}"><td><strong>${esc(partyName(r))}</strong> <span class="sub">${r.kind === "partner" ? "партнёр" : "ментор"}</span></td>
+    <tbody>${prowF.map(r => `<tr class="click${open === r ? " sel" : ""}" data-act="pay-open" data-id="${esc(r.kind + ":" + r.id)}"><td><strong>${esc(partyName(r))}</strong> <span class="sub">${r.kind === "partner" ? "партнёр" : "ментор"}</span></td>
       <td class="num">${signed(r.month)}</td><td class="num">${signed(r.st.accrued)}</td><td class="num">${money(r.st.paidOut)}</td><td class="num"><strong class="${r.st.balance > 0 ? "warn-text" : ""}">${money(r.st.balance)}</strong></td>
-      <td class="row-actions">${S.readOnly ? "" : `<button class="btn small${r.st.balance > 0 ? " primary" : ""}" data-act="payout-new" data-kind="${esc(r.kind)}" data-id="${esc(r.id)}">Выплатить</button>`}</td></tr>`).join("")}</tbody></table></div>`
+      <td class="row-actions">${S.readOnly ? "" : `<button class="btn small${r.st.balance > 0 ? " primary" : ""}" data-act="payout-new" data-kind="${esc(r.kind)}" data-id="${esc(r.id)}">Выплатить</button>`}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">По этому отбору никого нет. Нажмите «Сбросить».</td></tr>`}</tbody>
+      ${prowF.length > 1 ? `<tfoot><tr><td>Итого${prowF.length < prowAll ? ` по отбору: ${prowF.length} из ${prowAll}` : ""}</td><td class="num">${signed(sum(prowF, r => r.month))}</td><td class="num">${signed(sum(prowF, r => r.st.accrued))}</td><td class="num">${money(sum(prowF, r => r.st.paidOut))}</td><td class="num">${money(sum(prowF, r => Math.max(r.st.balance, 0)))}</td><td></td></tr></tfoot>` : ""}</table></div>`
     : `<p class="empty">Добавьте стороны в условиях направления: Настройки → Направления</p>`, "", prow.length ? "Когда перевели деньги, нажмите «Выплатить» — остаток уменьшится. Нажмите на строку, чтобы увидеть расчёт по месяцам и прошлые выплаты." : "")
     + (open ? panel(`${esc(partyName(open))}: начисления`, "", monthsTable(open.st.months)) + panel(`${esc(partyName(open))}: выплаты`, open.st.payouts.length ? money(open.st.paidOut) : "", payoutList(open.st.payouts, !S.readOnly)) : "");
   const calcHTML = `<p class="hint">Из оплат студентов за ${mName} вычитаются расходы — получается чистая выручка. Каждая сторона получает от неё свой процент, остаток — ваш.</p>
-    <div class="cols2" id="pay-dirs">${cells.map(dirPanel).join("") || `<section class="panel"><p class="empty">В этом месяце оплат и расходов не было</p></section>`}</div>`;
-  const expHTML = panel(`Расходы за ${mName}`, exps.length ? money(exp) : "", exps.length ? `<ul class="rows" id="pay-expenses">${exps.map(e => `<li><span class="who"><strong>${esc(e.comment || "Расход")}</strong><span>${esc(dirById(e.directionId)?.name || "Без направления")}</span></span><span class="amt">${money(e.amount)}</span><span class="when">${fDate(e.date)}</span>
+    <div class="cols2" id="pay-dirs">${cellsF.map(dirPanel).join("") || (cellsAll ? `<section class="panel">${none}</section>` : "") || `<section class="panel"><p class="empty">В этом месяце оплат и расходов не было</p></section>`}</div>`;
+  const expHTML = panel(`Расходы за ${mName}`, expsF.length ? money(sum(expsF, e => nnum(e.amount))) : "", expsF.length ? `<ul class="rows" id="pay-expenses">${expsF.map(e => `<li><span class="who"><strong>${esc(e.comment || "Расход")}</strong><span>${esc(dirById(e.directionId)?.name || "Без направления")}</span></span><span class="amt">${money(e.amount)}</span><span class="when">${fDate(e.date)}</span>
       ${S.readOnly ? "" : `<span class="acts"><button class="btn small ghost" data-act="expense-edit" data-id="${esc(e.id)}">Изменить</button><button class="btn small ghost" data-act="expense-del" data-id="${esc(e.id)}">Удалить</button></span>`}</li>`).join("")}</ul>`
-    : `<p class="empty">Расходов в этом месяце нет</p>`, addExp.replace('class="btn"', 'class="btn small"'), "Реклама, налоги, комиссии и непредвиденные траты. Они уменьшают чистую выручку до того, как она делится.");
+    : expsAll ? none : `<p class="empty">Расходов в этом месяце нет</p>`, addExp.replace('class="btn"', 'class="btn small"'), "Реклама, налоги, комиссии и непредвиденные траты. Они уменьшают чистую выручку до того, как она делится.");
   return headHTML("Выплаты менторам", "", sel + addExp, "Сколько из полученных денег причитается блогеру, менторам и вам") + `<section class="kpis">
     ${kpiHTML(`Чистая выручка за ${mName}`, signed(net), `получено ${money(got)} − расходы ${money(exp)}`)}
     ${kpiHTML("Ваша доля за месяц", signed(own), net > 0 ? `${pct(own, net)}% чистой выручки` : "")}
@@ -1824,7 +1836,7 @@ function payoutsView() {
   </section>
   ${loose ? `<div class="banner"><p>Потоков без направления: ${loose}. Оплаты их студентов ни с кем не делятся.</p><button class="btn small" data-act="nav" data-v="cohorts">Открыть потоки</button></div>` : ""}
   <nav class="tabs" id="pay-tabs">${tab("parties", "Кому выплатить")}${tab("calc", "Как посчитано")}${tab("expenses", `Расходы${exps.length ? ` · ${exps.length}` : ""}`)}</nav>
-  <div class="stack">${view === "parties" ? partiesHTML : view === "calc" ? calcHTML : expHTML}</div>`;
+  ${bar}<div class="stack">${view === "parties" ? partiesHTML : view === "calc" ? calcHTML : expHTML}</div>`;
 }
 const EXPENSE_HINTS = ["Реклама", "Налоги", "Комиссия банка", "Сервисы и подписки", "Возврат студенту", "Непредвиденный расход"];
 function expenseForm(e) {
@@ -1886,23 +1898,31 @@ function directionForm(d) {
   });
 }
 function paymentsView() {
-  const t = today(), all = D().students.flatMap(s => (s.payments || []).filter(isObj).map(p => ({ ...p, s })));
+  const fkeys = ["q", "cohort", "mentor", "ptype", "pmonth"], f = S.f, filtering = fkeys.some(k => f[k]);
+  const every = D().students.flatMap(s => (s.payments || []).filter(isObj).map(p => ({ ...p, s })));
+  // Месяц платежа: у оплаченного — когда пришли деньги, у остальных — срок
+  const pMonth = p => String(p.paid || p.due || "").slice(0, 7);
+  const monthsHere = [...new Set(every.map(pMonth).filter(k => /^\d{4}-\d{2}$/.test(k)))].sort().reverse();
+  const keep = new Set(filtered(["q", "cohort", "mentor"]).map(x => x.id));
+  const t = today(), all = every.filter(p => keep.has(p.s.id) && (!f.ptype || (f.ptype === "salary") === (p.salary === true)) && (!f.pmonth || pMonth(p) === f.pmonth));
+  const bar = filtersHTML(fkeys, { ph: "Имя студента, телефон", extra: fsel("ptype", "Вид платежа", [["", "Все платежи"], ["salary", "С зарплаты"], ["plain", "За обучение"]])
+    + (monthsHere.length ? fsel("pmonth", "Месяц", [["", "Все месяцы"], ...monthsHere.map(k => [k, monthName(k)])]) : "") });
   const tab = (k, l) => `<button data-act="paytab" data-v="${k}" class="${S.payTab === k ? "on" : ""}">${l}</button>`;
-  const open = all.filter(p => !p.paid && p.s.stage !== "lost"), od = open.filter(p => p.due < t), up = open.filter(p => p.due >= t), paidM = all.filter(p => p.paid && String(p.paid).slice(0, 7) === t.slice(0, 7));
+  const open = all.filter(p => !p.paid && p.s.stage !== "lost"), od = open.filter(p => p.due < t), up = open.filter(p => p.due >= t), paidM = all.filter(p => p.paid && String(p.paid).slice(0, 7) === (f.pmonth || t.slice(0, 7)));
   const amt = l => money(sum(l, p => nnum(p.amount)));
   const checked = all.filter(p => p.paid && p.expected != null), gapAll = sum(checked, payGap), short = checked.filter(p => payGap(p) < 0).length;
   const head = headHTML("Платежи студентов") + `<section class="kpis" id="pay-kpis">
     <div class="kpi"><span class="kpi-label">Ожидается</span><span class="kpi-value">${amt(up)}</span><span class="kpi-sub">${up.length ? plural(up.length, "платёж", "платежа", "платежей").replace(/^/, up.length + " ") + ", срок ещё не наступил" : "ближайших платежей нет"}</span></div>
     <div class="kpi"><span class="kpi-label">Просрочено</span><span class="kpi-value${od.length ? " danger-text" : ""}">${amt(od)}</span><span class="kpi-sub">${od.length ? `${od.length} ${plural(od.length, "платёж", "платежа", "платежей")}: напомните студентам` : "просрочек нет"}</span></div>
-    <div class="kpi"><span class="kpi-label">Получено в этом месяце</span><span class="kpi-value">${amt(paidM)}</span><span class="kpi-sub">${paidM.length ? `${paidM.length} ${plural(paidM.length, "платёж", "платежа", "платежей")}` : "оплат пока не было"}</span></div>
+    <div class="kpi"><span class="kpi-label">${f.pmonth ? `Получено за ${esc(monthName(f.pmonth).toLowerCase())}` : "Получено в этом месяце"}</span><span class="kpi-value">${amt(paidM)}</span><span class="kpi-sub">${paidM.length ? `${paidM.length} ${plural(paidM.length, "платёж", "платежа", "платежей")}` : "оплат пока не было"}</span></div>
     ${checked.length ? `<div class="kpi" id="pay-gap"><span class="kpi-label">С зарплат: ожидали и получили</span><span class="kpi-value${gapAll < 0 ? " danger-text" : ""}">${gapAll ? (gapAll < 0 ? "−" : "+") + money(Math.abs(gapAll)) : "сходится"}</span><span class="kpi-sub">ожидали ${money(sum(checked, p => nnum(p.expected)))}, пришло ${money(sum(checked, p => nnum(p.amount)))}${short ? ` · недоплат: ${short}` : ""}</span></div>` : ""}</section>
-  <nav class="tabs">${tab("upcoming", `Ожидаются${up.length ? ` · ${up.length}` : ""}`)}${tab("overdue", `Просроченные${od.length ? ` · ${od.length}` : ""}`)}${tab("paid", "Оплаченные")}</nav>`;
+  <nav class="tabs">${tab("upcoming", `Ожидаются${up.length ? ` · ${up.length}` : ""}`)}${tab("overdue", `Просроченные${od.length ? ` · ${od.length}` : ""}`)}${tab("paid", "Оплаченные")}</nav>${bar}${filtering ? `<p class="hint" id="pay-filtered" style="margin:-6px 0 10px">Показаны платежи по отбору: ${all.length} из ${every.length}. Суммы сверху посчитаны по ним же.</p>` : ""}`;
   let list;
   if (S.payTab === "overdue") list = sortBy(all.filter(p => !p.paid && p.due < t), p => p.due);
   else if (S.payTab === "upcoming") list = sortBy(all.filter(p => !p.paid && p.due >= t), p => p.due);
   else list = sortBy(all.filter(p => p.paid), p => p.paid).reverse();
   const paidTab = !["overdue", "upcoming"].includes(S.payTab);
-  const emptyText = { overdue: "Просроченных платежей нет", upcoming: "Ожидаемых платежей нет. Платёж добавляется в карточке студента кнопкой «+ Платёж».", paid: "Оплат пока не было" }[S.payTab] || "";
+  const emptyText = filtering ? "По этому отбору платежей нет. Нажмите «Сбросить»." : { overdue: "Просроченных платежей нет", upcoming: "Ожидаемых платежей нет. Платёж добавляется в карточке студента кнопкой «+ Платёж».", paid: "Оплат пока не было" }[S.payTab] || "";
   return head + `<div class="panel table-wrap"><table>
     <thead><tr><th>Студент</th><th>Поток</th><th>${paidTab ? "Оплачен" : "Срок"}</th>${paidTab ? "<th>Срок был</th><th>Вовремя</th>" : ""}<th class="num">Сумма</th><th>Комментарий</th><th></th></tr></thead>
     <tbody>${list.map(p => `<tr class="click" data-act="open" data-id="${esc(p.s.id)}"><td><strong>${esc(p.s.name)}</strong></td>
@@ -2849,7 +2869,7 @@ function renderSearch() {
 function closeSearch() { $("#gq").value = ""; $("#gq-res").hidden = true; }
 
 // ---------- События ----------
-function go(view) { S.navMore = false; S.view = view; S.openId = null; S.openDay = null; S.todayTab = null; S.sel.clear(); S.sort = null; if (VIEWS.includes(view)) lsSet("crm-menti-view", view); render(); window.scrollTo(0, 0); }
+function go(view) { if (view !== S.view) S.f.q = ""; S.navMore = false; S.view = view; S.openId = null; S.openDay = null; S.todayTab = null; S.sel.clear(); S.sort = null; if (VIEWS.includes(view)) lsSet("crm-menti-view", view); render(); window.scrollTo(0, 0); }
 function openStudent(id) {
   const was = S.openId; S.openId = id; S.histOpen = false; S.logOpen = false; closeSearch(); render();
   const el = $(".drawer"); if (el && !was) el.classList.add("enter");
@@ -2925,7 +2945,7 @@ const ACT = {
   },
   "more-nostep": () => { S.moreNoStep = !S.moreNoStep; render(); },
   "more-week": () => { S.moreWeek = !S.moreWeek; render(); },
-  payview: d => { S.payView = d.v; render(); },
+  payview: d => { S.payView = d.v; S.f.q = ""; render(); },
   "today-tab": d => { S.todayTab = d.v; render(); },
   qdate: d => { const el = document.getElementById(d.target); if (el) el.value = daysAhead(+d.days); },
   copy: d => copyText(d.text, "Скопировано"),
