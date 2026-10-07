@@ -1452,6 +1452,29 @@ function salaryPlanForm(s) {
   });
 }
 // Доход за месяц при почасовой оплате: из него считается сумма платежа
+// Платёж с зарплаты: сколько ожидали (expected) и сколько пришло на самом деле (amount после оплаты).
+// В расчёты выручки идёт amount, то есть факт; expected нужен только чтобы показать расхождение
+const payGap = p => p && p.paid && p.expected != null ? nnum(p.amount) - nnum(p.expected) : 0;
+const gapText = p => { const g = payGap(p); return g ? `<div class="sub ${g < 0 ? "danger-text" : "warn-text"}">ожидалось ${money(p.expected)} · ${g < 0 ? "недоплата" : "переплата"} ${money(Math.abs(g))}</div>` : ""; };
+function receivedForm(s, p) {
+  const diff = v => { const g = v - nnum(p.amount); return !(v > 0) ? "" : g === 0 ? "Совпадает с ожидаемой суммой" : `${g < 0 ? "Недоплата" : "Переплата"}: ${money(Math.abs(g))}`; };
+  openModal({
+    title: `Платёж с зарплаты: ${s.name}`, submit: "Отметить оплаченным", values: { received: nnum(p.amount), paid: today() },
+    fields: [{ k: "received", label: "Сколько пришло, ₽", type: "number", req: true, help: `Ожидалось ${money(p.amount)}, срок ${fDate(p.due)}` }, { k: "paid", label: "Дата оплаты", type: "date", req: true }],
+    extra: `<p><strong id="m-sum">${diff(nnum(p.amount))}</strong></p>`,
+    onInput: () => { const el = $("#m-sum"); if (el) el.textContent = diff(+($("#m-received")?.value) || 0); },
+    onSubmit: v => {
+      if (!(v.received > 0)) return "Укажите, сколько пришло";
+      if (!isDay(v.paid)) return "Укажите дату оплаты";
+      return save(() => patchStudent(s.id, cur => {
+        const old = (cur.payments || []).find(x => x.id === p.id); if (!old || old.paid || isPending(old)) return null;
+        const want = nnum(old.amount), g = v.received - want;
+        return { payments: cur.payments.map(x => x.id === p.id ? { ...x, amount: v.received, expected: want, paid: v.paid } : x),
+          log: withLog(cur, logItem(`Платёж с зарплаты оплачен: пришло ${money(v.received)}, ожидалось ${money(want)}${g ? `, ${g < 0 ? "недоплата" : "переплата"} ${money(Math.abs(g))}` : ""}`)) };
+      }), "Платёж отмечен оплаченным");
+    },
+  });
+}
 function incomeForm(s, p) {
   const due = (income) => Math.round(income * nnum(p.percent) / 100);
   openModal({
@@ -1490,11 +1513,13 @@ function payHistory(s) {
 }
 function payHistoryLine(s) {
   const h = payHistory(s);
-  if (!h.paid && !h.overdue) return "";
+  if (!h.paid && !h.overdue && !sum(s.payments || [], payGap)) return "";
   const parts = [];
   if (h.paid) parts.push(`вовремя ${h.onTime} из ${h.paid}`);
   if (h.late) parts.push(`<span class="warn-text">с опозданием ${h.late}: в среднем на ${days(h.avgLate)}${h.late > 1 ? `, самое долгое ${days(h.maxLate)}` : ""}</span>`);
   if (h.overdue) parts.push(`<span class="danger-text">сейчас просрочено ${h.overdue}, уже ${days(h.overdueDays)}</span>`);
+  const gap = sum(s.payments || [], payGap);
+  if (gap) parts.push(`<span class="${gap < 0 ? "danger-text" : "warn-text"}">с зарплаты ${gap < 0 ? "недоплачено" : "переплачено"} ${money(Math.abs(gap))}</span>`);
   return `<p class="hint" id="pay-history" style="margin:0 0 6px">История оплат: ${parts.join(" · ")}</p>`;
 }
 // Файлы, которые студент прислал боту: фото начисления зарплаты, отработанных часов. Сам файл лежит в Telegram
@@ -1513,7 +1538,7 @@ function paySection(s) {
   return `<section class="sec"><header><h3>Платежи</h3><span class="sub">${s.price ? `${money(paidSum(s))} из ${money(s.price)}` : pays.length ? money(paidSum(s)) : ""}</span><span class="right"></span>
       <button class="btn small" data-act="pay-new" data-id="${esc(s.id)}">+ Платёж</button>${SGROUP[s.stage] === "job" ? `<button class="btn small" data-act="pay-salary" data-id="${esc(s.id)}">+ С зарплаты</button>` : ""}</header>
     ${payHistoryLine(s)}<div class="box">${pays.length ? `<div class="table-wrap"><table class="compact"><tbody>
-      ${pays.map(x => { const od = !x.paid && x.due < t; return `<tr><td>${fShort(x.due)}${x.comment ? `<div class="sub">${esc(x.comment)}</div>` : ""}</td><td class="num">${isPending(x) ? `<span class="sub">${esc(pctText(x.percent))} от дохода</span>` : money(x.amount)}</td>
+      ${pays.map(x => { const od = !x.paid && x.due < t; return `<tr><td>${fShort(x.due)}${x.comment ? `<div class="sub">${esc(x.comment)}</div>` : ""}</td><td class="num">${isPending(x) ? `<span class="sub">${esc(pctText(x.percent))} от дохода</span>` : money(x.amount) + gapText(x)}</td>
         <td>${x.paid ? (payDelay(x) > 0 ? `<span class="tag warn" title="Срок был ${esc(fDate(x.due))}">оплачен ${fDay(x.paid)} · на ${days(payDelay(x))} позже</span>` : `<span class="tag ok">оплачен ${fDay(x.paid)}</span>`) : isPending(x) ? `<span class="tag ${od ? "danger" : "warn"}">${od ? "ждём доход" : "сумма по доходу"}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
         <td class="row-actions">${x.paid ? "" : isPending(x) ? `<button class="btn small" data-act="pay-income" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Указать доход</button> ` : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(s.id)}" data-pid="${esc(x.id)}" title="Скопировать текст напоминания">Напомнить</button> <button class="btn small" data-act="pay-done" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Оплачен</button> `}<button class="btn small ghost" data-act="pay-edit" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Изменить</button></td></tr>`; }).join("")}
     </tbody></table></div>` : `<p class="empty">Платежей пока нет</p>`}</div>${pays.some(x => !x.paid) ? botLine(s) : ""}</section>${proofSection(s)}`;
@@ -1862,10 +1887,12 @@ function paymentsView() {
   const tab = (k, l) => `<button data-act="paytab" data-v="${k}" class="${S.payTab === k ? "on" : ""}">${l}</button>`;
   const open = all.filter(p => !p.paid && p.s.stage !== "lost"), od = open.filter(p => p.due < t), up = open.filter(p => p.due >= t), paidM = all.filter(p => p.paid && String(p.paid).slice(0, 7) === t.slice(0, 7));
   const amt = l => money(sum(l, p => nnum(p.amount)));
+  const checked = all.filter(p => p.paid && p.expected != null), gapAll = sum(checked, payGap), short = checked.filter(p => payGap(p) < 0).length;
   const head = headHTML("Платежи студентов") + `<section class="kpis" id="pay-kpis">
     <div class="kpi"><span class="kpi-label">Ожидается</span><span class="kpi-value">${amt(up)}</span><span class="kpi-sub">${up.length ? plural(up.length, "платёж", "платежа", "платежей").replace(/^/, up.length + " ") + ", срок ещё не наступил" : "ближайших платежей нет"}</span></div>
     <div class="kpi"><span class="kpi-label">Просрочено</span><span class="kpi-value${od.length ? " danger-text" : ""}">${amt(od)}</span><span class="kpi-sub">${od.length ? `${od.length} ${plural(od.length, "платёж", "платежа", "платежей")}: напомните студентам` : "просрочек нет"}</span></div>
-    <div class="kpi"><span class="kpi-label">Получено в этом месяце</span><span class="kpi-value">${amt(paidM)}</span><span class="kpi-sub">${paidM.length ? `${paidM.length} ${plural(paidM.length, "платёж", "платежа", "платежей")}` : "оплат пока не было"}</span></div></section>
+    <div class="kpi"><span class="kpi-label">Получено в этом месяце</span><span class="kpi-value">${amt(paidM)}</span><span class="kpi-sub">${paidM.length ? `${paidM.length} ${plural(paidM.length, "платёж", "платежа", "платежей")}` : "оплат пока не было"}</span></div>
+    ${checked.length ? `<div class="kpi" id="pay-gap"><span class="kpi-label">С зарплат: ожидали и получили</span><span class="kpi-value${gapAll < 0 ? " danger-text" : ""}">${gapAll ? (gapAll < 0 ? "−" : "+") + money(Math.abs(gapAll)) : "сходится"}</span><span class="kpi-sub">ожидали ${money(sum(checked, p => nnum(p.expected)))}, пришло ${money(sum(checked, p => nnum(p.amount)))}${short ? ` · недоплат: ${short}` : ""}</span></div>` : ""}</section>
   <nav class="tabs">${tab("upcoming", `Ожидаются${up.length ? ` · ${up.length}` : ""}`)}${tab("overdue", `Просроченные${od.length ? ` · ${od.length}` : ""}`)}${tab("paid", "Оплаченные")}</nav>`;
   let list;
   if (S.payTab === "overdue") list = sortBy(all.filter(p => !p.paid && p.due < t), p => p.due);
@@ -1878,7 +1905,7 @@ function paymentsView() {
     <tbody>${list.map(p => `<tr class="click" data-act="open" data-id="${esc(p.s.id)}"><td><strong>${esc(p.s.name)}</strong></td>
       <td>${esc(cohortName(p.s.cohortId) || "—")}</td><td${!p.paid && p.due < t ? ' class="danger-text"' : ""}>${fDate(paidTab ? p.paid : p.due)}</td>
       ${paidTab ? `<td class="muted">${fDate(p.due)}</td><td>${payDelay(p) > 0 ? `<span class="tag warn">на ${days(payDelay(p))} позже</span>` : payDelay(p) === 0 ? `<span class="tag ok">вовремя</span>` : ""}</td>` : ""}
-      <td class="num">${isPending(p) ? `<span class="sub">${esc(pctText(p.percent))} от дохода</span>` : money(p.amount)}</td><td class="muted">${esc(p.comment)}</td>
+      <td class="num">${isPending(p) ? `<span class="sub">${esc(pctText(p.percent))} от дохода</span>` : money(p.amount) + gapText(p)}</td><td class="muted">${esc(p.comment)}</td>
       <td class="row-actions">${p.paid ? "" : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button> <button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">${isPending(p) ? "Указать доход" : "Оплачен"}</button>`}</td></tr>`).join("") || `<tr><td colspan="${paidTab ? 8 : 6}" class="empty">${emptyText}</td></tr>`}</tbody>
     ${list.length ? `<tfoot><tr><td colspan="${paidTab ? 5 : 3}">Итого</td><td class="num">${money(sum(list, p => p.amount))}</td><td colspan="2"></td></tr></tfoot>` : ""}
   </table></div>`;
@@ -2127,6 +2154,7 @@ async function payDone(id, pid) {
   const s = stu(id); if (!s) return;
   const first = (s.payments || []).find(x => x.id === pid);
   if (isPending(first)) return incomeForm(s, first); // сумма ещё неизвестна: сначала доход за месяц
+  if (first?.salary === true && !first.paid && !S.readOnly) return receivedForm(s, first); // с зарплаты: спрашиваем, сколько пришло на самом деле
   const mark = paid => cur => (cur.payments || []).map(p => p.id === pid ? { ...p, paid } : p);
   let item = null;
   const ok = await save(() => patchStudent(id, cur => {
@@ -2433,6 +2461,10 @@ function paymentForm(s, p) {
       const item = pending ? { id: p.id, amount: null, percent: p.percent, due: v.due, paid: null, comment: v.comment }
         : { id: p?.id || newId("x"), amount: v.amount, due: v.due, paid: v.paid || null, comment: v.comment };
       if (p?.salary === true) item.salary = true; // по этой отметке бот просит у студента фото начисления
+      if (p?.income != null && !pending) item.income = p.income;
+      if (p?.expected != null && item.paid) item.expected = p.expected;
+      // Оплату сняли: платёж снова ждёт ожидаемую сумму, а не ту, что пришла в прошлый раз
+      else if (p?.expected != null && +item.amount === +p.amount) item.amount = p.expected;
       return save(() => patchStudent(s.id, cur => {
         const list = cur.payments || [], old = p ? list.find(x => x.id === p.id) : null;
         if (p && !old) throw { code: "gone-item" };
