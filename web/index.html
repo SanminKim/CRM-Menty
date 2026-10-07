@@ -1802,26 +1802,29 @@ function payoutsView() {
     ${d ? "" : `<p class="hint pad">Оплаты студентов без потока и потоков без направления. Они ни с кем не делятся. Привяжите потоки к направлению в их настройках.</p>`}`);
   };
   const exps = sortBy(D().expenses.filter(e => dayOf(e.date).slice(0, 7) === month), e => String(e.date)).reverse();
-  return headHTML("Выплаты менторам", "", sel + addExp, "Чистая выручка направлений, доли сторон и остатки к выплате") + `<section class="kpis">
-    ${kpiHTML(`Получено за ${esc(monthName(month).toLowerCase())}`, money(got))}
-    ${kpiHTML("Расходы", money(exp), `записей: ${exps.length}`)}
-    ${kpiHTML("Чистая выручка", signed(net), "получено минус расходы")}
-    ${kpiHTML("Вам за месяц", signed(own), net > 0 ? `${pct(own, net)}% чистой выручки` : "")}
-    ${kpiHTML("К выплате сторонам", money(due), "остатки за всё время", " accent")}
+  // На экране одна часть: кому сколько выплатить, как это посчитано или расходы месяца
+  const view = ["parties", "calc", "expenses"].includes(S.payView) ? S.payView : "parties";
+  const mName = esc(monthName(month).toLowerCase()), owing = prow.filter(r => r.st.balance > 0).length;
+  const tab = (k, l) => `<button data-act="payview" data-v="${k}" class="${view === k ? "on" : ""}">${l}</button>`;
+  const partiesHTML = panel("Кому сколько выплатить", prow.length || "", prow.length ? `<div class="table-wrap"><table id="pay-parties"><thead><tr><th>Кому</th><th class="num">Начислено за ${mName}</th><th class="num">Начислено всего</th><th class="num">Уже выплачено</th><th class="num">Осталось выплатить</th><th></th></tr></thead>
+    <tbody>${prow.map(r => `<tr class="click${open === r ? " sel" : ""}" data-act="pay-open" data-id="${esc(r.kind + ":" + r.id)}"><td><strong>${esc(partyName(r))}</strong> <span class="sub">${r.kind === "partner" ? "партнёр" : "ментор"}</span></td>
+      <td class="num">${signed(r.month)}</td><td class="num">${signed(r.st.accrued)}</td><td class="num">${money(r.st.paidOut)}</td><td class="num"><strong class="${r.st.balance > 0 ? "warn-text" : ""}">${money(r.st.balance)}</strong></td>
+      <td class="row-actions">${S.readOnly ? "" : `<button class="btn small${r.st.balance > 0 ? " primary" : ""}" data-act="payout-new" data-kind="${esc(r.kind)}" data-id="${esc(r.id)}">Выплатить</button>`}</td></tr>`).join("")}</tbody></table></div>`
+    : `<p class="empty">Добавьте стороны в условиях направления: Настройки → Направления</p>`, "", prow.length ? "Когда перевели деньги, нажмите «Выплатить» — остаток уменьшится. Нажмите на строку, чтобы увидеть расчёт по месяцам и прошлые выплаты." : "")
+    + (open ? panel(`${esc(partyName(open))}: начисления`, "", monthsTable(open.st.months)) + panel(`${esc(partyName(open))}: выплаты`, open.st.payouts.length ? money(open.st.paidOut) : "", payoutList(open.st.payouts, !S.readOnly)) : "");
+  const calcHTML = `<p class="hint">Из оплат студентов за ${mName} вычитаются расходы — получается чистая выручка. Каждая сторона получает от неё свой процент, остаток — ваш.</p>
+    <div class="cols2" id="pay-dirs">${cells.map(dirPanel).join("") || `<section class="panel"><p class="empty">В этом месяце оплат и расходов не было</p></section>`}</div>`;
+  const expHTML = panel(`Расходы за ${mName}`, exps.length ? money(exp) : "", exps.length ? `<ul class="rows" id="pay-expenses">${exps.map(e => `<li><span class="who"><strong>${esc(e.comment || "Расход")}</strong><span>${esc(dirById(e.directionId)?.name || "Без направления")}</span></span><span class="amt">${money(e.amount)}</span><span class="when">${fDate(e.date)}</span>
+      ${S.readOnly ? "" : `<span class="acts"><button class="btn small ghost" data-act="expense-edit" data-id="${esc(e.id)}">Изменить</button><button class="btn small ghost" data-act="expense-del" data-id="${esc(e.id)}">Удалить</button></span>`}</li>`).join("")}</ul>`
+    : `<p class="empty">Расходов в этом месяце нет</p>`, addExp.replace('class="btn"', 'class="btn small"'), "Реклама, налоги, комиссии и непредвиденные траты. Они уменьшают чистую выручку до того, как она делится.");
+  return headHTML("Выплаты менторам", "", sel + addExp, "Сколько из полученных денег причитается блогеру, менторам и вам") + `<section class="kpis">
+    ${kpiHTML(`Чистая выручка за ${mName}`, signed(net), `получено ${money(got)} − расходы ${money(exp)}`)}
+    ${kpiHTML("Ваша доля за месяц", signed(own), net > 0 ? `${pct(own, net)}% чистой выручки` : "")}
+    ${kpiHTML("Осталось выплатить", money(due), owing ? `${owing} ${plural(owing, "стороне", "сторонам", "сторонам")}, за всё время` : "всем выплачено", " accent")}
   </section>
   ${loose ? `<div class="banner"><p>Потоков без направления: ${loose}. Оплаты их студентов ни с кем не делятся.</p><button class="btn small" data-act="nav" data-v="cohorts">Открыть потоки</button></div>` : ""}
-  <div class="stack">
-  <div class="cols2" id="pay-dirs">${cells.map(dirPanel).join("") || `<section class="panel"><p class="empty">В этом месяце оплат и расходов не было</p></section>`}</div>
-  ${panel("Стороны", prow.length || "", prow.length ? `<div class="table-wrap"><table id="pay-parties"><thead><tr><th>Сторона</th><th class="num">Начислено за месяц</th><th class="num">Начислено всего</th><th class="num">Выплачено всего</th><th class="num">К выплате</th><th></th></tr></thead>
-    <tbody>${prow.map(r => `<tr class="click" data-act="pay-open" data-id="${esc(r.kind + ":" + r.id)}"><td><strong>${esc(partyName(r))}</strong> <span class="sub">${r.kind === "partner" ? "партнёр" : "ментор"}</span></td>
-      <td class="num">${signed(r.month)}</td><td class="num">${signed(r.st.accrued)}</td><td class="num">${money(r.st.paidOut)}</td><td class="num"><strong class="${r.st.balance > 0 ? "warn-text" : ""}">${money(r.st.balance)}</strong></td>
-      <td class="row-actions">${S.readOnly ? "" : `<button class="btn small${r.st.balance > 0 ? " primary" : ""}" data-act="payout-new" data-kind="${esc(r.kind)}" data-id="${esc(r.id)}">Выплатить</button>`}</td></tr>`).join("")}</tbody></table></div>
-    <p class="hint pad">Нажмите на строку, чтобы увидеть начисления по месяцам и историю выплат.</p>` : `<p class="empty">Добавьте стороны в условиях направления: Настройки → Направления</p>`)}
-  ${open ? panel(`${esc(partyName(open))}: начисления`, "", monthsTable(open.st.months)) + panel(`${esc(partyName(open))}: выплаты`, open.st.payouts.length ? money(open.st.paidOut) : "", payoutList(open.st.payouts, !S.readOnly)) : ""}
-  ${panel(`Расходы за ${esc(monthName(month).toLowerCase())}`, exps.length ? money(exp) : "", exps.length ? `<ul class="rows" id="pay-expenses">${exps.map(e => `<li><span class="who"><strong>${esc(e.comment || "Расход")}</strong><span>${esc(dirById(e.directionId)?.name || "Без направления")}</span></span><span class="amt">${money(e.amount)}</span><span class="when">${fDate(e.date)}</span>
-      ${S.readOnly ? "" : `<span class="acts"><button class="btn small ghost" data-act="expense-edit" data-id="${esc(e.id)}">Изменить</button><button class="btn small ghost" data-act="expense-del" data-id="${esc(e.id)}">Удалить</button></span>`}</li>`).join("")}</ul>`
-    : `<p class="empty">Расходов в этом месяце нет. Реклама, налоги, комиссии и непредвиденные траты уменьшают чистую выручку до делёжки.</p>`, addExp.replace('class="btn"', 'class="btn small"'))}
-  </div>`;
+  <nav class="tabs" id="pay-tabs">${tab("parties", "Кому выплатить")}${tab("calc", "Как посчитано")}${tab("expenses", `Расходы${exps.length ? ` · ${exps.length}` : ""}`)}</nav>
+  <div class="stack">${view === "parties" ? partiesHTML : view === "calc" ? calcHTML : expHTML}</div>`;
 }
 const EXPENSE_HINTS = ["Реклама", "Налоги", "Комиссия банка", "Сервисы и подписки", "Возврат студенту", "Непредвиденный расход"];
 function expenseForm(e) {
@@ -2922,6 +2925,7 @@ const ACT = {
   },
   "more-nostep": () => { S.moreNoStep = !S.moreNoStep; render(); },
   "more-week": () => { S.moreWeek = !S.moreWeek; render(); },
+  payview: d => { S.payView = d.v; render(); },
   "today-tab": d => { S.todayTab = d.v; render(); },
   qdate: d => { const el = document.getElementById(d.target); if (el) el.value = daysAhead(+d.days); },
   copy: d => copyText(d.text, "Скопировано"),
