@@ -20,18 +20,20 @@ jobs:
     env:
       DATABASE_URL: postgres://crm:crm@localhost:5432/crm
       SECRET_KEY: ci
+      # Тест сверяет расчёт денег на странице и на сервере и запускает для этого код страницы в Node.js: без Node он не пропускается, а падает
+      CRM_REQUIRE_NODE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt
-      - run: python manage.py makemigrations --check --dry-run
-      - run: python manage.py test backend
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - run: pip install -r requirements.txt
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python manage.py test backend
       - name: Синтаксис страницы
         run: |
           node -e "new Function(require('fs').readFileSync('web/index.html','utf8').split('<script>')[1].split('</script>')[0])"

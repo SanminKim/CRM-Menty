@@ -90,9 +90,9 @@ def _log(ok, result, student_id=""):
     LeadLog.objects.create(ok=ok, result=result, student_id=student_id)
 
 
-def _notify(text):
+def _notify(text, student_id=None):
     from . import telegram  # позднее подключение: telegram сам пользуется этим модулем
-    telegram.notify_admins(text)
+    telegram.notify_admins(text, student_id=student_id)
 
 
 def register(*, name="", phone="", email="", telegram="", city="", consent=False, promo="", utm="", campaign="",
@@ -138,7 +138,7 @@ def register(*, name="", phone="", email="", telegram="", city="", consent=False
         label = plain(data["name"]) + (f", {plain(telegram, 40)}" if telegram and telegram != data["name"] else "")
         text = f"🆕 Новая заявка на обучение {origin}: {label}" + (f" · {plain(partner.data.get('name'), 60)}" if partner else "")
         # Уведомление уходит после фиксации записи: сбой Telegram не отменяет заявку
-        transaction.on_commit(lambda: _notify(text))
+        transaction.on_commit(lambda: _notify(text, doc_id))
     return doc_id, True, ""
 
 

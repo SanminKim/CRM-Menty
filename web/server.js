@@ -10,7 +10,7 @@
     // Запрос не висит бесконечно: после сна ноутбука или смены сети он обрывается и повторяется
     try { res = await fetch(url, { method, credentials: "same-origin", headers, body: data !== undefined ? JSON.stringify(data) : undefined, signal: AbortSignal.timeout(20000) }); }
     catch (e) { throw { code: "unavailable" }; }
-    if (res.status === 401) { location.href = "/login/?next=" + encodeURIComponent(location.pathname); throw { code: "unauthenticated" }; }
+    if (res.status === 401) { location.href = "/login/?next=" + encodeURIComponent(location.pathname) + location.hash; throw { code: "unauthenticated" }; }
     let out = null; try { out = await res.json(); } catch (e) { }
     if (!res.ok) throw { code: (out && out.error) || "internal", message: (out && out.message) || "" };
     return out;
@@ -135,6 +135,7 @@
   window.crmServer = {
     accounts: {
       list: async () => (await call("GET", "/api/accounts/")).accounts,
+      all: () => call("GET", "/api/accounts/"), // список и отметки о неудачных входах
       create: data => call("POST", "/api/accounts/", data),
       update: (id, data) => call("PATCH", `/api/accounts/${id}/`, data),
     },

@@ -78,6 +78,10 @@ USE_THOUSAND_SEPARATOR = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Логин при входе не различает регистр букв и пробелы по краям (backend/auth.py).
+# Стандартный способ оставлен вторым: по нему проверяются сессии, открытые до этого изменения, — людей не выкидывает из CRM.
+AUTHENTICATION_BACKENDS = ["backend.auth.LoginBackend", "django.contrib.auth.backends.ModelBackend"]
+
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"
 LOGOUT_REDIRECT_URL = "login"

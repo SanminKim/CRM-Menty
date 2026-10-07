@@ -149,20 +149,27 @@ def _staff_chats(**filters):
     return TgChat.objects.filter(user__is_active=True, **filters).exclude(user__account__role=Account.Role.PARTNER)
 
 
-def notify_admins(text):
+def crm_link(student_id=None):
+    """Адрес CRM для уведомления. С id студента ссылка открывает сразу его карточку (страница читает часть после #)."""
+    if isinstance(student_id, str) and store.ID_RE.match(student_id):
+        return f"{settings.PUBLIC_URL}/#/today?s={student_id}"
+    return f"{settings.PUBLIC_URL}/"
+
+
+def notify_admins(text, student_id=None):
     if not enabled():
         return
     for chat in _staff_chats(user__account__role=Account.Role.ADMIN):
-        send(chat.chat_id, f"{text}\n{settings.PUBLIC_URL}/")
+        send(chat.chat_id, f"{text}\n{crm_link(student_id)}")
 
 
-def notify_team(team_id, text, skip_user=None):
+def notify_team(team_id, text, skip_user=None, student_id=None):
     """Сообщение сотруднику, связанному с записью команды (например, ментору о назначенном студенте)."""
     if not enabled() or not team_id:
         return
     for chat in _staff_chats(user__account__link_id=team_id):
         if skip_user is None or chat.user_id != skip_user.pk:
-            send(chat.chat_id, f"{text}\n{settings.PUBLIC_URL}/")
+            send(chat.chat_id, f"{text}\n{crm_link(student_id)}")
 
 
 def link_url(user):
@@ -459,9 +466,9 @@ def _tell_staff_about_message(record, what="Сообщение"):
     text = f"{icon} {what} в боте от студента {leads.plain(doc.data.get('name'))}. Откройте его карточку в CRM, чтобы прочитать."
     mentor = doc.data.get("mentorId")
     if isinstance(mentor, str) and mentor and _staff_chats(user__account__link_id=mentor).exists():
-        notify_team(mentor, text)
+        notify_team(mentor, text, student_id=record.student_id)
     else:
-        notify_admins(text)
+        notify_admins(text, student_id=record.student_id)
 
 
 def _on_button(query):

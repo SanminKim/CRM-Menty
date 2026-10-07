@@ -1,5 +1,11 @@
 import json
+import os
+import random
+import shutil
+import subprocess
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.test import TestCase, override_settings
@@ -7,6 +13,62 @@ from django.test import TestCase, override_settings
 from backend import store
 from backend.backup import BackupError, import_backup
 from backend.models import Account, Doc, LeadLog, State, Tombstone
+
+
+def calc_case(seed):
+    """Случайная база для сверки расчёта страницы и сервера: в основном обычные записи, часть — кривые."""
+    rnd = random.Random(seed)
+    pick = rnd.choice
+
+    def mostly(good, junk, share=0.85):
+        return good() if rnd.random() < share else pick(junk)
+
+    stages = ["new", "contacted", "call", "waiting_payment", "studying", "final_project", "job_search", "offer", "probation_passed", "lost"]
+    amount = lambda: mostly(lambda: pick([15000, 30000, 9999.9, 3703.5, 233.1, 0.1, 0.2, 110000, 45000.55, 7]),
+                            ["1500", " 20.5 ", "1e3", "abc", "12,5", "", True, False, None, -500, 1e16, 0, [], {"a": 1}])
+    day = lambda: mostly(lambda: f"2026-{rnd.randint(4, 9):02d}-{rnd.randint(1, 28):02d}",
+                         ["2025-12-15T10:30:00.000Z", "2026-13-45", "", None, 5, "вчера", "2026-9-1", True])
+    month = lambda: mostly(lambda: pick(["2000-01", "2026-05", "2026-07", "2026-09"]), ["2026-1", None, 202601, "2026-06-01"])
+    party = lambda: mostly(lambda: pick([("partner", "p0"), ("partner", "p1"), ("mentor", "t0"), ("mentor", "t1"), ("mentor", "t2")]),
+                           [("partner", "t0"), ("mentor", "nope"), ("owner", "p0"), (None, "p1"), ("partner", None), ("mentor", 3)])
+    share = lambda: mostly(lambda: pick([10, 20, 33, 40, 12.5, 7.3]), ["30", 150, -5, None, "x", 0, 100])
+    stage = lambda: mostly(lambda: pick(stages), ["unknown", None, 4])
+    name = lambda: mostly(lambda: pick(["Иванов Пётр", "Сидорова Анна Петровна", "Олег", "ё Ё"]),
+                          ["", None, "+7 999 000-00-00", "a@b.ru", "  Два   Пробела ", 123])
+
+    def terms():
+        return [{"from": month(), "parties": [dict(zip(("kind", "id"), party()), share=share()) for _ in range(rnd.randint(1, 4))]}
+                for _ in range(rnd.randint(1, 3))]
+
+    payment = lambda: mostly(lambda: {"id": "x", "amount": amount(), "paid": mostly(day, [None], 0.7), "due": day()},
+                             [{"amount": None, "percent": 30, "paid": "2026-08-01"}, None, "строка", 5, [], {"paid": "2026-09-01"}])
+    payout = lambda kind, party_id: {("partnerId" if kind == "partner" else "mentorId"): party_id, "amount": amount(), "date": day(),
+                                     "comment": mostly(lambda: "аванс", [None, 5, "длинный " * 80])}
+    data = {
+        "partners": {f"p{i}": {"name": mostly(lambda: f"Блог {i}", ["", None]), "promo": mostly(lambda: "BLOG", ["", None, 5]),
+                               **({"demo": True} if rnd.random() < .2 else {})} for i in range(3)},
+        "team": {f"t{i}": {"name": mostly(lambda: "Ирина Котова", [None])} for i in range(3)},
+        "directions": {f"d{i}": {"name": mostly(lambda: "Аналитик 1С", [None, 7]), "terms": mostly(terms, [None, "нет", [None, 5]], 0.9)} for i in range(2)},
+        "cohorts": {f"c{i}": {"name": f"Поток {i}", "directionId": mostly(lambda: pick(["d0", "d1"]), ["нет", None, 1])} for i in range(4)},
+        "students": {f"s{i:02d}": {
+            "name": name(), "stage": stage(), "cohortId": mostly(lambda: f"c{rnd.randint(0, 3)}", [None, "нет", 2]),
+            "partnerId": mostly(lambda: f"p{rnd.randint(0, 2)}", [None, "нет"], 0.7),
+            "createdAt": mostly(lambda: f"2026-0{rnd.randint(1, 9)}-1{rnd.randint(0, 9)}T0{rnd.randint(0, 9)}:00:00.000Z", ["", None, "2026-05-05", 9]),
+            "history": mostly(lambda: [{"from": None, "to": stage(), "at": "2026-01-01T00:00:00.000Z"} for _ in range(rnd.randint(0, 4))],
+                              [None, "нет", [None, {"to": 3}]]),
+            "payments": mostly(lambda: [payment() for _ in range(rnd.randint(0, 5))], [None, "нет", {"a": 1}], 0.9),
+            **({"deletedAt": "2026-09-01T00:00:00.000Z"} if rnd.random() < .1 else {}),
+        } for i in range(rnd.randint(5, 24))},
+        "expenses": {f"e{i}": {"amount": amount(), "date": day(), "directionId": mostly(lambda: pick(["d0", "d1"]), ["нет", None, 4]), "comment": "Реклама"}
+                     for i in range(rnd.randint(0, 8))},
+        "payouts": {f"o{i}": payout(*party()) for i in range(rnd.randint(0, 8))},
+    }
+    return {"data": data, "parties": [["partner", f"p{i}"] for i in range(3)] + [["mentor", f"t{i}"] for i in range(3)]}
+
+
+def views_fonts():
+    from backend import views
+    return views.FONTS
 
 
 def student(mentor=None, **extra):
@@ -336,6 +398,40 @@ class AccountTests(BaseCase):
         other = Client()
         self.assertFalse(other.login(username="mentor", password="pass-12345-x"))
 
+    def test_admin_resets_a_password_and_sees_who_cannot_log_in(self):
+        from django.test import Client
+        cache.clear()
+        self.addCleanup(cache.clear)
+        visitor = Client()
+        for _ in range(2):
+            visitor.post("/login/", {"username": "Mentor", "password": "zabyl"})
+        visitor.post("/login/", {"username": "parol-vmesto-logina", "password": "x"})
+        self.login("admin")
+        listed = self.client.get("/api/accounts/").json()
+        mentor = next(a for a in listed["accounts"] if a["username"] == "mentor")
+        self.assertEqual(mentor["failed"]["n"], 2)
+        self.assertEqual(listed["unknownFailed"]["n"], 1)
+        self.assertNotIn("parol-vmesto-logina", json.dumps(listed))  # введённое в поле логина не хранится и не показывается
+        self.assertIsNone(next(a for a in listed["accounts"] if a["username"] == "other")["failed"])
+        res = self.client.patch(f"/api/accounts/{self.mentor.pk}/", data=json.dumps({"password": "novyi-parol-mentora"}), content_type="application/json")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual((res.json()["role"], res.json()["linkId"]), ("mentor", "t1"))  # сброс пароля не трогает роль и связь
+        self.assertEqual(visitor.post("/login/", {"username": "mentor", "password": "pass-12345-x"}).status_code, 200)
+        self.assertEqual(visitor.post("/login/", {"username": "mentor", "password": "novyi-parol-mentora"}).status_code, 302)
+        mentor = next(a for a in self.client.get("/api/accounts/").json()["accounts"] if a["username"] == "mentor")
+        self.assertIsNone(mentor["failed"])  # удачный вход снимает отметку
+        self.assertTrue(mentor["lastLogin"])
+        weak = self.client.patch(f"/api/accounts/{self.mentor.pk}/", data=json.dumps({"password": "123"}), content_type="application/json")
+        self.assertEqual(weak.status_code, 400)
+
+    def test_password_reset_signs_the_person_out_everywhere(self):
+        from django.test import Client
+        mentor = Client()
+        self.assertTrue(mentor.login(username="mentor", password="pass-12345-x"))
+        self.login("admin")
+        self.client.patch(f"/api/accounts/{self.mentor.pk}/", data=json.dumps({"password": "novyi-parol-mentora"}), content_type="application/json")
+        self.assertEqual(mentor.get("/api/me/").status_code, 401)
+
     def test_admin_cannot_lock_himself_out(self):
         self.login("admin")
         for patch in ({"active": False}, {"role": "mentor", "linkId": "t0"}):
@@ -361,10 +457,72 @@ class PageTests(BaseCase):
         self.assertIn("frame-ancestors 'none'", csp)
         self.assertNotIn("script-src 'unsafe-inline'", csp.replace("; ", ";\n"))
         self.assertEqual(csp.count("'sha256-"), 2)  # выполняются только два наших скрипта
-        self.assertIn("script-src 'none'", self.client.get("/password/")["Content-Security-Policy"])
+        self.assertFalse("fonts.g" in csp + html)  # шрифт отдаёт свой сервер
+        self.login("admin")
+        self.assertIn("script-src 'none'", self.client.get("/backup/import/")["Content-Security-Policy"])
         self.assertEqual(self.client.get("/logout/").status_code, 405)
         self.assertEqual(self.client.get("/admin/").status_code, 404)
         self.assertIn("csrftoken", res.cookies)
+
+    def test_login_and_password_pages_run_only_the_form_script(self):
+        from backend import views
+        self.client.logout()
+        login_page = self.client.get("/login/")
+        self.login("mentor")
+        for res in (login_page, self.client.get("/password/")):
+            csp, html = res["Content-Security-Policy"], res.content.decode()
+            self.assertEqual(csp.count("'sha256-"), 1)
+            self.assertNotIn("unsafe-inline'; img", csp.split("script-src")[1].split(";")[0])
+            self.assertIn(f"<script>{views.FORM_JS}</script>", html)  # хеш в заголовке считается ровно от этого текста
+            self.assertIn(views._hash(views.FORM_JS), csp)
+            self.assertIn("data-show=", html)
+            self.assertIn('id="caps"', html)
+
+    def test_login_ignores_case_and_spaces_in_username(self):
+        for typed in ("Mentor", "  MENTOR ", "mentor"):
+            self.client.logout()
+            res = self.client.post("/login/", {"username": typed, "password": "pass-12345-x"})
+            self.assertEqual((res.status_code, res["Location"]), (302, "/"), typed)
+            self.assertEqual(self.client.get("/api/me/").json()["username"], "mentor")
+        self.client.logout()
+        for typed, password in (("Mentor", "PASS-12345-X"), ("mentor", " pass-12345-x"), ("ment or", "pass-12345-x"), ("", "pass-12345-x")):
+            self.assertEqual(self.client.post("/login/", {"username": typed, "password": password}).status_code, 200, typed)
+        self.assertEqual(self.client.get("/api/me/").status_code, 401)
+        User.objects.filter(pk=self.mentor.pk).update(is_active=False)
+        self.assertEqual(self.client.post("/login/", {"username": "MENTOR", "password": "pass-12345-x"}).status_code, 200)
+        cache.clear()
+
+    def test_sessions_opened_before_the_login_change_stay_valid(self):
+        self.client.force_login(self.mentor, backend="django.contrib.auth.backends.ModelBackend")
+        self.assertEqual(self.client.get("/api/me/").json()["username"], "mentor")
+
+    def test_two_logins_differing_only_by_case_need_exact_spelling(self):
+        twin = User.objects.create_user("MENTOR", password="pass-drugoi-2026")
+        Account.objects.create(user=twin, role="mentor", link_id="t2x")
+        self.assertTrue(self.client.login(username="MENTOR", password="pass-drugoi-2026"))
+        self.assertTrue(self.client.login(username="mentor", password="pass-12345-x"))
+        self.assertFalse(self.client.login(username="Mentor", password="pass-12345-x"))
+
+    def test_failed_login_explains_what_to_do_and_keeps_the_typed_login(self):
+        res = self.client.post("/login/", {"username": "Mentor", "password": "ne-tot"})
+        html = res.content.decode()
+        self.assertIn("Сбросить пароль", html)
+        self.assertIn('value="Mentor"', html)
+        self.assertNotIn("ne-tot", html)
+        cache.clear()
+
+    def test_fonts_come_from_this_server(self):
+        self.client.logout()
+        res = self.client.get("/fonts/golos-text-cyrillic.woff2")
+        self.assertEqual((res.status_code, res["Content-Type"]), (200, "font/woff2"))
+        self.assertIn("immutable", res["Cache-Control"])
+        self.assertEqual(b"".join(res.streaming_content)[:4], b"wOF2")
+        for name in ("LICENSE", "nope.woff2", "..%2Findex.html"):
+            self.assertEqual(self.client.get(f"/fonts/{name}").status_code, 404, name)
+        page = (Path(settings.BASE_DIR) / "web" / "index.html").read_text(encoding="utf-8")
+        for name in views_fonts():
+            self.assertTrue(f"/fonts/{name}" in page, name)
+        self.assertFalse("fonts.googleapis" in page or "fonts.gstatic" in page)
 
     def test_login_does_not_redirect_off_site(self):
         res = self.client.post("/login/", {"username": "mentor", "password": "pass-12345-x", "next": "//evil.example/"})
@@ -560,6 +718,29 @@ class ReportTests(BaseCase):
         self.assertEqual(r["accrued"], expected)
         self.assertEqual([x["comment"] for x in r["payouts"]], ["вторая", "первая"])  # при равных датах — обратный порядок записей
         self.assertEqual([x["name"] for x in r["rows"]], ["Г С.", "В С.", "Б С.", "А С."])
+
+    def test_page_and_server_calculate_the_same_reports(self):
+        """Сверка двух расчётов: отчёт сервера и отчёт, посчитанный кодом страницы, совпадают на одних данных до копейки."""
+        from backend import reports
+        node = shutil.which("node")
+        if not node:
+            if os.environ.get("CRM_REQUIRE_NODE"):
+                self.fail("Нужен Node.js: без него расчёт страницы не сверяется с сервером")
+            self.skipTest("нет Node.js")
+        cases = [calc_case(seed) for seed in range(60)]
+        run = subprocess.run([node, "web/dev/calc.js"], input=json.dumps(cases), capture_output=True, text=True,
+                             cwd=settings.BASE_DIR, timeout=120)
+        self.assertEqual(run.returncode, 0, run.stderr[-2000:])
+        checked = 0
+        for seed, (case, pages) in enumerate(zip(cases, json.loads(run.stdout))):
+            for (kind, party), page in zip(case["parties"], pages):
+                server = json.loads(json.dumps(reports.build(party, case["data"])))
+                self.assertEqual(server["kind"], kind)
+                if kind == "partner":  # ключ этапа в воронке страница не хранит: сравниваем подписи и числа
+                    server["funnel"] = [{k: f[k] for k in ("label", "count", "pct")} for f in server["funnel"]]
+                self.assertEqual(page, server, f"набор {seed}, {kind} {party}")
+                checked += len(server["months"])
+        self.assertGreater(checked, 100)  # в наборах есть что сравнивать
 
     def test_moving_and_trashing_students_updates_reports(self):
         store.system_write("partners", "p2", {"name": "Другой"})
@@ -762,7 +943,8 @@ class TelegramTests(BaseCase):
         self.assertIn("Заявка на обучение принята", self.texts()[-1])
         note = self.texts(900)[-1]
         self.assertIn("Новая заявка на обучение из Telegram: Сайтова Вера, @vera_s · Блог", note)
-        self.assertIn("https://crm.example.test/", note)
+        lead_id = Doc.objects.get(collection="students", data__tgId=555).doc_id
+        self.assertTrue(note.endswith(f"\nhttps://crm.example.test/#/today?s={lead_id}"), note)  # ссылка открывает карточку заявки
         self.assertEqual(self.texts(901), [])                      # ментору о ничьей заявке не пишем
         # человек пишет ещё раз: дубль не создаётся, сообщение попадает заметкой
         count = Doc.objects.filter(collection="students").count()
@@ -973,6 +1155,7 @@ class TelegramTests(BaseCase):
         with self.captureOnCommitCallbacks(execute=True):
             self.send("patch", "students", "s2", {"mentorId": "t1"})
         self.assertIn("За вами закреплён студент: Чужой Студент", self.texts(700)[-1])
+        self.assertTrue(self.texts(700)[-1].endswith("\nhttps://crm.example.test/#/today?s=s2"))
         # сам себе ментор уведомление не шлёт
         before = len(self.texts(700))
         self.login("mentor")

@@ -1,20 +1,22 @@
 """Страницы: сама CRM, вход, смена пароля, загрузка резервной копии."""
 import base64
 import hashlib
-import unicodedata
 from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
-from django.http import HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import render
 from django.urls import reverse_lazy
+from django.utils import timezone
+from django.utils.safestring import mark_safe
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from . import store
+from .auth import find_user, login_name
 from .backup import BackupError, import_backup, summary_lines
 
 WEB_DIR = Path(settings.BASE_DIR) / "web"
@@ -26,13 +28,47 @@ ICON = (
 _page = {"key": None, "html": "", "csp": ""}
 CSP_PAGE = (
     "default-src 'self'; script-src {hashes}; "
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; "
+    "style-src 'self' 'unsafe-inline'; font-src 'self'; "
     "img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 )
 
 
 def _hash(script):
     return "'sha256-" + base64.b64encode(hashlib.sha256(script.encode()).digest()).decode() + "'"
+
+
+# Страницы входа и смены пароля выполняют один маленький скрипт («показать пароль», Caps Lock) и больше никакой
+FORM_JS = mark_safe((Path(__file__).resolve().parent / "templates" / "backend" / "form.js").read_text(encoding="utf-8"))
+CSP_FORM = (
+    f"default-src 'self'; script-src {_hash(FORM_JS)}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+    "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+)
+
+
+class FormPage:
+    """Страница с формой пароля: отдаёт скрипт формы и разрешает выполнять только его."""
+
+    def get_context_data(self, **kwargs):
+        return {**super().get_context_data(**kwargs), "form_js": FORM_JS}
+
+    def dispatch(self, request, *args, **kwargs):
+        response = super().dispatch(request, *args, **kwargs)
+        response["Content-Security-Policy"] = CSP_FORM
+        return response
+
+
+# ---------- Шрифт страницы: лежит на своём сервере, а не у Google ----------
+
+FONTS_DIR = WEB_DIR / "fonts"
+FONTS = ("golos-text-cyrillic.woff2", "golos-text-latin.woff2", "golos-text-latin-ext.woff2")
+
+
+def font(request, name):
+    if name not in FONTS:
+        raise Http404
+    response = FileResponse(open(FONTS_DIR / name, "rb"), content_type="font/woff2")
+    response["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 
 
 def build_page():
@@ -72,6 +108,16 @@ def app(request):
 LOGIN_TRIES = 8          # неудачных попыток на пару «адрес + логин»
 LOGIN_TRIES_IP = 40      # и на один адрес
 LOGIN_WINDOW = 15 * 60   # секунд
+MISS_TTL = 24 * 3600     # сколько администратор видит неудачные входы
+
+
+def miss_key(user):
+    """Счётчик неудачных входов для экрана «Доступ». Сам введённый логин не хранится: в это поле по ошибке вводят и пароль."""
+    return f"login-miss:{user.pk}" if user is not None else "login-miss:unknown"
+
+
+def login_misses(user):
+    return cache.get(miss_key(user))
 
 
 def client_ip(request):
@@ -85,7 +131,7 @@ def _bump(key):
     cache.set(key, (cache.get(key) or 0) + 1, LOGIN_WINDOW)
 
 
-class LoginView(auth_views.LoginView):
+class LoginView(FormPage, auth_views.LoginView):
     template_name = "backend/login.html"
     redirect_authenticated_user = True
 
@@ -93,26 +139,31 @@ class LoginView(auth_views.LoginView):
         ip = client_ip(self.request)
         if ":" in ip:
             ip = ":".join(ip.split(":")[:4])  # IPv6: считаем по подсети /64, иначе адрес легко менять
-        username = unicodedata.normalize("NFKC", self.request.POST.get("username", "")).strip().lower()[:150]
+        # Логин в ключе счётчика — отпечатком: в ключ кэша не попадают пробелы и слишком длинные строки
+        username = hashlib.sha256(login_name(self.request.POST.get("username", "")).lower().encode()).hexdigest()[:32]
         return f"login:{ip}:{username}", f"login-ip:{ip}"
 
     def post(self, request, *args, **kwargs):
         pair, by_ip = self._keys()
         if (cache.get(pair) or 0) >= LOGIN_TRIES or (cache.get(by_ip) or 0) >= LOGIN_TRIES_IP:
-            return render(request, self.template_name, {"locked": True, "next": request.POST.get("next", "")}, status=429)
+            return render(request, self.template_name, {"locked": True, "next": request.POST.get("next", ""), "form_js": FORM_JS}, status=429)
         return super().post(request, *args, **kwargs)
 
     def form_invalid(self, form):
         for key in self._keys():
             _bump(key)
+        # Администратор увидит в «Доступе», у кого не получается войти: это отличает забытый пароль от неверного логина
+        key = miss_key(find_user(self.request.POST.get("username", "")))
+        cache.set(key, {"n": min((cache.get(key) or {}).get("n", 0) + 1, 999), "at": timezone.now().isoformat()}, MISS_TTL)
         return super().form_invalid(form)
 
     def form_valid(self, form):
         cache.delete(self._keys()[0])
+        cache.delete(miss_key(form.get_user()))
         return super().form_valid(form)
 
 
-class PasswordChangeView(auth_views.PasswordChangeView):
+class PasswordChangeView(FormPage, auth_views.PasswordChangeView):
     template_name = "backend/password.html"
     success_url = reverse_lazy("password_done")
 

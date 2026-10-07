@@ -320,7 +320,7 @@ def write(access, collection, doc_id, data, partial):
     if collection == "students" and old is not None and old.get("mentorId") != new.get("mentorId"):
         _touch_meetings(doc_id, rev)
         if isinstance(new.get("mentorId"), str) and new["mentorId"] and not new.get("deletedAt"):
-            _tell_mentor(new["mentorId"], str(new.get("name") or "")[:100], access.user)
+            _tell_mentor(new["mentorId"], str(new.get("name") or "")[:100], access.user, doc_id)
     _refresh_reports(collection, rev, old, new)
     visible = access.visible(doc)
     return rev, present(doc, visible, _team_links()) if visible is not None else None
@@ -349,10 +349,10 @@ def delete(access, collection, doc_id):
     return rev
 
 
-def _tell_mentor(team_id, name, by_user):
+def _tell_mentor(team_id, name, by_user, student_id=None):
     """Ментору в Telegram: за ним закрепили студента. Уходит после фиксации записи; сбой Telegram запись не отменяет."""
     from . import telegram  # позднее подключение: telegram пользуется этим модулем
-    transaction.on_commit(lambda: telegram.notify_team(team_id, f"👤 За вами закреплён студент: {name}. Свяжитесь с ним и назначьте следующий шаг.", skip_user=by_user))
+    transaction.on_commit(lambda: telegram.notify_team(team_id, f"👤 За вами закреплён студент: {name}. Свяжитесь с ним и назначьте следующий шаг.", skip_user=by_user, student_id=student_id))
 
 
 def _refresh_reports(collection, rev, old, new):

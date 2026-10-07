@@ -12,7 +12,8 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from . import backup, reports, store, telegram
+from . import backup, reports, store, telegram, views
+from .auth import login_name
 from .models import Account, Doc, TgChat
 
 User = get_user_model()
@@ -171,11 +172,14 @@ def account_json(user):
         "id": user.pk, "username": user.get_username(), "name": user.get_full_name(), "active": user.is_active,
         "role": acc.role if acc else (Account.Role.ADMIN if user.is_superuser else ""),
         "linkId": acc.link_id if acc else "", "me": False,
+        "lastLogin": user.last_login.isoformat() if user.last_login else None,
+        # Неудачные входы за сутки: видно, кому нужен новый пароль
+        "failed": views.login_misses(user),
     }
 
 
 def _apply_account(user, data, creating):
-    username = str(data.get("username", user.username or "")).strip()
+    username = login_name(data.get("username", user.username or ""))
     if not username or len(username) > 150:
         raise store.Invalid("Укажите логин")
     if User.objects.filter(username__iexact=username).exclude(pk=user.pk).exists():
@@ -233,7 +237,8 @@ def accounts(request, access):
     rows = [account_json(u) for u in users if hasattr(u, "account") or u.is_superuser]
     for row in rows:
         row["me"] = row["id"] == request.user.pk
-    return JsonResponse({"accounts": rows})
+    # Попытки войти с логином, которого нет: сами логины не хранятся
+    return JsonResponse({"accounts": rows, "unknownFailed": views.login_misses(None)})
 
 
 @require_http_methods(["PATCH"])

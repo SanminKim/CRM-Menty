@@ -10,6 +10,7 @@ urlpatterns = [
     path("password/", views.PasswordChangeView.as_view(), name="password"),
     path("password/done/", views.password_done, name="password_done"),
     path("backup/import/", views.backup_import, name="backup_import"),
+    path("fonts/<str:name>", views.font, name="font"),
     path("api/me/", api.me),
     path("api/sync/", api.sync),
     path("api/db/<str:collection>/<str:doc_id>/", api.doc),

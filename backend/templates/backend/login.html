@@ -1,15 +1,20 @@
 {% extends "backend/plain.html" %}
 {% block title %}Вход — CRM Менти{% endblock %}
 {% block body %}
-<form method="post" class="card" action="{% url 'login' %}">
+<form method="post" class="card" action="{% url 'login' %}" data-keep-hash>
   {% csrf_token %}
   <div class="brand"><span class="brand-mark">М</span><span>CRM Менти</span></div>
   <h1>Вход</h1>
   {% if locked %}<p class="error" role="alert">Слишком много неудачных попыток. Подождите 15 минут и попробуйте снова.</p>
-  {% elif form.errors %}<p class="error" role="alert">Неверный логин или пароль</p>{% endif %}
-  <label>Логин<input type="text" name="username" autocomplete="username" autofocus required></label>
-  <label>Пароль<input type="password" name="password" autocomplete="current-password" required></label>
+  {% elif form.errors %}<div class="error" role="alert"><p><strong>Неверный логин или пароль</strong></p>
+    <p class="muted">Проверьте раскладку клавиатуры и Caps Lock. Большие и маленькие буквы в логине не различаются, в пароле различаются. Если пароль забыт, попросите администратора задать новый: Настройки → Доступ → «Сбросить пароль».</p></div>{% endif %}
+  <label>Логин<input type="text" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" autofocus required{% if form.username.value %} value="{{ form.username.value }}"{% endif %}></label>
+  <label>Пароль
+    <span class="pass"><input type="password" name="password" id="password" autocomplete="current-password" required><button type="button" class="show" data-show="password" aria-pressed="false" hidden>Показать</button></span>
+  </label>
+  <p class="warn" id="caps" role="status" hidden>Включён Caps Lock</p>
   <input type="hidden" name="next" value="{{ next }}">
   <button>Войти</button>
 </form>
+<script>{{ form_js }}</script>
 {% endblock %}

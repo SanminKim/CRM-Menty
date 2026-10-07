@@ -1,8 +1,10 @@
 <title>CRM Менти</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap">
 <style>
+/* Шрифт лежит на своём сервере (web/fonts, адрес /fonts/…): страница не ждёт чужой сайт и открывается, даже если он недоступен.
+   Один файл на набор знаков, все начертания 400–900 внутри. Знак рубля — в наборе latin-ext. */
+@font-face { font-family: "Golos Text"; font-style: normal; font-weight: 400 900; font-display: swap; src: url("/fonts/golos-text-cyrillic.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Golos Text"; font-style: normal; font-weight: 400 900; font-display: swap; src: url("/fonts/golos-text-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Golos Text"; font-style: normal; font-weight: 400 900; font-display: swap; src: url("/fonts/golos-text-latin-ext.woff2") format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
 /* Раскладка: тёмное узкое меню слева, светлая рабочая область, карточка студента выезжает панелью справа.
    Система: шрифт Golos Text, размеры 12 / 13 / 14 / 16 / 18 / 24; отступы кратны 4; радиусы 8 (элементы), 10 (карточки), 14 (окна);
    высота элементов управления 34, на сенсорных экранах 44. Цвет несёт смысл: синий — действие, бирюзовый, фиолетовый и зелёный — группы этапов,
@@ -123,7 +125,7 @@ p { margin: 0; }
 .nav .n { margin-left: auto; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--side-2); color: var(--side-text); border-radius: 99px; padding: 0 7px; line-height: 18px; }
 .nav button.on .n { background: rgba(255, 255, 255, .12); }
 .nav .n.hot, .nav button.on .n.hot { background: var(--hot); color: #fff; }
-.side-foot { margin-top: auto; padding: 0 8px; font-size: 12px; color: var(--side-muted); display: flex; align-items: center; gap: 6px; }
+.side-foot { margin-top: auto; padding: 0 4px; font-size: 12px; color: var(--side-muted); display: flex; align-items: center; gap: 4px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
 .dot.busy { background: var(--warn); }
 .main { padding: 24px 32px 56px; min-width: 0; }
@@ -228,7 +230,20 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .tbtn:hover { background: var(--side-2); color: var(--side-ink); }
 .tbtn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .side-foot .tbtn + .link { margin-left: 4px; }
-td.clip { white-space: nowrap; max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+.side-foot .tbtn + .tbtn { margin-left: 0; }
+@media (min-width: 861px) { .side-foot .tbtn { width: 26px; height: 26px; } }
+.side-foot .dot { margin-right: 2px; }
+.tbtn.on { color: var(--mark); }
+/* Строка про деньги месяца на экране «Сегодня» */
+.mline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 20px; padding: 10px 16px; margin-bottom: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.mline-h { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+.mline strong { font-variant-numeric: tabular-nums; }
+.mline .link { margin-left: auto; }
+.more-row td { text-align: center; color: var(--muted); }
+.col-more { all: unset; box-sizing: border-box; cursor: pointer; text-align: center; padding: 6px; font-size: 13px; color: var(--brand); border-radius: var(--r-ctl); }
+.col-more:hover { background: var(--surface); }
+.pwrow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+td.clip { white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
 .nw { white-space: nowrap; }
 .side-foot .st { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .allclear { padding: 22px 16px; color: var(--muted); border-top: 1px solid var(--border); }
@@ -382,6 +397,8 @@ td.mxc { padding: 4px 2px; text-align: center; }
 .chart .s1 { fill: var(--c1); }
 .chart .s2 { fill: var(--c2); }
 .chart .s3 { fill: var(--c3); }
+.chart .sneg { fill: var(--danger); }
+.chart .zero { stroke: var(--muted); }
 .chart .hit { fill: transparent; }
 .chart g:hover .hit { fill: var(--surface-2); }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
@@ -611,11 +628,71 @@ const S = {
   data: { students: [], cohorts: [], partners: [], payouts: [], team: [], reports: [], meetings: [], directions: [], expenses: [] }, loaded: {}, trash: [],
   view: "today", openId: null, partnerId: null, cohortId: null, reportId: null, pipe: "sales", anTab: "funnel", sel: new Set(), visible: [],
   f: { q: "", cohort: "", mentor: "", partner: "", stage: "" }, showLost: false, payTab: "upcoming",
-  config: {}, moreNoStep: false, histOpen: false, logOpen: false, sort: null, cal: { ym: today().slice(0, 7), day: today() }, pending: 0, names: {}, drag: null, busy: false,
+  config: {}, moreNoStep: false, histOpen: false, logOpen: false, sort: null, sorts: {}, rows: 0, colMax: {}, cal: { ym: today().slice(0, 7), day: today() }, pending: 0, names: {}, drag: null, busy: false,
+  unknownFailed: null,
 };
 {
   const v = lsGet("crm-menti-view"); if (VIEWS.includes(v)) S.view = v;
   const p = lsGet("crm-menti-pipe"); if (PIPES.some(x => x[0] === p)) S.pipe = p;
+}
+
+// ---------- Адрес страницы ----------
+// Раздел и открытая карточка записаны после # в адресе: «#/students?s=<id студента>», «#/cohort/<id>», «#/calendar?d=2026-10-08».
+// Ссылку можно переслать коллеге или открыть из уведомления, а кнопка «Назад» в браузере закрывает карточку и возвращает раздел.
+const ROUTE_RE = /^#\/([a-z]+)(?:\/([A-Za-z0-9_-]{1,64}))?(?:\?(s|d)=([A-Za-z0-9_-]{1,64}))?$/;
+function routeHash() {
+  if (S.status !== "ready" || S.mode !== "staff") return null;
+  const tail = S.view === "cohort" ? "/" + S.cohortId : S.view === "partner" ? "/" + S.partnerId : "";
+  const h = "#/" + S.view + tail + (S.openId ? "?s=" + S.openId : S.openDay ? "?d=" + S.openDay : "");
+  return ROUTE_RE.test(h) ? h : "#/" + S.view;
+}
+function readHash() {
+  let hash = ""; try { hash = location.hash; } catch (e) { }
+  const m = ROUTE_RE.exec(hash); if (!m) return false;
+  const [, view, id, key, val] = m;
+  if (view === "cohort" && id) { S.view = "cohort"; S.cohortId = id; }
+  else if (view === "partner" && id) { S.view = "partner"; S.partnerId = id; }
+  else if (VIEWS.includes(view)) S.view = view;
+  else return false;
+  S.openId = key === "s" ? val : null;
+  S.openDay = key === "d" && isDay(val) && val.length === 10 ? val : null;
+  if (S.openDay) S.cal = { ym: S.openDay.slice(0, 7), day: S.openDay };
+  return true;
+}
+let ROUTING = !readHash();   // адрес не задал раздел: первая запись в историю заменяет текущую, а не добавляет шаг
+function syncUrl() {
+  const h = routeHash(); let cur = ""; try { cur = location.hash; } catch (e) { return; }
+  if (h === null) return;
+  if (h !== cur) { try { history[ROUTING || !cur ? "replaceState" : "pushState"](null, "", h); } catch (e) { } }
+  ROUTING = false;
+}
+
+// ---------- Что запоминается в браузере: отборы, сортировка, выбранные вкладки ----------
+// У каждого пользователя свой набор. Строка поиска не запоминается: забытый текст прятал бы людей из списка.
+const UI_KEY = () => "crm-menti-ui:" + (S.myId || "");
+const UI_FILTERS = ["cohort", "mentor", "partner", "stage", "stuck"];   // отборы внутри «Платежей» и «Выплат» живут до ухода из раздела
+let uiSaved = "";
+function loadUi() {
+  let v = null; try { v = JSON.parse(lsGet(UI_KEY()) || "null"); } catch (e) { }
+  if (!isObj(v)) return;
+  if (isObj(v.f)) for (const k of UI_FILTERS) if (typeof v.f[k] === "string" && v.f[k].length <= 64) S.f[k] = v.f[k];
+  if (isObj(v.sorts)) for (const [k, x] of Object.entries(v.sorts)) if (VIEWS.includes(k) || k === "cohort") { if (isObj(x) && typeof x.k === "string" && Object.hasOwn(SORTS, x.k)) S.sorts[k] = { k: x.k, dir: x.dir < 0 ? -1 : 1 }; }
+  S.sort = S.sorts[S.view] || null;
+  S.showLost = v.showLost === true;
+  if (["upcoming", "overdue", "paid"].includes(v.payTab)) S.payTab = v.payTab;
+  if (["funnel", "money"].includes(v.anTab)) S.anTab = v.anTab;
+  uiSaved = uiState();
+}
+function uiState() { const f = {}; for (const k of UI_FILTERS) if (S.f[k]) f[k] = S.f[k]; return JSON.stringify({ f, sorts: S.sorts, showLost: S.showLost, payTab: S.payTab, anTab: S.anTab }); }
+function saveUi() { if (S.status !== "ready" || S.mode !== "staff") return; const now = uiState(); if (now !== uiSaved) { uiSaved = now; lsSet(UI_KEY(), now); } }
+// Запомненный отбор по записи, которой больше нет (или которая этой роли не видна), молча прятал бы людей: такие значения сбрасываются
+function dropStaleFilters() {
+  const f = S.f;
+  if (f.cohort && f.cohort !== "none" && !cohortById(f.cohort)) f.cohort = "";
+  if (f.mentor && (S.limited || (f.mentor === "me" ? !myTeam() : f.mentor !== "none" && !teamName(f.mentor)))) f.mentor = "";
+  if (f.partner && f.partner !== "none" && !partnerById(f.partner)) f.partner = "";
+  if (f.stage && !Object.hasOwn(SIDX, f.stage)) f.stage = "";
+  if (f.dir && S.loaded.directions && !dirById(f.dir)) f.dir = "";
 }
 
 // На своём сервере страница получает window.crmServer: учётные записи, выход, смена пароля. В Claude его нет.
@@ -651,7 +728,8 @@ function progressOf(s) {
   return { done, total: mods.length, pct: pct(done, mods.length) };
 }
 const progHTML = (p, wide = false) => p ? `<span class="prog${wide ? " wide" : ""}" title="Пройдено модулей: ${esc(p.done)} из ${esc(p.total)}"><span class="prog-bar"><span style="width:${+p.pct || 0}%"></span></span><span>${esc(p.done)}/${esc(p.total)}</span></span>` : "";
-function reached(s) { let m = 0; for (const h of [...(s.history || []), { to: s.stage }]) { const i = SIDX[h.to]; if (h.to !== "lost" && i > m) m = i; } return m; }
+// До какого этапа человек дошёл. Кривые записи истории пропускаются, как и на сервере (backend/reports.py, reached)
+function reached(s) { let m = 0; for (const h of [...(Array.isArray(s.history) ? s.history : []).filter(isObj), { to: s.stage }]) { const i = typeof h.to === "string" && Object.hasOwn(SIDX, h.to) ? SIDX[h.to] : -1; if (h.to !== "lost" && i > m) m = i; } return m; }
 function funnel(list) {
   const r = list.map(reached);
   return STAGES.filter(s => s[0] !== "lost").map((s, i) => { const c = r.filter(v => v >= i).length; return { label: s[1], count: c, pct: pct(c, list.length) }; });
@@ -857,6 +935,7 @@ function filtered(keys = ["q", "cohort", "mentor", "partner", "stage"]) {
     if (on("mentor") && (f.mentor === "me" ? (!me || s.mentorId !== me.id) : f.mentor === "none" ? !!teamName(s.mentorId) : (f.mentor && s.mentorId !== f.mentor))) return false;
     if (on("partner") && (f.partner === "none" ? s.partnerId : (f.partner && s.partnerId !== f.partner))) return false;
     if (on("stage") && f.stage && s.stage !== f.stage) return false;
+    if (on("stuck") && f.stuck && !isStuck(s)) return false;
     return true;
   });
 }
@@ -875,6 +954,7 @@ function filtersHTML(keys, { lost = false, ph = "Имя, телефон, email",
     ${on("partner") && D().partners.length ? `<select id="f-partner" data-filter="partner" aria-label="Источник">${opt("", "Все источники", f.partner)}${D().partners.map(p => opt(p.id, p.name, f.partner)).join("")}${opt("none", "Без партнёра", f.partner)}</select>` : ""}
     ${on("stage") ? `<select id="f-stage" data-filter="stage" aria-label="Этап">${opt("", "Все этапы", f.stage)}${STAGES.map(s => opt(s[0], s[1], f.stage)).join("")}</select>` : ""}
     ${extra}
+    ${on("stuck") ? (n => n || f.stuck ? `<label class="check" title="Дольше ${STUCK_DAYS} дней на одном этапе"><input type="checkbox" id="f-stuck" data-fcheck="stuck"${f.stuck ? " checked" : ""}> Застряли${n ? ` · ${n}` : ""}</label>` : "")(filtered(keys.filter(k => k !== "stuck")).filter(isStuck).length) : ""}
     ${lost ? `<label class="check"><input type="checkbox" id="f-lost" data-act="toggle-lost"${S.showLost ? " checked" : ""}> Выбывшие</label>` : ""}
     ${any ? `<button class="btn ghost" data-act="freset">Сбросить</button>` : ""}
   </div>`;
@@ -906,6 +986,8 @@ function render() {
   if (aid && aid !== "mform" && aid !== "gq" && !aid.startsWith("m-")) { const el = document.getElementById(aid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) { } } }
   renderSync();
   resolveNames();
+  syncUrl();
+  saveUi();
 }
 function renderSync() {
   const el = $("#sync"); if (!el) return;
@@ -913,8 +995,9 @@ function renderSync() {
   const dark = themeNow() === "dark", label = dark ? "Включить светлую тему" : "Включить тёмную тему";
   const theme = `<button class="tbtn" data-act="theme" data-v="${dark ? "light" : "dark"}" aria-label="${label}" title="${label}">${ico(dark ? "sun" : "moon")}</button>`;
   const out = S.server ? `<button class="link" data-act="logout">Выйти</button>` : "";
-  const st = (text, busy) => `<span class="dot${busy ? " busy" : ""}" role="img" aria-label="${text}"></span><span class="st">${text}</span>`;
-  el.innerHTML = (S.offline ? st("Нет связи с сервером", true) : S.readOnly || S.mode === "partner" ? st("Только просмотр") : S.pending ? st("Сохраняю…", true) : st("Сохранено")) + theme + (S.offline ? "" : out);
+  const help = S.mode === "staff" ? `<button class="tbtn${S.view === "help" ? " on" : ""}" id="nav-help" data-act="nav" data-v="help" aria-label="Справка" title="Справка: как вести человека и что где находится"${S.view === "help" ? ' aria-current="page"' : ""}>${ico("help")}</button>` : "";
+  const st = (text, busy) => `<span class="dot${busy ? " busy" : ""}" role="img" aria-label="${text}"></span><span class="st" title="${text}">${text}</span>`;
+  el.innerHTML = (S.offline ? st("Нет связи с сервером", true) : S.readOnly || S.mode === "partner" ? st("Только просмотр") : S.pending ? st("Сохраняю…", true) : st("Сохранено")) + help + theme + (S.offline ? "" : out);
 }
 const ICONS = {
   today: "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18M8.5 12.5l2.5 2.5l4.5-5",
@@ -942,9 +1025,9 @@ function navHTML() {
   if (S.mode === "partner") return `<button class="on" aria-current="page">${ico("report")}Отчёт</button>${S.server ? `<button data-act="password">${ico("password")}Сменить пароль</button><button data-act="logout">${ico("logout")}Выйти</button>` : ""}`;
   const ag = agenda(D().students), late = ag.pays.filter(p => p.due < today()).length;
   const meetsToday = events(today(), today()).filter(e => e.status === "planned").length;
-  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи студентов", late, true], ["payouts", S.limited ? "Мои выплаты" : "Выплаты менторам"], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"], ["help", "Справка"]];
-  const cur = S.view === "partner" ? "partners" : S.view === "cohort" ? "cohorts" : S.view;
-  if (S.limited) items.splice(items.findIndex(i => i[0] === "partners"), 1);
+  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи студентов", late, true], ["payouts", S.limited ? "Мои выплаты" : "Выплаты и партнёры"], ["analytics", "Аналитика"], ["settings", "Настройки"]];
+  // Справка открывается значком «?» внизу меню, партнёры — вкладкой в выплатах
+  const cur = S.view === "partner" || S.view === "partners" ? "payouts" : S.view === "cohort" ? "cohorts" : S.view;
   const GROUPS = { cohorts: "Обучение", payments: "Деньги", analytics: "Итоги", settings: "Система" };
   const btn = ([v, l, n, hot]) => `${GROUPS[v] ? `<span class="nav-h">${GROUPS[v]}</span>` : ""}<button data-act="nav" data-v="${v}" title="${esc(about(v))}" class="${cur === v ? "on" : ""}"${cur === v ? ' aria-current="page"' : ""}>${ico(v)}${l}${n ? `<span class="n${hot ? " hot" : ""}">${n}</span>` : ""}</button>`;
   const rest = items.slice(NAV_MAIN), inRest = rest.some(i => i[0] === cur);
@@ -961,7 +1044,9 @@ function mainHTML() {
   if (!need.every(c => S.loaded[c])) return `<p class="loading">Загружаю базу…</p>`;
   const ro = S.readOnly ? `<div class="banner"><p>У вас доступ только для просмотра. Чтобы вносить изменения, попросите владельца выдать права редактора.</p></div>` : "";
   if (S.limited && (S.view === "partners" || S.view === "partner")) S.view = "today";
-  const v = { today: todayView, calendar: calendarView, board: boardView, students: listView, cohorts: cohortsView, cohort: cohortView, payments: paymentsView, payouts: payoutsView, analytics: analyticsView, partners: partnersView, partner: partnerView, settings: settingsView, help: helpView }[S.view] || todayView;
+  if (S.view === "partners") { S.view = "payouts"; S.payView = "partners"; }   // старый адрес раздела: теперь это вкладка в выплатах
+  dropStaleFilters();
+  const v = { today: todayView, calendar: calendarView, board: boardView, students: listView, cohorts: cohortsView, cohort: cohortView, payments: paymentsView, payouts: payoutsView, analytics: analyticsView, partner: partnerView, settings: settingsView, help: helpView }[S.view] || todayView;
   return ro + v();
 }
 // Что делают в разделе: одна строка под заголовком и подсказка в меню
@@ -972,11 +1057,11 @@ const ABOUT = {
   students: "Все люди в базе одним списком. Отметьте несколько строк галочками, чтобы разом назначить им ментора, поток или следующий шаг.",
   cohorts: "Группы обучения: программа по модулям, состав и прогресс студентов.",
   payments: "Оплаты студентов: кто просрочил, кто платит на днях, кто уже заплатил. Новый платёж добавляется в карточке студента.",
-  payouts: "Сколько из полученных денег причитается блогеру, менторам и вам",
+  payouts: "Сколько из полученных денег причитается блогеру, менторам и вам. Здесь же партнёры: кто сколько привёл.",
   analytics: "Сколько заявок доходит до оплаты и оффера и на каком этапе люди теряются.",
   partners: "Блогеры и каналы, откуда приходят заявки: сколько человек привели и сколько из них оплатили.",
   settings: "Команда и доступы, направления и доли, бот в Telegram, резервная копия, оформление.",
-  help: "Короткая памятка: как вести человека от заявки до оффера и что где находится",
+  help: "Короткая памятка: как вести человека от заявки до оффера и что где находится. Открывается значком «?» рядом со сменой темы.",
 };
 // Ментор видит раздел иначе: в подсказке только то, что ему доступно
 const ABOUT_LIMITED = { settings: "Пароль, уведомления в Telegram, оформление.", payouts: "Сколько вам начислено за месяц, что уже выплатили и какие расходы учтены", students: "Ваши студенты одним списком. Отметьте несколько строк галочками, чтобы разом назначить им следующий шаг." };
@@ -1003,6 +1088,20 @@ function stepRow(s) {
     <button class="chk" data-act="step-done" data-id="${esc(s.id)}" aria-label="Отметить выполненным: ${esc(s.next.text)}" title="Выполнено"></button>
     <span class="who"><strong>${esc(s.name)}</strong><span>${esc(s.next.text)}</span></span>
     ${badge(s.stage)}<span class="when${late ? " late" : ""}">${dueLabel(s.next.date)}</span></li>`;
+}
+// Деньги текущего месяца одной строкой, по всей школе: чтобы владельцу не ходить за этим в «Аналитику»
+function monthMoneyLine() {
+  const t = today(), m = t.slice(0, 7);
+  let got = 0, exp = 0, late = 0, lateN = 0;
+  for (const s of D().students) for (const p of Array.isArray(s.payments) ? s.payments : []) {
+    if (!isObj(p)) continue;
+    if (p.paid) { if (dayOf(p.paid).slice(0, 7) === m) got += nnum(p.amount); }
+    else if (s.stage !== "lost" && isDay(p.due)) { if (p.due < t) { late += nnum(p.amount); lateN++; } else if (p.due.slice(0, 7) === m) exp += nnum(p.amount); }
+  }
+  return `<div class="mline" id="today-money" title="По всем студентам школы, без учёта отбора по ментору"><span class="mline-h">Деньги за ${esc(monthName(m).split(" ")[0].toLowerCase())}</span>
+    <span>получено <strong>${money(got)}</strong></span><span>до конца месяца ожидается <strong>${money(exp)}</strong></span>
+    <span${lateN ? ' class="danger-text"' : ""}>просрочено <strong>${money(late)}</strong>${lateN ? ` · ${lateN} ${plural(lateN, "платёж", "платежа", "платежей")}` : ""}</span>
+    <button class="link" data-act="money-open">Подробнее</button></div>`;
 }
 function todayView() {
   if (!D().students.length) return welcomeView();
@@ -1031,7 +1130,7 @@ function todayView() {
     ${tile("nostep", "Без следующего шага", ag.noStep.length ? "о них легко забыть" : "у всех есть шаг")}</section>`;
   const dueBody = ag.due.length ? `<ul class="rows">${grp("Просрочено", lateSteps, "danger-text")}${grp("Сегодня", nowSteps)}</ul>`
     : `<div class="allclear"><strong>На сегодня шагов нет</strong>${ag.noStep.length ? "Назначьте следующий шаг студентам из списка «Без следующего шага»." : "Все студенты под контролем."}</div>`;
-  return headHTML("Сегодня", "", mentorSelect() + addBtn, sub) + demoBanner() + backupBanner() + summary + `
+  return headHTML("Сегодня", "", mentorSelect() + addBtn, sub) + demoBanner() + backupBanner() + summary + (S.limited ? "" : monthMoneyLine()) + `
   <div class="today one">
     <div class="stack">
       ${tab === "new" && orphans.length ? panel("Без ментора", orphans.length, `<ul class="rows">${orphans.slice(0, 8).map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
@@ -1047,7 +1146,7 @@ function todayView() {
       ${tab !== "pays" ? "" : panel("Платежи студентов", ag.pays.length ? money(sum(ag.pays, p => p.amount)) : "", ag.pays.length ? `<ul class="rows">${ag.pays.map(p => `<li class="click" data-act="open" data-id="${esc(p.s.id)}">
           <span class="who"><strong>${esc(p.s.name)}</strong><span>${esc(p.comment || "Платёж")}</span></span>
           <span class="amt">${money(p.amount)}</span><span class="when${p.due < t ? " late" : ""}">${dueLabel(p.due)}</span>
-          <span class="acts"><button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button><button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button></span></li>`).join("")}</ul>`
+          <span class="acts">${remindBtn(p.s, p)}<button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button></span></li>`).join("")}</ul>`
         : `<p class="empty">Просрочек и платежей на ближайшие три дня нет</p>`, "", "Просроченные и те, что подходят в ближайшие три дня.")}
       ${tab === "meets" && meets.length ? panel("Встречи на неделе", meets.length, `<ul class="rows">${meets.map(e => evRow(e, true)).join("")}</ul>`, `<button class="btn small ghost" data-act="nav" data-v="calendar">Календарь</button>`) : ""}
       ${tab === "nostep" && ag.noStep.length ? panel("Без следующего шага", ag.noStep.length, `<ul class="rows">${noStep.map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
@@ -1065,9 +1164,8 @@ function helpView() {
     ["students", "Студенты", "Поиск и список всех людей, выгрузка в файл, действия сразу над несколькими."],
     ["cohorts", "Потоки", "Группы, программа и прогресс по модулям."],
     ["payments", "Платежи студентов", "Кто должен заплатить и кто опаздывает."],
-    ["payouts", adm ? "Выплаты менторам" : "Мои выплаты", adm ? "Сколько причитается блогеру и менторам, расходы и записанные выплаты." : "Сколько вам начислено за месяц, что уже выплатили и какие расходы учтены."],
+    ["payouts", adm ? "Выплаты и партнёры" : "Мои выплаты", adm ? "Сколько причитается блогеру и менторам, расходы и записанные выплаты. На вкладке «Партнёры» — откуда приходят заявки и что из них получается." : "Сколько вам начислено за месяц, что уже выплатили и какие расходы учтены."],
     ["analytics", "Аналитика", "Конверсия по этапам и время до первого ответа на заявку."],
-    ...(adm ? [["partners", "Партнёры", "Откуда приходят заявки и что из них получается."]] : []),
     ["settings", "Настройки", adm ? "Команда, доступы, направления и доли, бот, резервная копия." : "Пароль, уведомления в Telegram, оформление."]];
   return headHTML("Справка") + `<div class="guide">
     <section class="card"><h2>Как вести человека</h2><ol>
@@ -1085,6 +1183,9 @@ function helpView() {
       <li>Удалённый студент попадает в корзину в настройках, оттуда его можно вернуть.</li>
       <li>${adm ? "Ментор видит только своих студентов и свои начисления, партнёр — только свой отчёт." : "Вы видите только своих студентов и свои начисления."}</li>
       <li>Изменения сохраняются сами: внизу слева видно «Сохранено».</li>
+      <li>У каждой карточки свой адрес: скопируйте его из строки браузера, чтобы переслать коллеге. Кнопка «Назад» в браузере закрывает карточку и возвращает прошлый раздел.</li>
+      <li>Отборы и сортировка в списках запоминаются в этом браузере, пока вы их не сбросите.</li>
+      <li>«Напомнить» у платежа открывает переписку в Telegram с готовым текстом, если у студента указан ник.</li>
     </ul></section></div>`;
 }
 function welcomeView() {
@@ -1129,15 +1230,18 @@ function niceMax(v) { if (v <= 0) return 1000; const p = Math.pow(10, Math.floor
 // Столбики по месяцам из нескольких рядов, один над другим. items: [{ label, cur, vals: [..], tip }]
 function stackChart(id, items, aria, fmt = fmtK, whole = false) {
   const W = 720, H = 230, L = 52, R = 8, T = 10, B = 26, pw = W - L - R, ph = H - T - B;
-  const peak = Math.max(...items.map(m => sum(m.vals, v => v)), 0);
+  const peak = Math.max(...items.map(m => sum(m.vals, v => v)), 0), low = Math.max(...items.map(m => m.neg || 0), 0);
   // whole — счётчики: шкала кратна четырём, чтобы подписи были целыми и не повторялись
-  const top = whole ? Math.max(4, Math.ceil(peak / 4) * 4) : niceMax(peak), y = v => T + ph - v / top * ph;
+  // Убыток (neg) рисуется вниз от нуля. Шаг шкалы общий: над нулём столько делений, сколько нужно доходу, под нулём — сколько нужно убытку
+  const tick = (whole ? Math.max(4, Math.ceil(peak / 4) * 4) : niceMax(Math.max(peak, low))) / 4, down = low > 0 ? Math.ceil(low / tick - 1e-9) : 0;
+  const up = down ? Math.max(1, Math.ceil(peak / tick - 1e-9)) : 4, top = up * tick, y = v => T + (top - v) / (top + down * tick) * ph;
   const step = pw / items.length, bw = Math.min(30, step * .56);
-  const grid = [0, .25, .5, .75, 1].map(k => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(top * k)}" y2="${y(top * k)}"></line><text x="${L - 8}" y="${y(top * k) + 4}" text-anchor="end">${k ? fmt(top * k) : "0"}</text>`).join("");
+  const grid = Array.from({ length: down + up + 1 }, (_, i) => i - down).map(k => `<line class="grid${k === 0 && down ? " zero" : ""}" x1="${L}" x2="${W - R}" y1="${y(tick * k)}" y2="${y(tick * k)}"></line><text x="${L - 8}" y="${y(tick * k) + 4}" text-anchor="end">${k ? (k < 0 ? "−" : "") + fmt(Math.abs(tick * k)) : "0"}</text>`).join("");
+  const downBar = (x, v) => { const y0 = y(0), h = Math.max(y(-v) - y0, 1), r = Math.min(4, h, bw / 2); return `<path class="sneg" d="M${x},${y0}V${y0 + h - r}Q${x},${y0 + h} ${x + r},${y0 + h}H${x + bw - r}Q${x + bw},${y0 + h} ${x + bw},${y0 + h - r}V${y0}Z"></path>`; };
   const bars = items.map((m, i) => {
     const x = L + step * i + (step - bw) / 2, last = m.vals.reduce((a, v, n) => v > 0 ? n : a, -1);
     let base = 0;
-    const parts = m.vals.map((v, n) => { if (!(v > 0)) return ""; const h = v / top * ph, gap = n !== last ? 2 : 0; base += v; return `<path class="s${n + 1}" d="${barPath(x, y(base), bw, Math.max(h - gap, 1), n === last ? 4 : 0)}"></path>`; }).join("");
+    const parts = m.vals.map((v, n) => { if (!(v > 0)) return ""; const h = y(0) - y(v), gap = n !== last ? 2 : 0; base += v; return `<path class="s${n + 1}" d="${barPath(x, y(base), bw, Math.max(h - gap, 1), n === last ? 4 : 0)}"></path>`; }).join("") + (m.neg > 0 ? downBar(x, m.neg) : "");
     return `<g data-tip="${esc(m.tip)}"><rect class="hit" x="${L + step * i}" y="${T}" width="${step}" height="${ph}"></rect>${parts}<text class="${m.cur ? "now" : ""}" x="${x + bw / 2}" y="${H - 8}" text-anchor="middle">${esc(m.label)}</text></g>`;
   }).join("");
   return `<svg class="chart" id="${id}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(aria)}">${grid}${bars}</svg>`;
@@ -1150,11 +1254,12 @@ function splitChartPanel() {
     const c = cells.filter(x => x.month === m.key), by = k => sum(c.flatMap(x => x.parties).filter(x => x.kind === k), x => x.accrued);
     return { ...m, received: sum(c, x => x.received), expenses: sum(c, x => x.expenses), net: sum(c, x => x.net), owner: sum(c, x => x.owner), mentor: by("mentor"), partner: by("partner") };
   });
-  const items = axis.map(m => ({ label: m.label, cur: m.cur, vals: [m.owner, m.mentor, m.partner].map(v => Math.max(v, 0)),
+  // Убыток месяца — всё, что ушло в минус у владельца, менторов и партнёров: на графике он идёт вниз от нуля
+  const items = axis.map(m => ({ label: m.label, cur: m.cur, vals: [m.owner, m.mentor, m.partner].map(v => Math.max(v, 0)), neg: -sum([m.owner, m.mentor, m.partner], v => Math.min(v, 0)),
     tip: `${monthName(m.key)}${m.received || m.expenses ? `\nПолучено: ${money(m.received)}\nРасходы: ${money(m.expenses)}\nЧистая выручка: ${money(m.net)}\nВам: ${money(m.owner)}\nМенторам: ${money(m.mentor)}\nПартнёрам: ${money(m.partner)}` : "\nНет оплат и расходов"}` }));
-  const rows = axis.filter(m => m.received || m.expenses).reverse();
-  return panel("Куда идёт чистая выручка", "", `<div class="pad">${legendHTML(["Вам", "Менторам", "Партнёрам"])}<div class="chart-wrap">${stackChart("chart-split", items, "Распределение чистой выручки по месяцам")}</div>
-    <p class="hint">Считается по всем направлениям и не зависит от фильтров выше. Месяц с убытком на графике показан нулём, точные цифры — в таблице.</p>
+  const rows = axis.filter(m => m.received || m.expenses).reverse(), loss = items.some(m => m.neg > 0);
+  return panel("Куда идёт чистая выручка", "", `<div class="pad">${legendHTML(["Вам", "Менторам", "Партнёрам"]).replace(/<\/div>$/, loss ? `<span id="legend-loss"><i style="background:var(--danger)"></i>Убыток месяца</span></div>` : "</div>")}<div class="chart-wrap">${stackChart("chart-split", items, "Распределение чистой выручки по месяцам")}</div>
+    <p class="hint">Считается по всем направлениям и не зависит от фильтров выше. ${loss ? "Месяц, где расходы больше оплат, показан красным столбиком вниз от нуля; точные цифры — в таблице." : "Точные цифры — в таблице."}</p>
     <details style="margin-top:8px"><summary>Показать таблицей</summary><div class="table-wrap"><table class="compact"><thead><tr><th>Месяц</th><th class="num">Получено</th><th class="num">Расходы</th><th class="num">Чистая выручка</th><th class="num">Вам</th><th class="num">Менторам</th><th class="num">Партнёрам</th></tr></thead>
       <tbody>${rows.map(m => `<tr><td>${monthName(m.key)}</td><td class="num">${money(m.received)}</td><td class="num">${money(m.expenses)}</td><td class="num">${money(m.net)}</td><td class="num">${money(m.owner)}</td><td class="num">${money(m.mentor)}</td><td class="num">${money(m.partner)}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">Оплат пока нет</td></tr>`}</tbody></table></div></details></div>`);
 }
@@ -1227,7 +1332,7 @@ function analyticsView() {
   <div class="grid-2">
     <div class="stack">${panel("Сколько дошли до этапа", "", `<div class="pad">${funnelHTML(m.funnel)}</div>`)}${S.limited ? "" : mentorsPanel(list)}</div>
     <div class="stack">
-      ${panel(`Давно на одном этапе`, m.stuck.length || "", m.stuck.length ? `<ul class="rows">${m.stuck.map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}"><span class="who"><strong>${esc(s.name)}</strong></span>${badge(s.stage)}<span class="when">${days(daysSince(s.stageAt))}</span></li>`).join("")}</ul>` : `<p class="empty">Никто не стоит дольше ${STUCK_DAYS} дней</p>`)}
+      ${panel(`Давно на одном этапе`, m.stuck.length || "", m.stuck.length ? `<ul class="rows">${m.stuck.map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}"><span class="who"><strong>${esc(s.name)}</strong></span>${badge(s.stage)}<span class="when">${days(daysSince(s.stageAt))}</span></li>`).join("")}</ul>` : `<p class="empty">Никто не стоит дольше ${STUCK_DAYS} дней</p>`, m.stuck.length ? `<button class="btn small ghost" data-act="list-stuck">Открыть списком</button>` : "")}
       ${m.lost ? panel("Почему уходят", m.lost, `<ul class="rows">${m.reasons.map(([k, n]) => `<li><span class="who"><strong>${esc(k)}</strong></span><span class="when">${n}</span></li>`).join("")}</ul>`) : ""}
     </div>
   </div>
@@ -1303,7 +1408,7 @@ function boardView() {
   const cols = stages.map(([st, label, g]) => {
     const items = sortBy(list.filter(s => s.stage === st), s => (hasStep(s) ? s.next.date : "9999") + (s.stageAt || ""));
     return `<section class="col g-${g}" data-stage="${st}"><header><span>${label}</span><span class="count">${items.length}</span>${st !== "lost" ? `<button class="col-add" data-act="quick" data-st="${st}" aria-label="Добавить в «${label}»" title="Добавить">+</button>` : ""}</header>
-      <div class="col-body">${items.map(tileHTML).join("") || `<p class="empty">Пусто</p>`}</div></section>`;
+      <div class="col-body">${items.slice(0, S.colMax[st] || COL_STEP).map(tileHTML).join("") || `<p class="empty">Пусто</p>`}${items.length > (S.colMax[st] || COL_STEP) ? `<button class="col-more" data-act="col-more" data-st="${st}">Показать ещё: ${items.length - (S.colMax[st] || COL_STEP)}</button>` : ""}</div></section>`;
   }).join("");
   return headHTML("Воронка", "", `<button class="btn" data-act="import">Импорт списка</button>` + addBtn) + `
   <div class="board-bar">
@@ -1336,33 +1441,40 @@ function bulkBar(ids) {
 const SORTS = {
   name: s => String(s.name || "").toLowerCase(), stage: s => SIDX[s.stage] ?? 99, step: s => hasStep(s) ? s.next.date : "9999",
   cohort: s => cohortName(s.cohortId).toLowerCase() || "\uffff", source: s => String(partnerById(s.partnerId)?.name || s.utmSource || "\uffff").toLowerCase(),
-  mentor: s => teamName(s.mentorId).toLowerCase() || "\uffff", paid: s => paidSum(s),
+  mentor: s => teamName(s.mentorId).toLowerCase() || "\uffff", paid: s => paidSum(s), days: s => daysSince(s.stageAt),
 };
+// Длинные списки рисуются частями: страница не тормозит и на тысяче строк. Следующая часть открывается кнопкой под таблицей.
+const ROWS_STEP = 100, COL_STEP = 40;
+const rowsMax = () => Math.max(S.rows || 0, ROWS_STEP);
+const moreRow = (shown, total, cols) => total > shown ? `<tr class="more-row"><td colspan="${cols}">Показано ${shown} из ${total}. <button class="link" id="more-rows" data-act="more-rows">Показать ещё ${Math.min(ROWS_STEP, total - shown)}</button></td></tr>` : "";
 function studentsTable(list, mods, emptyText) {
-  if (S.sort && SORTS[S.sort.k]) { list = sortBy(list, SORTS[S.sort.k]); if (S.sort.dir < 0) list.reverse(); }
+  if (S.sort && Object.hasOwn(SORTS, S.sort.k)) { list = sortBy(list, SORTS[S.sort.k]); if (S.sort.dir < 0) list.reverse(); }
+  const total = list.length; list = list.slice(0, rowsMax());
+  // Выбор и массовые действия — только над строками, которые сейчас на экране
   const ids = list.map(s => s.id), all = ids.length > 0 && ids.every(id => S.sel.has(id));
   S.visible = ids;
-  const th = (k, label, cls = "") => { const on = S.sort?.k === k; return `<th${cls ? ` class="${cls}"` : ""}${on ? ` aria-sort="${S.sort.dir > 0 ? "ascending" : "descending"}"` : ""}><button class="th-sort${on ? " on" : ""}" id="th-${k}" data-act="sort" data-k="${k}" title="Сортировать">${label}${on ? `<span aria-hidden="true">${S.sort.dir > 0 ? "↑" : "↓"}</span>` : ""}</button></th>`; };
+  const th = (k, label, cls = "", title = "Сортировать") => { const on = S.sort?.k === k; return `<th${cls ? ` class="${cls}"` : ""}${on ? ` aria-sort="${S.sort.dir > 0 ? "ascending" : "descending"}"` : ""}><button class="th-sort${on ? " on" : ""}" id="th-${k}" data-act="sort" data-k="${k}" title="${title}">${label}${on ? `<span aria-hidden="true">${S.sort.dir > 0 ? "↑" : "↓"}</span>` : ""}</button></th>`; };
   const stepCell = s => hasStep(s) ? `${esc(s.next.text)} <span class="sub nw${stepLate(s) ? " danger-text" : ""}">· ${dueLabel(s.next.date)}</span>` : isActive(s) ? `<span class="warn-text">не назначен</span>` : `<span class="muted">—</span>`;
   const paidCell = s => s.price ? `${money(paidSum(s))} <span class="sub">из ${money(s.price)}</span>` : money(paidSum(s) || null);
-  const cols = 6 + (mods ? mods.length : 2);
+  const cols = mods ? 6 + mods.length : 9;
+  const daysCell = s => !isActive(s) ? `<span class="muted">—</span>` : isStuck(s) ? `<strong class="warn-text" title="Дольше ${STUCK_DAYS} дней на одном этапе">${daysSince(s.stageAt)}</strong>` : `<span title="Дней на этапе «${esc(SLABEL[s.stage] || "")}»">${daysSince(s.stageAt)}</span>`;
   return `<div class="panel table-wrap" id="tbl"><table>
     <thead><tr><th class="selc"><input type="checkbox" data-sel-all data-ids="${esc(ids.join(","))}"${all ? " checked" : ""} aria-label="Выбрать всех"></th>${th("name", "Студент")}${th("stage", "Этап")}
-      ${mods ? mods.map((m, i) => `<th class="mxh" title="${esc(m.title)}">${i + 1}</th>`).join("") : th("step", "Следующий шаг") + th("cohort", "Поток")}
+      ${mods ? mods.map((m, i) => `<th class="mxh" title="${esc(m.title)}">${i + 1}</th>`).join("") : th("days", "Дней", "num", "Сколько дней человек на текущем этапе. Нажмите, чтобы отсортировать") + th("step", "Следующий шаг") + th("cohort", "Поток")}
       ${mods ? th("step", "Следующий шаг") : th("source", "Источник")}${th("mentor", "Ментор")}${th("paid", "Оплачено", "num")}</tr></thead>
     <tbody>${list.map(s => `<tr class="click" data-act="open" data-id="${esc(s.id)}">
       <td class="selc" data-stop><input type="checkbox" id="sel-${esc(s.id)}" data-sel="${esc(s.id)}"${S.sel.has(s.id) ? " checked" : ""} aria-label="Выбрать: ${esc(s.name)}"></td>
       <td><strong>${esc(s.name)}</strong><div class="sub">${esc(s.telegram || s.phone || s.email || "")}</div></td>
       <td>${badge(s.stage)}</td>
       ${mods ? mods.map(m => `<td class="mxc"><button class="mx${s.progress && s.progress[m.id] ? " on" : ""}" id="mx-${esc(s.id)}-${esc(m.id)}" data-act="mod-toggle" data-id="${esc(s.id)}" data-mid="${esc(m.id)}" title="${esc(m.title)}" aria-label="${esc(m.title)}: ${esc(s.name)}" aria-pressed="${!!(s.progress && s.progress[m.id])}"></button></td>`).join("")
-        : `<td>${stepCell(s)}</td><td>${esc(cohortName(s.cohortId) || "—")}${progressOf(s) && (progressOf(s).done || SGROUP[s.stage] === "study") ? `<div>${progHTML(progressOf(s))}</div>` : ""}</td>`}
+        : `<td class="num nw">${daysCell(s)}</td><td>${stepCell(s)}</td><td>${esc(cohortName(s.cohortId) || "—")}${progressOf(s) && (progressOf(s).done || SGROUP[s.stage] === "study") ? `<div>${progHTML(progressOf(s))}</div>` : ""}</td>`}
       ${mods ? `<td>${stepCell(s)}</td>` : `<td class="clip" title="${esc(partnerById(s.partnerId)?.name || s.utmSource || "")}">${esc(partnerById(s.partnerId)?.name || s.utmSource || "—")}</td>`}
       <td class="clip" title="${esc(teamName(s.mentorId) || "")}">${esc(teamName(s.mentorId) || "—")}</td><td class="num">${paidCell(s)}</td>
-    </tr>`).join("") || `<tr><td colspan="${cols}" class="empty">${emptyText}</td></tr>`}</tbody>
+    </tr>`).join("") || `<tr><td colspan="${cols}" class="empty">${emptyText}</td></tr>`}${moreRow(list.length, total, cols)}</tbody>
   </table></div>${bulkBar(ids)}`;
 }
 function listView() {
-  const keys = ["q", "cohort", "mentor", "partner", "stage"], list = sortBy(filtered(keys), s => s.createdAt || "").reverse();
+  const keys = ["q", "cohort", "mentor", "partner", "stage", "stuck"], list = sortBy(filtered(keys), s => s.createdAt || "").reverse();
   return headHTML(`Студенты <small>${list.length}</small>`, "", `<button class="btn" data-act="csv">Выгрузить в CSV</button><button class="btn" data-act="import">Импорт списка</button>${addBtn}`) + filtersHTML(keys) +
     studentsTable(list, null, "Никого не нашли. Измените фильтры или добавьте заявку.");
 }
@@ -1796,6 +1908,7 @@ function myMoneyHTML(r) {
   <nav class="tabs" id="my-tabs">${tab("months", "По месяцам")}${tab("paid", `Выплаты мне${pays.length ? ` · ${pays.length}` : ""}`)}${tab("expenses", `Расходы${exps.length ? ` · ${exps.length}` : ""}`)}</nav>
   <div class="stack">${body}</div>`;
 }
+const PAY_TITLE = "Выплаты и партнёры";
 function payoutsView() {
   if (S.limited) {
     const me = myTeam(), r = me && D().reports.find(x => x.id === me.id);
@@ -1806,7 +1919,13 @@ function payoutsView() {
   const months = lastMonths(12), month = months.includes(S.payMonth) ? S.payMonth : months[0];
   const sel = `<select id="pay-month" aria-label="Месяц">${months.map(k => opt(k, monthName(k), month)).join("")}</select>`;
   const addExp = S.readOnly ? "" : `<button class="btn" data-act="expense-new">+ Расход</button>`;
-  if (!D().directions.length) return headHTML("Выплаты менторам") + `<div class="card welcome"><h2>Сначала создайте направление</h2>
+  // На экране одна часть: кому сколько выплатить, как это посчитано, расходы месяца или партнёры
+  const view = ["parties", "calc", "expenses", "partners"].includes(S.payView) ? S.payView : "parties";
+  const tab = (k, l) => `<button data-act="payview" data-v="${k}" class="${view === k ? "on" : ""}">${l}</button>`;
+  const expCount = D().expenses.filter(e => dayOf(e.date).slice(0, 7) === month).length;
+  const tabs = `<nav class="tabs" id="pay-tabs">${tab("parties", "Кому выплатить")}${tab("calc", "Как посчитано")}${tab("expenses", `Расходы${expCount ? ` · ${expCount}` : ""}`)}${tab("partners", `Партнёры${D().partners.length ? ` · ${D().partners.length}` : ""}`)}</nav>`;
+  if (view === "partners") return headHTML(PAY_TITLE, "", S.readOnly ? "" : `<button class="btn primary" data-act="partner-new">+ Партнёр</button>`, ABOUT.partners) + tabs + partnersTable();
+  if (!D().directions.length) return headHTML(PAY_TITLE) + tabs + `<div class="card welcome"><h2>Сначала создайте направление</h2>
     <p>Направление — это продукт школы со своим составом сторон: кто участвует и какой процент чистой выручки получает. Потоки привязываются к направлению, и оплаты их студентов делятся по его условиям.</p>
     <div class="actions">${S.readOnly ? "" : `<button class="btn primary" data-act="direction-new">Создать направление</button>`}</div></div>`;
   const cells = settle().filter(c => c.month === month);
@@ -1828,10 +1947,7 @@ function payoutsView() {
     ${d ? "" : `<p class="hint pad">Оплаты студентов без потока и потоков без направления. Они ни с кем не делятся. Привяжите потоки к направлению в их настройках.</p>`}`);
   };
   const exps = sortBy(D().expenses.filter(e => dayOf(e.date).slice(0, 7) === month), e => String(e.date)).reverse();
-  // На экране одна часть: кому сколько выплатить, как это посчитано или расходы месяца
-  const view = ["parties", "calc", "expenses"].includes(S.payView) ? S.payView : "parties";
   const mName = esc(monthName(month).toLowerCase()), owing = prow.filter(r => r.st.balance > 0).length;
-  const tab = (k, l) => `<button data-act="payview" data-v="${k}" class="${view === k ? "on" : ""}">${l}</button>`;
   const f = S.f, q = f.q.trim().toLowerCase(), has = v => !q || String(v || "").toLowerCase().includes(q);
   const dirOpts = [["", "Все направления"], ...D().directions.map(d => [d.id, d.name])];
   const inDir = id => !f.dir || (dirById(id)?.id || "") === f.dir;
@@ -1853,13 +1969,13 @@ function payoutsView() {
   const expHTML = panel(`Расходы за ${mName}`, expsF.length ? money(sum(expsF, e => nnum(e.amount))) : "", expsF.length ? `<ul class="rows" id="pay-expenses">${expsF.map(e => `<li><span class="who"><strong>${esc(e.comment || "Расход")}</strong><span>${esc(dirById(e.directionId)?.name || "Без направления")}</span></span><span class="amt">${money(e.amount)}</span><span class="when">${fDate(e.date)}</span>
       ${S.readOnly ? "" : `<span class="acts"><button class="btn small ghost" data-act="expense-edit" data-id="${esc(e.id)}">Изменить</button><button class="btn small ghost" data-act="expense-del" data-id="${esc(e.id)}">Удалить</button></span>`}</li>`).join("")}</ul>`
     : expsAll ? none : `<p class="empty">Расходов в этом месяце нет</p>`, addExp.replace('class="btn"', 'class="btn small"'), "Реклама, налоги, комиссии и непредвиденные траты. Они уменьшают чистую выручку до того, как она делится.");
-  return headHTML("Выплаты менторам", "", sel + addExp, "Сколько из полученных денег причитается блогеру, менторам и вам") + `<section class="kpis">
+  return headHTML(PAY_TITLE, "", sel + addExp, "Сколько из полученных денег причитается блогеру, менторам и вам") + `<section class="kpis">
     ${kpiHTML(`Чистая выручка за ${mName}`, signed(net), `получено ${money(got)} − расходы ${money(exp)}`)}
     ${kpiHTML("Ваша доля за месяц", signed(own), net > 0 ? `${pct(own, net)}% чистой выручки` : "")}
     ${kpiHTML("Осталось выплатить", money(due), owing ? `${owing} ${plural(owing, "стороне", "сторонам", "сторонам")}, за всё время` : "всем выплачено", " accent")}
   </section>
   ${loose ? `<div class="banner"><p>Потоков без направления: ${loose}. Оплаты их студентов ни с кем не делятся.</p><button class="btn small" data-act="nav" data-v="cohorts">Открыть потоки</button></div>` : ""}
-  <nav class="tabs" id="pay-tabs">${tab("parties", "Кому выплатить")}${tab("calc", "Как посчитано")}${tab("expenses", `Расходы${exps.length ? ` · ${exps.length}` : ""}`)}</nav>
+  ${tabs}
   ${bar}<div class="stack">${view === "parties" ? partiesHTML : view === "calc" ? calcHTML : expHTML}</div>`;
 }
 const EXPENSE_HINTS = ["Реклама", "Налоги", "Комиссия банка", "Сервисы и подписки", "Возврат студенту", "Непредвиденный расход"];
@@ -1946,23 +2062,25 @@ function paymentsView() {
   else if (S.payTab === "upcoming") list = sortBy(all.filter(p => !p.paid && p.due >= t), p => p.due);
   else list = sortBy(all.filter(p => p.paid), p => p.paid).reverse();
   const paidTab = !["overdue", "upcoming"].includes(S.payTab);
+  const shown = list.slice(0, rowsMax());
   const emptyText = filtering ? "По этому отбору платежей нет. Нажмите «Сбросить»." : { overdue: "Просроченных платежей нет", upcoming: "Ожидаемых платежей нет. Платёж добавляется в карточке студента кнопкой «+ Платёж».", paid: "Оплат пока не было" }[S.payTab] || "";
   return head + `<div class="panel table-wrap"><table>
     <thead><tr><th>Студент</th><th>Поток</th><th>${paidTab ? "Оплачен" : "Срок"}</th>${paidTab ? "<th>Срок был</th><th>Вовремя</th>" : ""}<th class="num">Сумма</th><th>Комментарий</th><th></th></tr></thead>
-    <tbody>${list.map(p => `<tr class="click" data-act="open" data-id="${esc(p.s.id)}"><td><strong>${esc(p.s.name)}</strong></td>
+    <tbody>${shown.map(p => `<tr class="click" data-act="open" data-id="${esc(p.s.id)}"><td><strong>${esc(p.s.name)}</strong></td>
       <td>${esc(cohortName(p.s.cohortId) || "—")}</td><td${!p.paid && p.due < t ? ' class="danger-text"' : ""}>${fDate(paidTab ? p.paid : p.due)}</td>
       ${paidTab ? `<td class="muted">${fDate(p.due)}</td><td>${payDelay(p) > 0 ? `<span class="tag warn">на ${days(payDelay(p))} позже</span>` : payDelay(p) === 0 ? `<span class="tag ok">вовремя</span>` : ""}</td>` : ""}
       <td class="num">${isPending(p) ? `<span class="sub">${esc(pctText(p.percent))} от дохода</span>` : money(p.amount) + gapText(p)}</td><td class="muted">${esc(p.comment)}</td>
-      <td class="row-actions">${p.paid ? "" : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}" title="Скопировать текст напоминания">Напомнить</button> <button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">${isPending(p) ? "Указать доход" : "Оплачен"}</button>`}</td></tr>`).join("") || `<tr><td colspan="${paidTab ? 8 : 6}" class="empty">${emptyText}</td></tr>`}</tbody>
-    ${list.length ? `<tfoot><tr><td colspan="${paidTab ? 5 : 3}">Итого</td><td class="num">${money(sum(list, p => p.amount))}</td><td colspan="2"></td></tr></tfoot>` : ""}
+      <td class="row-actions">${p.paid ? "" : `${remindBtn(p.s, p)} <button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">${isPending(p) ? "Указать доход" : "Оплачен"}</button>`}</td></tr>`).join("") || `<tr><td colspan="${paidTab ? 8 : 6}" class="empty">${emptyText}</td></tr>`}${moreRow(shown.length, list.length, paidTab ? 8 : 6)}</tbody>
+    ${list.length ? `<tfoot><tr><td colspan="${paidTab ? 5 : 3}">Итого${shown.length < list.length ? ` по всем ${list.length}` : ""}</td><td class="num">${money(sum(list, p => p.amount))}</td><td colspan="2"></td></tr></tfoot>` : ""}
   </table></div>`;
 }
 
 // ----- Партнёры -----
-function partnersView() {
+// Вкладка «Партнёры» в разделе выплат: блогеры и каналы, их трафик и расчёт с ними
+function partnersTable() {
   const rows = D().partners.map(p => ({ p, st: partnerStats(p) }));
-  return headHTML("Партнёры", "", `<button class="btn" data-act="partner-new">+ Партнёр</button>`) + `
-  <div class="panel table-wrap"><table>
+  return `
+  <div class="panel table-wrap"><table id="partners-table">
     <thead><tr><th>Партнёр</th><th>Промокод / UTM</th><th class="num">Заявок</th><th class="num">Оплатили</th><th class="num">Начислено</th><th class="num">Выплачено</th><th class="num">К выплате</th></tr></thead>
     <tbody>${rows.map(({ p, st }) => `<tr class="click" data-act="partner-open" data-id="${esc(p.id)}"><td><strong>${esc(p.name)}</strong>${p.active === false ? ` <span class="tag">неактивен</span>` : ""}</td>
       <td class="muted">${esc(p.promo || "—")} / ${esc(p.utm || "—")}</td><td class="num">${st.leads}</td><td class="num">${st.paidStudents}</td>
@@ -2061,8 +2179,12 @@ function accountPanel() {
 }
 function accessPanel() {
   const linkName = a => a.role === "partner" ? partnerById(a.linkId)?.name : teamName(a.linkId);
-  return panel("Доступ", S.accounts.length || "", (S.accounts.length ? `<ul class="rows">${S.accounts.map(a => `<li><span class="who"><strong>${esc(a.name || a.username)}</strong><span>${esc(a.username)} · ${esc(ROLEL[a.role] || "без роли")}${linkName(a) ? " · " + esc(linkName(a)) : ""}</span></span>
-      ${a.me ? `<span class="tag ok">это вы</span>` : ""}${a.active ? "" : `<span class="tag danger">отключён</span>`}<button class="btn small ghost" data-act="account-edit" data-id="${esc(a.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Загружаю…</p>`) +
+  const failed = x => isObj(x) && x.n > 0 ? `${esc(x.n)} ${plural(x.n, "раз", "раза", "раз")}${x.at ? `, последний — ${fDT(x.at)}` : ""}` : "";
+  const unknown = failed(S.unknownFailed);
+  return panel("Доступ", S.accounts.length || "", (S.accounts.length ? `<ul class="rows" id="access-list">${S.accounts.map(a => `<li><span class="who wrap"><strong>${esc(a.name || a.username)}</strong><span>логин <strong>${esc(a.username)}</strong> · ${esc(ROLEL[a.role] || "без роли")}${linkName(a) ? " · " + esc(linkName(a)) : ""}</span>
+        <span>${a.lastLogin ? `последний вход ${fDT(a.lastLogin)}` : "ещё не входил"}</span>${failed(a.failed) ? `<span class="warn-text" data-failed>Не смог войти за сутки: ${failed(a.failed)}. ${a.active ? "Логин верный, не подходит пароль — задайте новый." : "Вход закрыт: учётная запись отключена."}</span>` : ""}</span>
+      ${a.me ? `<span class="tag ok">это вы</span>` : ""}${a.active ? "" : `<span class="tag danger">отключён</span>`}<span class="acts"><button class="btn small" data-act="account-reset" data-id="${esc(a.id)}">Сбросить пароль</button><button class="btn small ghost" data-act="account-edit" data-id="${esc(a.id)}">Изменить</button></span></li>`).join("")}</ul>` : `<p class="empty">Загружаю…</p>`) +
+    (unknown ? `<p class="hint pad warn-text" id="access-unknown">Кто-то пытался войти с логином, которого нет в этом списке: ${unknown}. Если человек жалуется на «неверный логин или пароль», сверьте с ним логин из списка выше.</p>` : "") +
     `<p class="hint pad">Администратор видит всё. Ментор видит только своих студентов и не видит финансы школы и партнёров. Партнёр видит только отчёт по своему трафику.</p>`, `<button class="btn small" data-act="account-new">+ Доступ</button>`);
 }
 function trashPanel() {
@@ -2186,6 +2308,13 @@ function remindText(s, p) {
   const late = p.due < today();
   return `${first ? first + ", д" : "Д"}обрый день! Напоминаю про платёж за обучение: ${money(p.amount).replace(/[\u00a0\u202f]/g, " ")}, срок ${late ? "был " : ""}${fDate(p.due)}. ${late ? "Подскажите, пожалуйста, когда получится оплатить?" : "Если уже оплатили, дайте знать, я отмечу."}`;
 }
+// Кнопка «Напомнить». Если у студента указан ник в Telegram, она открывает переписку с ним, и текст уже стоит в поле сообщения;
+// иначе текст копируется. В обоих случаях он остаётся в буфере обмена.
+function remindBtn(s, p) {
+  const user = tgUser(s), attrs = `data-act="pay-remind" data-id="${esc(s.id)}" data-pid="${esc(p.id)}"`;
+  return user ? `<a class="btn small ghost" href="https://t.me/${esc(user)}?text=${esc(encodeURIComponent(remindText(s, p)))}" target="_blank" rel="noopener" ${attrs} title="Открыть переписку в Telegram с готовым текстом напоминания">Напомнить</a>`
+    : `<button class="btn small ghost" ${attrs} title="Скопировать текст напоминания: ника в Telegram у студента нет">Напомнить</button>`;
+}
 async function copyText(text, okMsg) {
   try { await navigator.clipboard.writeText(text); toast(okMsg); }
   catch (e) { openModal({ title: "Скопируйте текст", submit: "Готово", cancel: "Закрыть", values: { text }, fields: [{ k: "text", label: "Текст", type: "textarea", wide: true }], onSubmit: () => true }); }
@@ -2250,7 +2379,7 @@ function collect() {
     const el = document.getElementById("m-" + f.k); if (!el) continue;
     if (f.type === "checkbox") v[f.k] = el.checked;
     else if (f.type === "number") v[f.k] = num(el.value);
-    else if (f.type === "password") v[f.k] = el.value; // пароль не обрезаем: пробел в нём — тоже символ
+    else if (f.type === "password" || f.raw) v[f.k] = el.value; // пароль не обрезаем: пробел в нём — тоже символ
     else v[f.k] = el.value.trim();
   }
   return v;
@@ -2671,7 +2800,29 @@ async function selfTeam(after) {
 }
 async function loadAccounts() {
   if (!SRV || !S.isOwner) return;
-  try { S.accounts = await SRV.accounts.list(); scheduleRender(); } catch (e) { console.warn(e); }
+  try { const all = await SRV.accounts.all(); S.accounts = all.accounts; S.unknownFailed = all.unknownFailed || null; scheduleRender(); } catch (e) { console.warn(e); }
+}
+// Случайный пароль без похожих знаков (0 и O, 1 и l): его удобно продиктовать или переписать
+function genPassword(len = 14) {
+  const abc = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789", out = [], buf = new Uint8Array(64);
+  while (out.length < len) { crypto.getRandomValues(buf); for (const b of buf) if (b < 224 && out.length < len) out.push(abc[b % 56]); }
+  return out.join("");
+}
+// Сброс пароля: администратор задаёт сотруднику или партнёру новый пароль, не заходя на сервер
+function passwordResetForm(a) {
+  openModal({
+    title: `Новый пароль: ${a.name || a.username}`, submit: "Задать пароль", values: { password: genPassword() },
+    fields: [{ k: "password", label: "Новый пароль", req: true, raw: true, auto: "off", wide: true, help: "Не короче 10 символов и не только цифры. Можно оставить предложенный или вписать свой." }],
+    extra: `<div class="pwrow"><button type="button" class="btn small" data-act="pw-copy">Скопировать</button><button type="button" class="btn small ghost" data-act="pw-gen">Другой пароль</button></div>
+      <p class="hint" style="margin-top:10px">Логин для входа: <strong>${esc(a.username)}</strong> (большие и маленькие буквы в логине не различаются). После сохранения прежний пароль перестанет работать, а ${a.me ? "вы останетесь в системе на этом устройстве" : "человека попросят войти заново на всех устройствах"}. Передайте пароль лично.</p>`,
+    onSubmit: async v => {
+      if (/^\s|\s$/.test(v.password)) return "Пароль не должен начинаться или заканчиваться пробелом";
+      try { await SRV.accounts.update(a.id, { password: v.password }); }
+      catch (e) { return e?.message || (e?.code === "permission_denied" ? "На это действие у вас нет прав" : "Не удалось сохранить. Попробуйте ещё раз"); }
+      toast("Пароль изменён. Передайте его лично"); loadAccounts();
+      return true;
+    },
+  });
 }
 function accountForm(a, prefill = {}) {
   const taken = id => S.accounts.some(x => x.linkId === id && x.id !== a?.id && (x.role === "partner") === false);
@@ -2893,7 +3044,24 @@ function renderSearch() {
 function closeSearch() { $("#gq").value = ""; $("#gq-res").hidden = true; }
 
 // ---------- События ----------
-function go(view) { if (view !== S.view) S.f.q = ""; S.navMore = false; S.view = view; S.openId = null; S.openDay = null; S.todayTab = null; S.sel.clear(); S.sort = null; if (VIEWS.includes(view)) lsSet("crm-menti-view", view); render(); window.scrollTo(0, 0); }
+function go(view) {
+  if (view !== S.view) { S.f.q = ""; for (const k of Object.keys(S.f)) if (!UI_FILTERS.includes(k) && k !== "q") delete S.f[k]; }   // отборы «Платежей» и «Выплат» с собой не уносим
+  S.navMore = false; S.view = view; S.openId = null; S.openDay = null; S.todayTab = null; S.sel.clear(); S.rows = 0; S.colMax = {};
+  S.sort = S.sorts[view] || null;   // сортировка у каждого раздела своя и запоминается
+  if (VIEWS.includes(view)) lsSet("crm-menti-view", view);
+  if (view === "settings") loadAccounts();   // свежие отметки о неудачных входах
+  render(); window.scrollTo(0, 0);
+}
+// «Назад» и «Вперёд» в браузере, ссылка из уведомления, адрес, исправленный руками
+window.addEventListener("popstate", () => {
+  const view = S.view;
+  if (!readHash()) { ROUTING = true; return syncUrl(); }   // непонятный адрес: остаёмся где были и возвращаем в строку правильный
+  if (MODAL) closeModal();
+  S.navMore = false; S.todayTab = null;
+  if (S.view !== view) { S.sel.clear(); S.rows = 0; S.colMax = {}; S.sort = S.sorts[S.view] || null; S.f.q = ""; }
+  ROUTING = true; render();
+  if (S.openId || S.openDay) $("#d-x")?.focus({ preventScroll: true });
+});
 function openStudent(id) {
   const was = S.openId; S.openId = id; S.histOpen = false; S.logOpen = false; closeSearch(); render();
   const el = $(".drawer"); if (el && !was) el.classList.add("enter");
@@ -2909,10 +3077,17 @@ const ACT = {
   quick: d => quickForm(d.st || "new"),
   import: () => importForm(),
   antab: d => { S.anTab = d.v; render(); },
-  "cohort-open": d => { S.cohortId = d.id; S.sel.clear(); S.sort = null; S.view = "cohort"; render(); window.scrollTo(0, 0); },
+  "money-open": () => { S.anTab = "money"; go("analytics"); },
+  "list-stuck": () => { S.f = { ...S.f, q: "", stage: "", stuck: "1" }; go("students"); },
+  "more-rows": () => { S.rows = rowsMax() + ROWS_STEP; render(); },
+  "col-more": d => { S.colMax[d.st] = (S.colMax[d.st] || COL_STEP) + COL_STEP; render(); },
+  "account-reset": d => { const a = S.accounts.find(x => String(x.id) === d.id); if (a) passwordResetForm(a); },
+  "pw-gen": () => { const el = $("#m-password"); if (el) { el.value = genPassword(); el.focus(); el.select(); } },
+  "pw-copy": () => { const el = $("#m-password"); if (el && el.value) copyText(el.value, "Пароль скопирован"); },
+  "cohort-open": d => { S.cohortId = d.id; S.sel.clear(); S.rows = 0; S.sort = S.sorts.cohort || null; S.view = "cohort"; render(); window.scrollTo(0, 0); },
   "list-nocohort": () => { S.f = { q: "", cohort: "none", mentor: "", partner: "", stage: "" }; go("students"); },
   "mod-toggle": d => toggleModule(d.id, d.mid),
-  sort: d => { const s = S.sort; S.sort = !s || s.k !== d.k ? { k: d.k, dir: 1 } : s.dir > 0 ? { k: d.k, dir: -1 } : null; render(); },
+  sort: d => { const s = S.sort; S.sort = !s || s.k !== d.k ? { k: d.k, dir: 1 } : s.dir > 0 ? { k: d.k, dir: -1 } : null; if (S.sort) S.sorts[S.view] = S.sort; else delete S.sorts[S.view]; render(); },
   "cal-day": d => { S.cal.day = d.d; S.cal.ym = d.d.slice(0, 7); S.openDay = d.d; render(); $("#d-x")?.focus({ preventScroll: true }); },
   "cal-go": d => {
     const n = +d.n, t = today();
@@ -2974,7 +3149,13 @@ const ACT = {
   "today-tab": d => { S.todayTab = d.v; render(); },
   qdate: d => { const el = document.getElementById(d.target); if (el) el.value = daysAhead(+d.days); },
   copy: d => copyText(d.text, "Скопировано"),
-  "pay-remind": d => { const s = stu(d.id), p = (s?.payments || []).find(x => x.id === d.pid); if (p) copyText(remindText(s, p), "Напоминание скопировано. Вставьте его в переписку"); },
+  "pay-remind": (d, el) => {
+    const s = stu(d.id), p = (s?.payments || []).find(x => x.id === d.pid); if (!p) return;
+    if (el.tagName !== "A") return copyText(remindText(s, p), "Напоминание скопировано. Вставьте его в переписку");
+    // Ссылка сама открывает Telegram; копия в буфере — на случай, если текст не подставился
+    const done = () => toast("Открываю Telegram: текст напоминания уже в поле сообщения");
+    try { navigator.clipboard.writeText(remindText(s, p)).then(done, done); } catch (e) { done(); }
+  },
   "pay-new": d => paymentForm(stu(d.id)),
   "pay-edit": d => { const s = stu(d.id); paymentForm(s, (s.payments || []).find(p => p.id === d.pid)); },
   "pay-done": d => payDone(d.id, d.pid),
@@ -2988,7 +3169,7 @@ const ACT = {
   paytab: d => { S.payTab = d.v; render(); },
   "partner-new": () => partnerForm(null),
   "partner-edit": d => partnerForm(partnerById(d.id)),
-  "partner-open": d => { S.partnerId = d.id; S.view = "partner"; render(); window.scrollTo(0, 0); },
+  "partner-open": d => { S.partnerId = d.id; S.view = "partner"; S.payView = "partners"; render(); window.scrollTo(0, 0); },
   "payout-new": d => payoutForm(d.kind === "mentor" ? "mentor" : "partner", d.id),
   "direction-new": () => directionForm(null), "direction-edit": d => { const x = dirById(d.id); if (x) directionForm(x); },
   "expense-new": () => expenseForm(null), "expense-edit": d => { const x = D().expenses.find(e => e.id === d.id); if (x) expenseForm(x); },
@@ -3023,7 +3204,8 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("change", e => {
   const el = e.target;
-  if (el.dataset.filter) { S.f[el.dataset.filter] = el.value; render(); }
+  if (el.dataset.filter) { S.f[el.dataset.filter] = el.value; S.rows = 0; render(); }
+  if (el.dataset.fcheck) { S.f[el.dataset.fcheck] = el.checked ? "1" : ""; S.rows = 0; render(); }
   if (el.id === "pay-month") { S.payMonth = el.value; render(); }
   if (el.dataset.act === "toggle-lost") { S.showLost = el.checked; render(); }
   if (el.dataset.mod) toggleModule(el.dataset.sid, el.dataset.mod).then(ok => { if (!ok) scheduleRender(); });
@@ -3097,6 +3279,7 @@ async function boot() {
     if (!staff) staff = snap.exists;
   } catch (e) { console.warn(e); }
   S.mode = staff ? "staff" : "partner";
+  if (staff) loadUi();
   if (staff && S.canWrite === false && !S.isOwner) S.readOnly = true;
   if (staff) db.doc("config/main").onSnapshot(snap => { S.config = snap.exists ? { ...snap.data() } : {}; S.loaded.config = true; scheduleRender(); }, err => { console.warn("config", err); });
   const cols = S.mode === "partner" ? ["reports"] : COLS;
