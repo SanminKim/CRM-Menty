@@ -105,18 +105,18 @@ def _digest(today, is_admin, link_id, students, meetings, team):
     orphans = [s for s in active if not (isinstance(s.get("mentorId"), str) and s["mentorId"] in team)] if is_admin else []
     lines = []
     if due:
-        lines.append(f"• шагов: {len(due)}" + (f" (просрочено {len(late)})" if late else ""))
+        lines.append(f"• шагов по студентам: {len(due)}" + (f" (просрочено {len(late)})" if late else ""))
     if overdue:
-        lines.append(f"• просрочено платежей: {len(overdue)} на {_money(reports._total(reports._number(p.get('amount')) for p in overdue))}")
+        lines.append(f"• просроченных платежей: {len(overdue)} на {_money(reports._total(reports._number(p.get('amount')) for p in overdue))}")
     if no_income:
-        lines.append(f"• ждут сведений о доходе: {len(no_income)}")
+        lines.append(f"• студентов, от которых ждём сведения о доходе: {len(no_income)}")
     if pay_today:
-        lines.append(f"• срок оплаты сегодня: {len(pay_today)}")
+        lines.append(f"• платежей со сроком сегодня: {len(pay_today)}")
     if meets:
         lines.append(f"• встреч: {len(meets)}")
     if orphans:
-        lines.append(f"• заявок без ментора: {len(orphans)}")
-    return "Доброе утро! На сегодня:\n" + "\n".join(lines) if lines else ""
+        lines.append(f"• новых заявок без ментора: {len(orphans)}")
+    return "☀️ Доброе утро! Сводка CRM на сегодня:\n" + "\n".join(lines) if lines else ""
 
 
 # ---------- Напоминание о встрече ----------
@@ -144,13 +144,13 @@ def _reminders(now):
         # Название пишут сотрудники: ссылки убираются, а длинные числа прячутся, чтобы в Telegram не ушёл телефон
         title = PHONE_RE.sub("…", leads.plain(m.get("title") if isinstance(m.get("title"), str) else "", 80)) or "встреча"
         for chat_id in to:
-            telegram.send(chat_id, f"Через {max(round(left), 1)} мин, в {clock}: {title}\n{settings.PUBLIC_URL}/")
+            telegram.send(chat_id, f"⏰ Через {max(round(left), 1)} мин, в {clock}, встреча: {title}\n{settings.PUBLIC_URL}/")
 
 
 # ---------- Напоминание студенту о платеже ----------
 
-PAY_TEXT = "сегодня срок платежа за обучение — {amount}."
-ASK_TEXT = ("сегодня день расчёта за обучение: {percent}% от вашего дохода за прошедший месяц. "
+PAY_TEXT = "сегодня срок платежа — {amount}."
+ASK_TEXT = ("сегодня день расчёта — {percent}% от вашего дохода за прошедший месяц. "
             "Напишите, пожалуйста, сколько вы заработали, и пришлите сюда фото начисления зарплаты и отработанных часов.")
 SLIP_TEXT = "Пришлите, пожалуйста, сюда фото или документ с начислением зарплаты за месяц."
 
@@ -187,7 +187,7 @@ def _pay_reminders(now):
             continue
         # Платёж с оклада: просим подтверждение начисления. При почасовой оплате фото уже запрошено в вопросе о доходе
         salary = any(p.get("salary") is True or str(p.get("comment") or "").startswith("С зарплаты") for p in due)
-        text = "Здравствуйте! Напоминаю: " + " Также ".join(parts) + (" " + SLIP_TEXT if salary and not rates else "")
+        text = "💳 Здравствуйте! Напоминаю об оплате обучения: " + " Также ".join(parts) + (" " + SLIP_TEXT if salary and not rates else "")
         key = f"sched:pay:{student_id}:{today}"
         # Отметка ставится после отправки: если Telegram был недоступен, напоминание уйдёт позже в тот же день
         if not cache.get(key) and telegram.send(chat_id, text):
@@ -215,6 +215,6 @@ def _backup(now):
         return
     cache.set(key, now.isoformat(), KEEP_SECONDS)  # если сборка копии сорвётся, следующая попытка будет через час, а не через минуту
     content = backup.encrypt(backup.dump(), settings.BACKUP_PASSPHRASE)
-    caption = f"Копия базы CRM за {now.strftime('%d.%m.%Y')}. Зашифрована паролем копии; загружается в CRM: Настройки → Резервная копия."
+    caption = f"🗄 Резервная копия базы CRM Менти за {now.strftime('%d.%m.%Y')}. Файл зашифрован паролем копии. Восстановить: CRM → Настройки → Резервная копия → «Загрузить копию»."
     sent = [telegram.send_document(chat, f"crm-menti-{today}.crmbackup", content, caption) for chat in admins]
     cache.set(key, "ok" if any(sent) else now.isoformat(), KEEP_SECONDS)

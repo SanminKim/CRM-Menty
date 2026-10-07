@@ -136,7 +136,7 @@ def register(*, name="", phone="", email="", telegram="", city="", consent=False
         store.system_write("students", doc_id, data)
         _log(True, "created", doc_id)
         label = plain(data["name"]) + (f", {plain(telegram, 40)}" if telegram and telegram != data["name"] else "")
-        text = f"Новая заявка {origin}: {label}" + (f" · {plain(partner.data.get('name'), 60)}" if partner else "")
+        text = f"🆕 Новая заявка на обучение {origin}: {label}" + (f" · {plain(partner.data.get('name'), 60)}" if partner else "")
         # Уведомление уходит после фиксации записи: сбой Telegram не отменяет заявку
         transaction.on_commit(lambda: _notify(text))
     return doc_id, True, ""

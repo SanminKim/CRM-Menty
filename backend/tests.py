@@ -745,15 +745,15 @@ class TelegramTests(BaseCase):
         self.assertEqual((data["comment"], data["stage"], data["tgId"], data["mentorId"], data["cohortId"]),
                          ("Работаю бухгалтером, хочу в аналитики", "new", 555, None, "c1"))
         self.assertEqual(data["next"]["text"], "Связаться")
-        self.assertIn("Спасибо", self.texts()[-1])
+        self.assertIn("Заявка на обучение принята", self.texts()[-1])
         note = self.texts(900)[-1]
-        self.assertIn("Новая заявка из Telegram: Сайтова Вера, @vera_s · Блог", note)
+        self.assertIn("Новая заявка на обучение из Telegram: Сайтова Вера, @vera_s · Блог", note)
         self.assertIn("https://crm.example.test/", note)
         self.assertEqual(self.texts(901), [])                      # ментору о ничьей заявке не пишем
         # человек пишет ещё раз: дубль не создаётся, сообщение попадает заметкой
         count = Doc.objects.filter(collection="students").count()
         self.say("/start OTHER")
-        self.assertIn("уже у нас", self.texts()[-1])
+        self.assertIn("уже у ментора. Если", self.texts()[-1])
         self.say("Забыла сказать: могу только по вечерам")
         self.assertEqual(Doc.objects.filter(collection="students").count(), count)
         self.assertIn("Сообщение в боте: Забыла сказать", self.lead().data["notes"][-1]["text"])
@@ -762,12 +762,12 @@ class TelegramTests(BaseCase):
         self.say("/start", username=None)
         self.press(username=None)
         self.say("Пётр Безников", username=None)
-        self.assertIn("Оставьте телефон", self.texts()[-1])
+        self.assertIn("Оставьте номер телефона", self.texts()[-1])
         self.say("нет", username=None)
-        self.assertIn("Оставьте телефон", self.texts()[-1])
+        self.assertIn("Оставьте номер телефона", self.texts()[-1])
         # чужой контакт, пересланный в чат, не принимается
         self.say("", username=None, contact={"phone_number": "+79990001122", "user_id": 777})
-        self.assertIn("Оставьте телефон", self.texts()[-1])
+        self.assertIn("Оставьте номер телефона", self.texts()[-1])
         self.say("", username=None, contact={"phone_number": "+79990001122", "user_id": 555})
         self.say("Хочу сменить профессию", username=None)
         data = self.lead().data
@@ -864,7 +864,7 @@ class TelegramTests(BaseCase):
         self.assertEqual((proof["fileId"], proof["kind"], proof["caption"]), ("BIG-file_id", "photo", "Расчётный лист за сентябрь, тел. +7 900 111-22-33"))
         self.assertTrue(proof["id"] and proof["at"])
         self.assertIn("фото", doc["notes"][-1]["text"])                     # в ленте карточки видно, что пришёл файл
-        self.assertIn("Получил", self.texts(720)[-1])
+        self.assertIn("Файл получен", self.texts(720)[-1])
         notice = self.texts(901)
         self.assertEqual(len(notice), 1)
         self.assertIn("Иванов Пётр", notice[0])
@@ -947,7 +947,7 @@ class TelegramTests(BaseCase):
         self.say("/start link_wrong", chat=700)
         self.assertIn("устарела", self.texts(700)[-1])
         self.say("/start " + code, chat=700)
-        self.assertIn("Уведомления CRM", self.texts(700)[-1])
+        self.assertIn("Telegram подключён к CRM", self.texts(700)[-1])
         self.assertEqual(TgChat.objects.get(chat_id=700).user, self.mentor)
         self.say("/start " + code, chat=701)                       # ссылка одноразовая
         self.assertIn("устарела", self.texts(701)[-1])
@@ -1031,7 +1031,7 @@ class TelegramTests(BaseCase):
         TgChat.objects.create(chat_id=900, user=self.admin)
         with override_settings(LEAD_WEBHOOK_TOKEN="secret-token-0123456789"), self.captureOnCommitCallbacks(execute=True):
             self.client.post("/api/leads/?token=secret-token-0123456789", {"name": "Мария Соколова", "phone": "+7 900 111-22-33"})
-        self.assertIn("Новая заявка с сайта: Мария Соколова", self.texts(900)[-1])
+        self.assertIn("Новая заявка на обучение с сайта: Мария Соколова", self.texts(900)[-1])
         self.assertNotIn("+7 900", self.texts(900)[-1])            # телефон в Telegram не уходит
 
     def test_telegram_failure_does_not_break_writes(self):
@@ -1216,12 +1216,12 @@ class SchedulerTests(BaseCase):
         self.run_at(9, 1)
         admin, mentor = self.texts(100), self.texts(200)
         self.assertEqual((len(admin), len(mentor), self.texts(300)), (1, 1, []))          # партнёру сводка не идёт
-        self.assertIn("шагов: 2 (просрочено 1)", admin[0])
-        self.assertIn("просрочено платежей: 1 на 30 000 ₽", admin[0])
-        self.assertIn("срок оплаты сегодня: 1", admin[0])
-        self.assertIn("заявок без ментора: 1", admin[0])
+        self.assertIn("шагов по студентам: 2 (просрочено 1)", admin[0])
+        self.assertIn("просроченных платежей: 1 на 30 000 ₽", admin[0])
+        self.assertIn("платежей со сроком сегодня: 1", admin[0])
+        self.assertIn("новых заявок без ментора: 1", admin[0])
         self.assertIn("встреч: 1", admin[0])
-        self.assertIn("шагов: 1", mentor[0])
+        self.assertIn("шагов по студентам: 1", mentor[0])
         self.assertNotIn("просрочено 1)", mentor[0])                                      # чужой просроченный шаг ментору не считается
         self.assertNotIn("без ментора", mentor[0])
         for text in admin + mentor:
@@ -1417,8 +1417,8 @@ class SchedulerTests(BaseCase):
         self.sent.clear()
         self.run_at(9, 1, day=self.day + datetime.timedelta(days=1))
         # платежи без суммы в сводке идут отдельной строкой
-        self.assertIn("просрочено платежей: 3 на 57 000 ₽", self.texts(200)[0])
-        self.assertIn("ждут сведений о доходе: 2", self.texts(200)[0])
+        self.assertIn("просроченных платежей: 3 на 57 000 ₽", self.texts(200)[0])
+        self.assertIn("от которых ждём сведения о доходе: 2", self.texts(200)[0])
 
     def test_scheduler_is_silent_without_the_bot(self):
         with override_settings(TELEGRAM_BOT_TOKEN=""):

@@ -352,7 +352,7 @@ def delete(access, collection, doc_id):
 def _tell_mentor(team_id, name, by_user):
     """Ментору в Telegram: за ним закрепили студента. Уходит после фиксации записи; сбой Telegram запись не отменяет."""
     from . import telegram  # позднее подключение: telegram пользуется этим модулем
-    transaction.on_commit(lambda: telegram.notify_team(team_id, f"За вами закреплён студент: {name}", skip_user=by_user))
+    transaction.on_commit(lambda: telegram.notify_team(team_id, f"👤 За вами закреплён студент: {name}. Свяжитесь с ним и назначьте следующий шаг.", skip_user=by_user))
 
 
 def _refresh_reports(collection, rev, old, new):
