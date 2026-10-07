@@ -219,8 +219,24 @@ def build(doc_id, data, cells=None):
         return _partner_report(doc_id, partner, data, cells)
     member = data["team"].get(doc_id)
     if isinstance(member, dict):
-        return {"kind": "mentor", "mentorId": doc_id, "name": _text(member.get("name"), 200), **_money(data, "mentor", doc_id, cells)}
+        money = _money(data, "mentor", doc_id, cells)
+        return {"kind": "mentor", "mentorId": doc_id, "name": _text(member.get("name"), 200), **money,
+                "expenses": _expenses(data, money["months"])}
     return None
+
+
+def _expenses(data, months):
+    """Расходы, которые уменьшили начисления ментора: только тех месяцев и направлений, где у него есть доля."""
+    mine = {(m["month"], m["directionId"]) for m in months}
+    rows = []
+    for _, expense in sorted(_rows(data, "expenses"), key=lambda row: row[0]):
+        day = _day(expense.get("date"))
+        direction_id = expense.get("directionId")
+        if not day or not isinstance(direction_id, str) or (day[:7], direction_id) not in mine:
+            continue
+        rows.append({"date": day, "amount": _tidy(_number(expense.get("amount"))), "comment": _text(expense.get("comment"), 120),
+                     "direction": _text(data["directions"][direction_id].get("name"), 200)})
+    return sorted(rows, key=lambda row: row["date"])[::-1]
 
 
 def _partner_report(partner_id, partner, data, cells):

@@ -448,6 +448,20 @@ class ReportTests(BaseCase):
         self.assertEqual([(m["direction"], m["net"], m["accrued"]) for m in self.report("t2")["months"]], [("Собеседования", 20000, 12000)])
         self.assertEqual([(m["direction"], m["net"]) for m in self.report("p1")["months"]], [("Аналитик 1С", 100000)])
 
+    def test_mentor_report_lists_only_expenses_that_cut_his_share(self):
+        store.system_write("directions", "d2", {"name": "Собеседования", "terms": [{"from": "2000-01", "parties": [{"kind": "mentor", "id": "t2", "share": 60}]}]})
+        store.system_write("cohorts", "c2", {"name": "Интенсив", "directionId": "d2"})
+        self.pay("s1", (100000, "2026-10-03"))
+        store.system_write("students", "s2", student("t2", cohortId="c2", payments=[{"amount": 20000, "paid": "2026-10-04"}]))
+        store.system_write("expenses", "e1", {"directionId": "d1", "amount": 10000, "date": "2026-10-05", "comment": "Реклама"})
+        store.system_write("expenses", "e2", {"directionId": "d2", "amount": 5000, "date": "2026-10-06", "comment": "Сервис записи"})
+        store.system_write("expenses", "e3", {"directionId": "d1", "amount": 700, "date": "2025-01-06", "comment": "Старый расход"})   # в этом месяце оплат не было, но расход уменьшил долю
+        mine = self.report("t1")["expenses"]
+        self.assertEqual(mine, [{"date": "2026-10-05", "amount": 10000, "comment": "Реклама", "direction": "Аналитик 1С"},
+                                {"date": "2025-01-06", "amount": 700, "comment": "Старый расход", "direction": "Аналитик 1С"}])
+        self.assertEqual([e["comment"] for e in self.report("t2")["expenses"]], ["Сервис записи"])
+        self.assertNotIn("expenses", self.report("p1"))   # партнёру состав расходов не показывается
+
     def test_partner_report_keeps_traffic_numbers_without_contacts(self):
         self.pay("s1", (50000, "2026-08-05"), ("33333", "2026-09-05"), (10000, None), name="Иванов Пётр Сергеевич", partnerId="p1",
                  stage="offer", phone="+7 900 000-00-01", createdAt="2026-08-01T09:00:00.000Z", history=[{"to": "new"}, {"to": "studying"}, {"to": "offer"}])

@@ -387,7 +387,7 @@ try:
       check("mentor menu has no partners", mn.locator(".nav >> text=Партнёры").count() == 0)
       mn.click(".nav >> text=Выплаты"); mn.wait_for_selector(".kpi")
       mkeys = list(mn.evaluate("window.__store").keys())
-      check("mentor sees only own accruals", mn.locator("#pay-parties").count() == 0 and mn.locator("#pay-dirs").count() == 0 and mn.locator(".kpi").count() == 4 and "Начисления по месяцам" in mn.text_content("#main")
+      check("mentor sees only own accruals", mn.locator("#pay-parties").count() == 0 and mn.locator("#pay-dirs").count() == 0 and mn.locator("#my-kpis .kpi").count() == 3 and "Вам начислено за" in mn.text_content("#my-kpis") and "Мои выплаты" in mn.text_content(".page-head h1") and mn.locator(".nav >> text=Мои выплаты").count() == 1 and mn.locator("#my-months").count() == 1
             and not any(k.startswith(("payouts/", "directions/", "expenses/")) for k in mkeys) and [k for k in mkeys if k.startswith("reports/")] == ["reports/" + mn.evaluate("myTeam().id")], [k for k in mkeys if not k.startswith(("students/", "meetings/"))])
       mn.click(".nav >> text=Аналитика"); mn.wait_for_timeout(200); check("mentor has no finance tab", mn.locator(".tabs >> text=Финансы").count() == 0 and mn.locator(".kpi").count() == 7)
       mn.click(".nav >> text=Настройки"); mn.wait_for_timeout(200); check("mentor settings: account only", mn.locator(".panel").count() <= 2 and mn.locator("text=Сменить пароль").count() == 1 and mn.locator("text=Резервная копия").count() == 0 and "Пароль" in mn.inner_text(".page-head"))
@@ -488,7 +488,7 @@ try:
              f" const a = partyReport('partner', {json.dumps(rid)}), b = D().reports.find(r => r.id === {json.dumps(rid)});" \
              " const pk = ['kind', 'name', 'promo', 'leads', 'paidStudents', 'conv', 'employed', 'revenue', 'funnel', 'months', 'accrued', 'paidOut', 'balance', 'payouts', 'rows'];" \
              " const mid = S.accounts.find(x => x.role === 'mentor' && x.linkId).linkId, c = partyReport('mentor', mid), e = D().reports.find(r => r.id === mid);" \
-             " const mk = ['kind', 'name', 'months', 'accrued', 'paidOut', 'balance', 'payouts'];" \
+             " const mk = ['kind', 'name', 'months', 'accrued', 'paidOut', 'balance', 'payouts', 'expenses'];" \
              " return !!b && !!e && pick(a, pk) === pick(b, pk) && pick(c, mk) === pick(e, mk) && a.months.length + c.months.length > 1; })()"
       try: pg.wait_for_function("() => " + same, timeout=15000); par = True
       except Exception: par = False

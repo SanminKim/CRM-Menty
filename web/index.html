@@ -818,7 +818,13 @@ const partyName = x => x.kind === "partner" ? (partnerById(x.id)?.name || "Па�
 function partyReport(kind, id) {
   const st = partyStats(kind, id);
   const money = { months: st.months, accrued: st.accrued, paidOut: st.paidOut, balance: st.balance, payouts: st.payouts.map(x => ({ date: dayOf(x.date), amount: nnum(x.amount), comment: textOf(x.comment, 300) })) };
-  if (kind === "mentor") return { kind, mentorId: id, name: textOf(teamById(id)?.name, 200), ...money, updatedAt: new Date().toISOString() };
+  if (kind === "mentor") {
+    // Расходы, которые уменьшили начисления ментора: только тех месяцев и направлений, где у него есть доля
+    const mine = new Set(st.months.map(m => m.month + "|" + m.directionId));
+    const expenses = sortBy(sortBy(D().expenses, x => x.id).filter(e => dayOf(e.date) && typeof e.directionId === "string" && mine.has(dayOf(e.date).slice(0, 7) + "|" + e.directionId))
+      .map(e => ({ date: dayOf(e.date), amount: nnum(e.amount), comment: textOf(e.comment, 120), direction: textOf(dirById(e.directionId)?.name, 200) })), x => x.date).reverse();
+    return { kind, mentorId: id, name: textOf(teamById(id)?.name, 200), ...money, expenses, updatedAt: new Date().toISOString() };
+  }
   const p = partnerById(id), t = partnerStats(p);
   const doc = {
     kind, partnerId: id, name: textOf(p.name, 200), promo: textOf(p.promo, 100), leads: t.leads, paidStudents: t.paidStudents, conv: t.conv, employed: t.employed, revenue: t.revenue, funnel: t.funnel, ...money,
@@ -936,7 +942,7 @@ function navHTML() {
   if (S.mode === "partner") return `<button class="on" aria-current="page">${ico("report")}Отчёт</button>${S.server ? `<button data-act="password">${ico("password")}Сменить пароль</button><button data-act="logout">${ico("logout")}Выйти</button>` : ""}`;
   const ag = agenda(D().students), late = ag.pays.filter(p => p.due < today()).length;
   const meetsToday = events(today(), today()).filter(e => e.status === "planned").length;
-  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи студентов", late, true], ["payouts", "Выплаты менторам"], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"], ["help", "Справка"]];
+  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи студентов", late, true], ["payouts", S.limited ? "Мои выплаты" : "Выплаты менторам"], ["analytics", "Аналитика"], ["partners", "Партнёры"], ["settings", "Настройки"], ["help", "Справка"]];
   const cur = S.view === "partner" ? "partners" : S.view === "cohort" ? "cohorts" : S.view;
   if (S.limited) items.splice(items.findIndex(i => i[0] === "partners"), 1);
   const GROUPS = { cohorts: "Обучение", payments: "Деньги", analytics: "Итоги", settings: "Система" };
@@ -973,7 +979,7 @@ const ABOUT = {
   help: "Короткая памятка: как вести человека от заявки до оффера и что где находится",
 };
 // Ментор видит раздел иначе: в подсказке только то, что ему доступно
-const ABOUT_LIMITED = { settings: "Пароль, уведомления в Telegram, оформление.", payouts: "Ваши начисления и выплаты", students: "Ваши студенты одним списком. Отметьте несколько строк галочками, чтобы разом назначить им следующий шаг." };
+const ABOUT_LIMITED = { settings: "Пароль, уведомления в Telegram, оформление.", payouts: "Сколько вам начислено за месяц, что уже выплатили и какие расходы учтены", students: "Ваши студенты одним списком. Отметьте несколько строк галочками, чтобы разом назначить им следующий шаг." };
 const about = v => (S.limited && ABOUT_LIMITED[v]) || ABOUT[v] || "";
 function headHTML(title, extra = "", actions = "", sub = "") {
   if (!sub && !extra) sub = about(S.view);
@@ -1059,7 +1065,7 @@ function helpView() {
     ["students", "Студенты", "Поиск и список всех людей, выгрузка в файл, действия сразу над несколькими."],
     ["cohorts", "Потоки", "Группы, программа и прогресс по модулям."],
     ["payments", "Платежи студентов", "Кто должен заплатить и кто опаздывает."],
-    ["payouts", "Выплаты менторам", adm ? "Сколько причитается блогеру и менторам, расходы и записанные выплаты." : "Ваши начисления и выплаты."],
+    ["payouts", adm ? "Выплаты менторам" : "Мои выплаты", adm ? "Сколько причитается блогеру и менторам, расходы и записанные выплаты." : "Сколько вам начислено за месяц, что уже выплатили и какие расходы учтены."],
     ["analytics", "Аналитика", "Конверсия по этапам и время до первого ответа на заявку."],
     ...(adm ? [["partners", "Партнёры", "Откуда приходят заявки и что из них получается."]] : []),
     ["settings", "Настройки", adm ? "Команда, доступы, направления и доли, бот, резервная копия." : "Пароль, уведомления в Telegram, оформление."]];
@@ -1772,12 +1778,30 @@ function moneyHTML(r) {
   <div class="stack">${panel("Начисления по месяцам", "", monthsTable(months))}${panel("Выплаты", "", payoutList(Array.isArray(r.payouts) ? r.payouts : [], false))}</div>
   <p class="hint" style="margin-top:12px">Чистая выручка — оплаты студентов направления за месяц минус расходы. Ваша доля считается от неё по ставке, действовавшей в этом месяце. Если расходы месяца больше оплат, начисление отрицательное и уменьшает остаток.</p>`;
 }
+// Деньги ментора его глазами: сколько начислено за месяц, что уже выплатили и какие расходы учтены
+function myMoneyHTML(r) {
+  const cur = today().slice(0, 7), months = Array.isArray(r.months) ? r.months : [], pays = Array.isArray(r.payouts) ? r.payouts : [], exps = Array.isArray(r.expenses) ? r.expenses : [];
+  const now = months.filter(m => m.month === cur), accr = sum(now, m => m.accrued), mName = esc(monthName(cur).toLowerCase());
+  const view = ["months", "paid", "expenses"].includes(S.myPay) ? S.myPay : "months";
+  const tab = (k, l) => `<button data-act="mypay" data-v="${k}" class="${view === k ? "on" : ""}">${l}</button>`;
+  const body = view === "months" ? panel("Как посчитано по месяцам", "", months.length ? `<div class="table-wrap"><table id="my-months"><thead><tr><th>Месяц</th><th>Направление</th><th class="num">Оплаты студентов</th><th class="num">Расходы</th><th class="num">Чистая выручка</th><th class="num">Ваша ставка</th><th class="num">Вам начислено</th></tr></thead>
+      <tbody>${months.map(m => `<tr><td>${esc(monthName(m.month))}</td><td>${esc(m.direction)}</td><td class="num">${money(m.received)}</td><td class="num">${money(m.expenses)}</td><td class="num">${signed(m.net)}</td><td class="num">${esc(m.share)}%</td><td class="num"><strong>${signed(m.accrued)}</strong></td></tr>`).join("")}</tbody></table></div>`
+      : `<p class="empty">Начислений пока нет: в направлениях с вашим участием ещё не было оплат</p>`, "", "Из оплат студентов направления вычитаются расходы. От того, что осталось, вам начисляется ваш процент.")
+    : view === "paid" ? panel("Что вам уже выплатили", pays.length ? money(r.paidOut) : "", pays.length ? `<ul class="rows" id="my-paid">${pays.map(x => `<li><span class="who"><strong>${money(x.amount)}</strong><span>${esc(x.comment || "")}</span></span><span class="when">${fDate(x.date)}</span></li>`).join("")}</ul>` : `<p class="empty">Выплат пока не было</p>`, "", "Выплаты записывает администратор, когда переводит вам деньги.")
+    : panel("Расходы, которые учтены в расчёте", exps.length ? money(sum(exps, e => nnum(e.amount))) : "", exps.length ? `<ul class="rows" id="my-expenses">${exps.map(e => `<li><span class="who"><strong>${esc(e.comment || "Расход")}</strong><span>${esc(e.direction)}</span></span><span class="amt">${money(e.amount)}</span><span class="when">${fDate(e.date)}</span></li>`).join("")}</ul>` : `<p class="empty">${Array.isArray(r.expenses) ? "Расходов в ваших направлениях не было" : "Список расходов появится после ближайшего пересчёта отчёта: при следующей оплате, расходе или выплате"}</p>`, "", "Расходы направлений, в которых у вас есть доля. Они вычитаются из оплат студентов до расчёта вашего процента.");
+  return `<section class="kpis" id="my-kpis">
+    ${kpiHTML(`Вам начислено за ${mName}`, signed(accr), now.length ? `${now.map(m => `${esc(m.share)}% от ${signed(m.net)}`).join(" + ")} чистой выручки` : "оплат в этом месяце пока не было", " accent")}
+    ${kpiHTML("Осталось получить", money(Math.max(r.balance, 0)), r.balance < 0 ? `вам выплатили вперёд ${money(-r.balance)}` : "начислено за всё время минус выплачено")}
+    ${kpiHTML("Уже выплачено", money(r.paidOut), pays.length ? `последняя выплата ${fDate(pays[0].date)}` : "выплат пока не было")}</section>
+  <nav class="tabs" id="my-tabs">${tab("months", "По месяцам")}${tab("paid", `Выплаты мне${pays.length ? ` · ${pays.length}` : ""}`)}${tab("expenses", `Расходы${exps.length ? ` · ${exps.length}` : ""}`)}</nav>
+  <div class="stack">${body}</div>`;
+}
 function payoutsView() {
   if (S.limited) {
     const me = myTeam(), r = me && D().reports.find(x => x.id === me.id);
-    if (!me) return headHTML("Выплаты менторам") + `<div class="card welcome"><p>Ваша учётная запись не связана с записью в команде. Попросите администратора связать их в разделе «Доступ».</p></div>`;
-    if (!r) return headHTML("Выплаты менторам") + (S.loaded.reports ? `<div class="card welcome"><p>Отчёт о начислениях пока не готов. Он появится после первой оплаты в направлении с вашим участием.</p></div>` : `<p class="loading">Загружаю отчёт…</p>`);
-    return headHTML("Выплаты менторам", "", "", `Ваши начисления и выплаты · данные на ${fDT(r.updatedAt)}`) + moneyHTML(r);
+    if (!me) return headHTML("Мои выплаты") + `<div class="card welcome"><p>Ваша учётная запись не связана с записью в команде. Попросите администратора связать их в разделе «Доступ».</p></div>`;
+    if (!r) return headHTML("Мои выплаты") + (S.loaded.reports ? `<div class="card welcome"><p>Отчёт о начислениях пока не готов. Он появится после первой оплаты в направлении с вашим участием.</p></div>` : `<p class="loading">Загружаю отчёт…</p>`);
+    return headHTML("Мои выплаты", "", "", `Сколько вам начислено, что уже выплачено и какие расходы учтены · данные на ${fDT(r.updatedAt)}`) + myMoneyHTML(r);
   }
   const months = lastMonths(12), month = months.includes(S.payMonth) ? S.payMonth : months[0];
   const sel = `<select id="pay-month" aria-label="Месяц">${months.map(k => opt(k, monthName(k), month)).join("")}</select>`;
@@ -2946,6 +2970,7 @@ const ACT = {
   "more-nostep": () => { S.moreNoStep = !S.moreNoStep; render(); },
   "more-week": () => { S.moreWeek = !S.moreWeek; render(); },
   payview: d => { S.payView = d.v; S.f.q = ""; render(); },
+  mypay: d => { S.myPay = d.v; render(); },
   "today-tab": d => { S.todayTab = d.v; render(); },
   qdate: d => { const el = document.getElementById(d.target); if (el) el.value = daysAhead(+d.days); },
   copy: d => copyText(d.text, "Скопировано"),
