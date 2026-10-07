@@ -1025,7 +1025,7 @@ function navHTML() {
   if (S.mode === "partner") return `<button class="on" aria-current="page">${ico("report")}Отчёт</button>${S.server ? `<button data-act="password">${ico("password")}Сменить пароль</button><button data-act="logout">${ico("logout")}Выйти</button>` : ""}`;
   const ag = agenda(D().students), late = ag.pays.filter(p => p.due < today()).length;
   const meetsToday = events(today(), today()).filter(e => e.status === "planned").length;
-  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи студентов", late, true], ["payouts", S.limited ? "Мои выплаты" : "Выплаты и партнёры"], ["analytics", "Аналитика"], ["settings", "Настройки"]];
+  const items = [["today", "Сегодня", ag.due.length, ag.due.some(stepLate)], ["calendar", "Календарь", meetsToday], ["board", "Воронка"], ["students", "Студенты"], ["cohorts", "Потоки"], ["payments", "Платежи студентов", late, true], ["payouts", S.limited ? "Выплаты" : "Выплаты"], ["analytics", "Аналитика"], ["settings", "Настройки"]];
   // Справка открывается значком «?» внизу меню, партнёры — вкладкой в выплатах
   const cur = S.view === "partner" || S.view === "partners" ? "payouts" : S.view === "cohort" ? "cohorts" : S.view;
   const GROUPS = { cohorts: "Обучение", payments: "Деньги", analytics: "Итоги", settings: "Система" };
@@ -1164,7 +1164,7 @@ function helpView() {
     ["students", "Студенты", "Поиск и список всех людей, выгрузка в файл, действия сразу над несколькими."],
     ["cohorts", "Потоки", "Группы, программа и прогресс по модулям."],
     ["payments", "Платежи студентов", "Кто должен заплатить и кто опаздывает."],
-    ["payouts", adm ? "Выплаты и партнёры" : "Мои выплаты", adm ? "Сколько причитается блогеру и менторам, расходы и записанные выплаты. На вкладке «Партнёры» — откуда приходят заявки и что из них получается." : "Сколько вам начислено за месяц, что уже выплатили и какие расходы учтены."],
+    ["payouts", adm ? "Выплаты" : "Выплаты", adm ? "Сколько причитается блогеру и менторам, расходы и записанные выплаты. На вкладке «Партнёры» — откуда приходят заявки и что из них получается." : "Сколько вам начислено за месяц, что уже выплатили и какие расходы учтены."],
     ["analytics", "Аналитика", "Конверсия по этапам и время до первого ответа на заявку."],
     ["settings", "Настройки", adm ? "Команда, доступы, направления и доли, бот, резервная копия." : "Пароль, уведомления в Telegram, оформление."]];
   return headHTML("Справка") + `<div class="guide">
@@ -1908,13 +1908,13 @@ function myMoneyHTML(r) {
   <nav class="tabs" id="my-tabs">${tab("months", "По месяцам")}${tab("paid", `Выплаты мне${pays.length ? ` · ${pays.length}` : ""}`)}${tab("expenses", `Расходы${exps.length ? ` · ${exps.length}` : ""}`)}</nav>
   <div class="stack">${body}</div>`;
 }
-const PAY_TITLE = "Выплаты и партнёры";
+const PAY_TITLE = "Выплаты";
 function payoutsView() {
   if (S.limited) {
     const me = myTeam(), r = me && D().reports.find(x => x.id === me.id);
-    if (!me) return headHTML("Мои выплаты") + `<div class="card welcome"><p>Ваша учётная запись не связана с записью в команде. Попросите администратора связать их в разделе «Доступ».</p></div>`;
-    if (!r) return headHTML("Мои выплаты") + (S.loaded.reports ? `<div class="card welcome"><p>Отчёт о начислениях пока не готов. Он появится после первой оплаты в направлении с вашим участием.</p></div>` : `<p class="loading">Загружаю отчёт…</p>`);
-    return headHTML("Мои выплаты", "", "", `Сколько вам начислено, что уже выплачено и какие расходы учтены · данные на ${fDT(r.updatedAt)}`) + myMoneyHTML(r);
+    if (!me) return headHTML("Выплаты") + `<div class="card welcome"><p>Ваша учётная запись не связана с записью в команде. Попросите администратора связать их в разделе «Доступ».</p></div>`;
+    if (!r) return headHTML("Выплаты") + (S.loaded.reports ? `<div class="card welcome"><p>Отчёт о начислениях пока не готов. Он появится после первой оплаты в направлении с вашим участием.</p></div>` : `<p class="loading">Загружаю отчёт…</p>`);
+    return headHTML("Выплаты", "", "", `Сколько вам начислено, что уже выплачено и какие расходы учтены · данные на ${fDT(r.updatedAt)}`) + myMoneyHTML(r);
   }
   const months = lastMonths(12), month = months.includes(S.payMonth) ? S.payMonth : months[0];
   const sel = `<select id="pay-month" aria-label="Месяц">${months.map(k => opt(k, monthName(k), month)).join("")}</select>`;

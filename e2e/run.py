@@ -396,7 +396,7 @@ try:
       check("mentor menu has no partners", mn.locator(".nav >> text=Партнёры").count() == 0)
       mn.click(".nav >> text=Выплаты"); mn.wait_for_selector(".kpi")
       mkeys = list(mn.evaluate("window.__store").keys())
-      check("mentor sees only own accruals", mn.locator("#pay-parties").count() == 0 and mn.locator("#pay-dirs").count() == 0 and mn.locator("#my-kpis .kpi").count() == 3 and "Вам начислено за" in mn.text_content("#my-kpis") and "Мои выплаты" in mn.text_content(".page-head h1") and mn.locator(".nav >> text=Мои выплаты").count() == 1 and mn.locator("#my-months").count() == 1
+      check("mentor sees only own accruals", mn.locator("#pay-parties").count() == 0 and mn.locator("#pay-dirs").count() == 0 and mn.locator("#my-kpis .kpi").count() == 3 and "Вам начислено за" in mn.text_content("#my-kpis") and mn.text_content(".page-head h1") == "Выплаты" and mn.locator("#my-months").count() == 1
             and not any(k.startswith(("payouts/", "directions/", "expenses/")) for k in mkeys) and [k for k in mkeys if k.startswith("reports/")] == ["reports/" + mn.evaluate("myTeam().id")], [k for k in mkeys if not k.startswith(("students/", "meetings/"))])
       mn.click(".nav >> text=Аналитика"); mn.wait_for_timeout(200); check("mentor has no finance tab", mn.locator(".tabs >> text=Финансы").count() == 0 and mn.locator(".kpi").count() == 7)
       mn.click(".nav >> text=Настройки"); mn.wait_for_timeout(200); check("mentor settings: account only", mn.locator(".panel").count() <= 2 and mn.locator("text=Сменить пароль").count() == 1 and mn.locator("text=Резервная копия").count() == 0 and "Пароль" in mn.inner_text(".page-head"))
@@ -770,7 +770,7 @@ try:
       vis.goto(URL + "login/"); vis.fill("input[name=username]", "irina"); vis.fill("input[name=password]", PASSWORD); vis.click("button:not([type=button])"); vis.wait_for_selector(".error")
       vis.fill("input[name=username]", "IRINA"); vis.fill("input[name=password]", fresh); vis.click("button:not([type=button])"); vis.wait_for_selector(".today", timeout=15000)
       check("after the reset only the new password works", vis.evaluate("S.me.username") == "irina" and vis.evaluate("S.limited"))
-      check("mentor has no access panel and no money line", vis.locator("#today-money").count() == 0 and vis.locator("#nav-help").count() == 1 and vis.locator(".nav >> text=Мои выплаты").count() == 1)
+      check("mentor has no access panel and no money line", vis.locator("#today-money").count() == 0 and vis.locator("#nav-help").count() == 1 and vis.locator(".nav >> text=Выплаты").count() == 1)
       mn.reload(); mn.wait_for_selector("input[name=password]", timeout=15000); check("reset signs the person out on other devices", "/login/" in mn.url)
       nx.click(".nav >> text=Сегодня"); nx.click(".nav >> text=Настройки"); nx.wait_for_timeout(600)
       check("a successful login clears the failed-login note", nx.locator("#access-list li", has_text="irina").locator("[data-failed]").count() == 0)
