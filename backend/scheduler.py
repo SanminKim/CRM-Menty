@@ -12,7 +12,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
-from . import backup, health, leads, reports, telegram
+from . import backup, health, leads, meetings, reports, telegram
 from .models import Account, Doc, TgChat
 
 log = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ def run(now=None):
         log.exception("Планировщик: проверка работы не выполнена")
     if not telegram.enabled():
         return
-    for job in (_reminders, _digests, _pay_reminders, _backup):
+    for job in (_reminders, _student_meetings, _digests, _pay_reminders, _backup):
         try:
             job(now)
         except Exception:  # одно сорвавшееся дело не должно останавливать остальные и сам планировщик
@@ -148,8 +148,58 @@ def _reminders(now):
             or [chat for chat, role, link in staff if role == Account.Role.ADMIN]
         # Название пишут сотрудники: ссылки убираются, а длинные числа прячутся, чтобы в Telegram не ушёл телефон
         title = PHONE_RE.sub("…", leads.plain(m.get("title") if isinstance(m.get("title"), str) else "", 80)) or "встреча"
+        # Кто придёт: ответы студентов на напоминание бота
+        who = meetings.summary(m, dict(_docs("students")))
         for chat_id in to:
-            telegram.send(chat_id, f"⏰ Через {max(round(left), 1)} мин, в {clock}, встреча: {title}\n{settings.PUBLIC_URL}/")
+            telegram.send(chat_id, f"⏰ Через {max(round(left), 1)} мин, в {clock}, встреча: {title}" + (f"\n{who}" if who else "") + f"\n{settings.PUBLIC_URL}/")
+
+
+# ---------- Напоминание студентам о встрече: «буду / не буду» ----------
+
+def _student_meetings(now):
+    """Утром в день встречи и за несколько минут до неё бот пишет студентам встречи со ссылкой и кнопками ответа.
+
+    Пишем только в чат, привязанный к карточке студента, как и о платежах. Кто ответил «не буду», второго
+    напоминания не получает; кто ответил «буду», получает его без кнопок. Каждое сообщение уходит один раз.
+    """
+    conf = meetings.load_settings()
+    if not conf["on"]:
+        return
+    bound = {c.chat_id: c.student_id for c in TgChat.objects.filter(user__isnull=True).exclude(student_id="")}
+    if not bound:
+        return
+    students, cohorts = dict(_docs("students")), dict(_docs("cohorts"))
+    today, morning = now.date().isoformat(), tuple(int(x) for x in conf["morning"].split(":"))
+    for meeting_id, m in _docs("meetings"):
+        if m.get("remind") is False or (m.get("status") or "planned") != "planned":
+            continue
+        start = meetings.start_of(m, now)
+        if start is None or start <= now:
+            continue
+        left = (start - now).total_seconds() / 60
+        phase = "soon" if left <= conf["before"] else "morning" if (now.hour, now.minute) >= morning else None
+        if phase is None:
+            continue
+        title = PHONE_RE.sub("…", leads.plain(m.get("title") if isinstance(m.get("title"), str) else "", 120)) or "встреча"
+        link = meetings.link_of(m, cohorts)
+        for student_id in meetings.participants(m, students):
+            s = students[student_id]
+            chat_id = s.get("tgId")
+            if isinstance(chat_id, bool) or not isinstance(chat_id, int) or bound.get(chat_id) != student_id:
+                continue
+            answer = meetings.answer_of(m, student_id)
+            if phase == "soon" and answer == "no":
+                continue
+            key = f"sched:rsvp:{meeting_id}:{today}T{start:%H:%M}:{student_id}:{phase}"
+            if cache.get(key):
+                continue
+            text = meetings.render(conf["textSoon" if phase == "soon" else "textMorning"], имя=meetings.first_name(s.get("name")),
+                                   время=f"{start:%H:%M}", название=title, ссылка=link, минут=meetings.minutes_between(start, now))
+            markup = None if phase == "soon" and answer == "yes" else meetings.buttons(meeting_id, answer)
+            extra = {"reply_markup": markup} if markup else {}
+            # Отметка после отправки: если Telegram был недоступен, сообщение уйдёт на следующем проходе
+            if telegram.send(chat_id, text, **extra):
+                cache.set(key, 1, KEEP_SECONDS)
 
 
 # ---------- Напоминание студенту о платеже ----------

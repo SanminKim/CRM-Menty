@@ -482,6 +482,9 @@ def _on_button(query):
     if not isinstance(chat_id, int) or isinstance(chat_id, bool) or chat.get("type") != "private" or _too_many(chat_id):
         return ack()
     record = TgChat.objects.filter(chat_id=chat_id).first()
+    data = query.get("data")
+    if isinstance(data, str) and data.startswith("r:"):
+        return _on_rsvp(record, query, data, message)
     if not record or record.state != "consent" or query.get("data") != "consent":
         return ack()
     if isinstance(sender, dict):
@@ -492,6 +495,22 @@ def _on_button(query):
     _keep(record)
     send(chat_id, ASK_NAME)
     ack()
+
+
+def _on_rsvp(record, query, data, message):
+    """Студент нажал «Буду» или «Не буду» под напоминанием о встрече. Отвечать может только чат, привязанный к карточке."""
+    from . import meetings  # позднее подключение: встречи пользуются этим модулем через планировщик
+    _, meeting_id, code = (data.split(":", 2) + ["", ""])[:3]
+    if record is None or record.user_id or not record.student_id:
+        value, text = None, "Ответить можно только из чата, подключённого к вашей карточке студента."
+    else:
+        value, text = meetings.record_answer(record.student_id, meeting_id, code)
+    if isinstance(query.get("id"), str):
+        call("answerCallbackQuery", callback_query_id=query["id"], text=text[:200])
+    message_id = message.get("message_id") if isinstance(message, dict) else None
+    if value and isinstance(message_id, int):
+        # Под сообщением остаются кнопки с отметкой выбранного: ответ можно поменять до начала встречи
+        call("editMessageReplyMarkup", chat_id=record.chat_id, message_id=message_id, reply_markup=meetings.buttons(meeting_id, value))
 
 
 def _ask_contact_or_goal(record):

@@ -753,6 +753,33 @@ try:
       # шрифт со своего сервера
       nx.evaluate("document.fonts.ready.then(() => 1)"); nx.wait_for_timeout(300)
       check("font is loaded from this server only", nx.evaluate("[...document.fonts].filter(f => f.family.includes('Golos') && f.status === 'loaded').length") >= 1 and any("/fonts/golos-text-cyrillic.woff2" in u for u in requests) and not any("googleapis" in u or "gstatic" in u for u in requests), [u for u in requests if "font" in u][:5])
+      # участники встречи и их ответы «буду / не буду» в карточке дня
+      mt = nx.evaluate("""(async () => {
+        const c = D().cohorts.find(c => D().students.filter(s => s.cohortId === c.id && MEET_STUDY.includes(s.stage)).length >= 3);
+        const ss = sortBy(D().students.filter(s => s.cohortId === c.id && MEET_STUDY.includes(s.stage)), s => String(s.name || "").toLowerCase());
+        await save(() => updDoc("students", ss[0].id, { tgId: 9001 })); await save(() => updDoc("students", ss[1].id, { tgId: 9002 }));
+        await save(() => updDoc("students", ss[2].id, { tgId: null }));
+        await save(() => setDoc("meetings", "e2emeet", { title: "Занятие с ответами", date: today(), time: "23:50", kind: "lesson", status: "planned", cohortId: c.id, studentId: null, mentorId: null,
+          rsvp: { [ss[0].id]: { a: "yes", at: new Date().toISOString() }, [ss[1].id]: { a: "no", at: new Date().toISOString() } } }));
+        return { yes: ss[0].name, no: ss[1].name, nobot: ss[2].name, total: meetPeople(meetById("e2emeet")).length };
+      })()""")
+      nx.goto(URL + "#/calendar?d=" + today); nx.wait_for_selector(".drawer [data-people=e2emeet]")
+      ppl = nx.locator(".drawer [data-people=e2emeet]")
+      check("day card lists meeting participants with their answers", mt["yes"] in ppl.locator(".p-yes").all_inner_texts() and mt["no"] in ppl.locator(".p-no").all_inner_texts()
+            and any(mt["nobot"] in x and "без бота" in x for x in ppl.locator(".p-nobot").all_inner_texts()) and f"Будут 1 из {mt['total']}, не будут 1" in ppl.inner_text(), (mt, ppl.inner_text()))
+      check("answers are styled: crossed out and faded", ppl.locator(".p-no").evaluate("el => getComputedStyle(el).textDecorationLine") == "line-through"
+            and float(ppl.locator(".p-wait").first.evaluate("el => getComputedStyle(el).opacity")) < 0.6)
+      shot(nx, "s34_meeting_people.png")
+      nx.keyboard.press("Escape"); nx.wait_for_timeout(200)
+      check("calendar chip shows how many will come", f"1/{mt['total']}" in nx.inner_text(f"#cal-{today}"), nx.inner_text(f"#cal-{today}"))
+      nx.locator(".panel li[data-id=e2emeet] strong").first.click(); nx.wait_for_selector("#mform")
+      check("meeting form asks whether to remind students", nx.is_checked("#m-remind"))
+      nx.uncheck("#m-remind"); nx.click("#m-submit"); nx.wait_for_timeout(500)
+      check("reminder can be switched off for one meeting and answers stay", nx.evaluate("meetById('e2emeet').remind === false && Object.keys(meetById('e2emeet').rsvp).length === 2"))
+      nx.click(".nav >> text=Настройки"); nx.wait_for_selector("#meet-remind"); nx.click("[data-act=meet-remind]"); nx.wait_for_selector("#mform")
+      nx.check("#m-on"); nx.fill("#m-morning", "08:30"); nx.fill("#m-before", "20"); nx.click("#m-submit"); nx.wait_for_timeout(500)
+      check("student meeting reminders are set up in settings", nx.evaluate("JSON.stringify([S.config.meetRemind.on, S.config.meetRemind.morning, S.config.meetRemind.before])") == '[true,"08:30",20]' and "08:30" in nx.inner_text("#meet-remind"))
+      nx.evaluate("save(() => delDoc('meetings', 'e2emeet'))"); nx.wait_for_timeout(300)
       # сброс пароля и отметки о неудачных входах
       vis = b.new_context().new_page()
       for name, pw in (("Irina", "zabyla-parol"), ("irina", "eshe-raz"), ("irinka", "net-takogo-logina")):

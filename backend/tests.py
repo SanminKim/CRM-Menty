@@ -1695,3 +1695,143 @@ class HealthTests(BaseCase):
             with self.settings(HEALTHCHECK_PING_URL="https://hc-ping.com/x"):
                 scheduler.run()  # и сайт, и Healthchecks.io недоступны: планировщик не падает
             self.assertEqual(opened.call_count, 2)
+
+
+@override_settings(TELEGRAM_BOT_TOKEN="123456:test-token", PUBLIC_URL="https://crm.example.test")
+class MeetingAnswerTests(BaseCase):
+    """Студенту — напоминание о встрече с кнопками «Буду» / «Не буду»; ответ записывается во встречу."""
+
+    def setUp(self):
+        import datetime
+        from unittest import mock
+        from backend import telegram
+        from backend.models import TgChat
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.sent, self.calls = [], []
+        patcher = mock.patch.object(telegram, "send", side_effect=lambda chat_id, text, **kw: self.sent.append((chat_id, text, kw)) or {"ok": True})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch.object(telegram, "call", side_effect=lambda method, **kw: self.calls.append((method, kw)) or {"ok": True})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.day = datetime.date(2026, 10, 6)
+        store.system_write("config", "main", {"meetRemind": {"on": True, "morning": "09:00", "before": 15}})
+        store.system_write("cohorts", "c1", {"name": "Поток 2", "link": "https://telemost.yandex.ru/j/111"})
+        people = {"a1": ("Сидорова Анна", "studying", 601), "a2": ("Петров Олег", "final_project", 602),
+                  "a3": ("Новый Лид", "new", 603), "a4": ("Без Бота", "studying", None), "a5": ("Выбыл Совсем", "lost", 605)}
+        for sid, (name, stage, chat) in people.items():
+            store.system_write("students", sid, student("t2", name=name, stage=stage, cohortId="c1", **({"tgId": chat} if chat else {})))
+            if chat:
+                TgChat.objects.create(chat_id=chat, student_id=sid, state="done")
+        TgChat.objects.create(chat_id=700, user=self.other)  # ведущий занятия
+        store.system_write("meetings", "g1", {"title": "Разбор домашки", "date": "2026-10-06", "time": "19:00", "cohortId": "c1",
+                                              "mentorId": "t2", "status": "planned"})
+
+    def at(self, hour, minute=0):
+        import datetime
+        from django.utils import timezone
+        return timezone.make_aware(datetime.datetime.combine(self.day, datetime.time(hour, minute)))
+
+    def run_at(self, hour, minute=0):
+        from backend import scheduler
+        scheduler.run(self.at(hour, minute))
+
+    def st(self):  # только сообщения студентам: утренняя сводка ведущему здесь не важна
+        return [x for x in self.sent if x[0] != 700]
+
+    def to(self, chat):
+        return [(text, kw) for c, text, kw in self.sent if c == chat]
+
+    def rsvp(self):
+        return Doc.objects.get(collection="meetings", doc_id="g1").data.get("rsvp", {})
+
+    def test_morning_and_soon_reminders_with_answers(self):
+        from backend import meetings
+        self.run_at(8, 59)
+        self.assertEqual(self.st(), [])
+        self.run_at(9, 0)
+        self.assertEqual(sorted(c for c, _, _ in self.st()), [601, 602])  # учатся в потоке и подключены к боту
+        text, kw = self.to(601)[0]
+        self.assertIn("Анна, сегодня в 19:00 — Разбор домашки", text)
+        self.assertIn("https://telemost.yandex.ru/j/111", text)  # постоянная ссылка потока
+        self.assertEqual([b["callback_data"] for b in kw["reply_markup"]["inline_keyboard"][0]], ["r:g1:y", "r:g1:n"])
+        self.run_at(10, 0)
+        self.assertEqual(len(self.st()), 2)  # утреннее — один раз
+        self.assertEqual(meetings.record_answer("a1", "g1", "y", now=self.at(12))[0], "yes")
+        self.assertEqual(meetings.record_answer("a2", "g1", "n", now=self.at(12))[0], "no")
+        self.assertEqual(meetings.record_answer("a2", "g1", "y", now=self.at(12, 5))[0], "yes")  # передумал
+        self.assertEqual(meetings.record_answer("a2", "g1", "n", now=self.at(12, 6))[0], "no")
+        self.assertEqual({k: v["a"] for k, v in self.rsvp().items()}, {"a1": "yes", "a2": "no"})
+        self.run_at(18, 15)  # ведущему за час: кто придёт
+        mentor = self.to(700)[-1][0]
+        self.assertIn("Будут: 1 из 3. Не будут: Олег П.", mentor)  # «Без Бота» тоже участник, но ещё не ответил
+        self.run_at(18, 46)
+        soon = self.to(601)
+        self.assertEqual(len(soon), 2)
+        self.assertIn("через 14 мин начинаем", soon[-1][0])
+        self.assertNotIn("reply_markup", soon[-1][1])  # уже ответила «буду»: кнопки не нужны
+        self.assertEqual(len(self.to(602)), 1)  # ответил «не буду»: второго напоминания нет
+        self.assertIsNone(meetings.record_answer("a1", "g1", "n", now=self.at(19, 1))[0])  # встреча началась
+
+    def test_answers_are_checked(self):
+        from backend import meetings
+        for args in (("a3", "g1", "y"), ("a5", "g1", "y"), ("a1", "g1", "x"), ("a1", "нет", "y"), ("a1", "g9", "y"), ("s2", "g1", "y")):
+            self.assertIsNone(meetings.record_answer(*args, now=self.at(12))[0], args)
+        self.assertEqual(self.rsvp(), {})
+        store.system_write("meetings", "p1", {"title": "Созвон", "date": "2026-10-06", "time": "15:00", "studentId": "a3", "status": "planned"})
+        self.assertEqual(meetings.record_answer("a3", "p1", "y", now=self.at(12))[0], "yes")  # личная встреча — на любом этапе
+
+    def test_settings_switches_and_bad_values(self):
+        from backend import meetings
+        store.system_write("meetings", "g1", {**Doc.objects.get(collection="meetings", doc_id="g1").data, "remind": False})
+        self.run_at(9, 0)
+        self.assertEqual(self.st(), [])
+        store.system_write("meetings", "g1", {**Doc.objects.get(collection="meetings", doc_id="g1").data, "remind": True, "link": "javascript:alert(1)"})
+        store.system_write("config", "main", {"meetRemind": {"on": False}})
+        self.run_at(9, 1)
+        self.assertEqual(self.st(), [])
+        bad = meetings.settings_of({"meetRemind": {"on": "yes", "morning": "25:00", "before": 900, "textMorning": 5}})
+        self.assertEqual(bad, meetings.DEFAULTS)
+        store.system_write("config", "main", {"meetRemind": {"on": True, "morning": "10:30", "before": 30, "textMorning": "Привет, {имя}! {название} в {время}. {ссылка}"}})
+        self.run_at(10, 29)
+        self.assertEqual(self.st(), [])
+        self.run_at(10, 30)
+        self.assertIn("Привет, Анна! Разбор домашки в 19:00. https://telemost.yandex.ru/j/111", self.to(601)[0][0])  # кривую ссылку встречи заменила ссылка потока
+        store.system_write("cohorts", "c1", {"name": "Поток 2"})
+        cache.clear()
+        self.run_at(10, 31)
+        self.assertNotIn("http", self.to(601)[-1][0])  # ссылки нет — строки со ссылкой нет
+
+    def test_button_in_the_bot(self):
+        def press(chat, data):
+            with self.captureOnCommitCallbacks(execute=True):
+                return self.client.post("/api/telegram/", content_type="application/json",
+                                        headers={"X-Telegram-Bot-Api-Secret-Token": telegram_secret()},
+                                        data=json.dumps({"update_id": 9, "callback_query": {"id": "cb", "data": data, "from": {"id": chat},
+                                                                                            "message": {"message_id": 77, "chat": {"id": chat, "type": "private"}}}}))
+        from backend import telegram
+        telegram_secret = telegram.webhook_secret
+        from django.utils import timezone
+        from unittest import mock
+        with mock.patch.object(timezone, "localtime", side_effect=lambda *a: self.at(12)):
+            self.assertEqual(press(601, "r:g1:y").status_code, 200)
+            press(999, "r:g1:y")              # чужой чат
+            press(700, "r:g1:n")              # сотрудник
+            press(602, "r:g1:zz")             # кривая кнопка
+        self.assertEqual({k: v["a"] for k, v in self.rsvp().items()}, {"a1": "yes"})
+        edits = [kw for method, kw in self.calls if method == "editMessageReplyMarkup"]
+        self.assertEqual(len(edits), 1)
+        self.assertEqual(edits[0]["reply_markup"]["inline_keyboard"][0][0]["text"], "✓ Буду")
+        answers = [kw["text"] for method, kw in self.calls if method == "answerCallbackQuery"]
+        self.assertIn("Записали: будете", answers[0])
+        self.assertEqual(len(answers), 4)
+
+    def test_only_the_bot_writes_answers(self):
+        self.login("other")  # ведёт занятие g1
+        res = self.send("patch", "meetings", "g1", {"rsvp": {"a1": {"a": "yes"}}})
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(self.send("patch", "meetings", "g1", {"title": "Новое название"}).status_code, 200)
+        self.assertEqual(self.send("put", "meetings", "g9", {"title": "x", "mentorId": "t2", "rsvp": {"a1": {"a": "yes"}}}).status_code, 403)
+        self.login("admin")
+        self.assertEqual(self.send("patch", "meetings", "g1", {"rsvp": {}}).status_code, 200)

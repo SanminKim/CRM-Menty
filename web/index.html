@@ -467,6 +467,14 @@ td.mxc { padding: 4px 2px; text-align: center; }
 .ev.st-done { opacity: .6; }
 .ev.st-missed, .ev.st-cancelled { opacity: .6; text-decoration: line-through; }
 .ev-more { font-size: 12px; color: var(--muted); padding-left: 5px; }
+/* Кто придёт на встречу: ответил «буду» — обычное имя, «не буду» — зачёркнутое, не ответил — бледное */
+.people { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; font-size: 13px; padding-left: 54px; }
+.people .p-sum { color: var(--muted); }
+.people .p-yes { color: var(--text); font-weight: 500; }
+.people .p-no { color: var(--muted); text-decoration: line-through; }
+.people .p-wait { color: var(--text); opacity: .45; }
+.people .p-nobot { color: var(--muted); font-style: italic; }
+.people .p-legend { color: var(--muted); font-size: 12px; }
 .rows .evt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; min-width: 44px; }
 a.btn { text-decoration: none; }
 .steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 13px; }
@@ -1349,7 +1357,29 @@ function evRow(e, withDate = false) {
   return `<li class="click" data-act="meet-edit" data-id="${esc(m.id)}"><span class="evt${late ? " danger-text" : ""}">${esc(when)}</span>
     <span class="who"><strong>${esc(e.title)}</strong><span>${esc(sub)}</span></span>
     ${e.status !== "planned" ? `<span class="tag${e.status === "done" ? " ok" : ""}">${esc((MEETL[e.status] || e.status).toLowerCase())}</span>` : late ? `<span class="tag danger">не отмечена</span>` : ""}
-    <span class="acts">${/^https?:\/\//i.test(m.link || "") ? `<a class="btn small ghost" href="${esc(m.link)}" target="_blank" rel="noopener" data-stop>Ссылка</a>` : ""}${e.status === "planned" && e.date <= t && canMark(m) ? `<button class="btn small" data-act="meet-mark" data-id="${esc(m.id)}" data-st="done">Состоялась</button><button class="btn small ghost" data-act="meet-mark" data-id="${esc(m.id)}" data-st="missed" title="Встреча не состоялась">Не было</button>` : ""}</span></li>`;
+    <span class="acts">${meetLink(m) ? `<a class="btn small ghost" href="${esc(meetLink(m))}" target="_blank" rel="noopener" data-stop>Ссылка</a>` : ""}${e.status === "planned" && e.date <= t && canMark(m) ? `<button class="btn small" data-act="meet-mark" data-id="${esc(m.id)}" data-st="done">Состоялась</button><button class="btn small ghost" data-act="meet-mark" data-id="${esc(m.id)}" data-st="missed" title="Встреча не состоялась">Не было</button>` : ""}</span>${withDate ? "" : peopleHTML(m)}</li>`;
+}
+// Участники встречи и их ответы «буду / не буду». Правило то же, что на сервере (backend/meetings.py, participants):
+// тот, с кем встреча назначена, и учащиеся потока, если это занятие группы. Ментор видит только своих студентов.
+const MEET_STUDY = ["studying", "final_project"];
+function meetPeople(m) {
+  const out = D().students.filter(s => s.stage !== "lost" && ((typeof m.studentId === "string" && s.id === m.studentId)
+    || (typeof m.cohortId === "string" && m.cohortId && s.cohortId === m.cohortId && MEET_STUDY.includes(s.stage))));
+  const rsvp = isObj(m.rsvp) ? m.rsvp : {};
+  const answer = s => isObj(rsvp[s.id]) && ["yes", "no"].includes(rsvp[s.id].a) ? rsvp[s.id].a : null;
+  // Подключён ли к боту: номер чата Telegram записан в карточке
+  const bot = s => typeof s.tgId === "number";
+  return sortBy(out, s => String(s.name || "").toLowerCase()).map(s => ({ s, a: answer(s), bot: bot(s) }));
+}
+const meetLink = m => [m.link, cohortById(m.cohortId)?.link].find(x => typeof x === "string" && /^https?:\/\//i.test(x.trim())) || "";
+function peopleHTML(m) {
+  const people = meetPeople(m); if (!people.length) return "";
+  const yes = people.filter(x => x.a === "yes").length, no = people.filter(x => x.a === "no").length;
+  const name = x => x.a === "yes" ? `<span class="p-yes" title="Ответил(а): буду">${esc(x.s.name)}</span>`
+    : x.a === "no" ? `<span class="p-no" title="Ответил(а): не буду">${esc(x.s.name)}</span>`
+    : x.bot ? `<span class="p-wait" title="Ещё не ответил(а)">${esc(x.s.name)}</span>`
+    : `<span class="p-wait p-nobot" title="Не подключен(а) к боту: напоминание не получит">${esc(x.s.name)} (без бота)</span>`;
+  return `<span class="people" data-stop data-people="${esc(m.id)}"><span class="p-sum">Будут ${yes} из ${people.length}${no ? `, не будут ${no}` : ""}:</span>${people.map(name).join("")}</span>`;
 }
 // Карточка дня: всё, что назначено на дату — встречи, шаги и платежи
 function dayHTML(d) {
@@ -1382,7 +1412,9 @@ function calendarView() {
   const by = {}; for (const e of events(cells[0], cells[total - 1])) (by[e.date] = by[e.date] || []).push(e);
   const sel = S.cal.day, dayEvs = by[sel] || [], late = unmarked();
   const planned = Object.entries(by).filter(([d]) => d.slice(0, 7) === S.cal.ym).flatMap(([, l]) => l).filter(e => e.status === "planned").length;
-  const chip = e => `<span class="ev k-${esc(e.kind)} st-${esc(e.status)}" title="${esc((e.time ? e.time + " " : "") + e.title + (e.s ? " · " + e.s.name : ""))}">${esc((e.time ? e.time + " " : "") + (e.s ? mask(e.s.name) : e.title))}</span>`;
+  // У занятия группы сразу после времени — сколько ответили «буду»: «19:00 3/8 Занятие потока»
+  const going = e => { if (e.type !== "m") return ""; const p = meetPeople(e.m); return p.length > 1 ? `${p.filter(x => x.a === "yes").length}/${p.length}` : ""; };
+  const chip = e => `<span class="ev k-${esc(e.kind)} st-${esc(e.status)}" title="${esc((e.time ? e.time + " " : "") + e.title + (e.s ? " · " + e.s.name : "") + (going(e) ? `, будут ${going(e).replace("/", " из ")}` : ""))}">${esc((e.time ? e.time + " " : "") + (going(e) ? going(e) + " " : "") + (e.s ? mask(e.s.name) : e.title))}</span>`;
   const grid = cells.map(d => { const l = by[d] || []; return `<button class="cal-cell${d.slice(0, 7) !== S.cal.ym ? " out" : ""}${d === t ? " now" : ""}${d === sel ? " sel" : ""}" id="cal-${d}" data-act="cal-day" data-d="${d}" aria-pressed="${d === sel}" aria-label="${fShort(d)}${l.length ? `, событий: ${l.length}` : ""}">
       <span class="dn">${+d.slice(8)}</span>${l.slice(0, 3).map(chip).join("")}${l.length > 3 ? `<span class="ev-more">ещё ${l.length - 3}</span>` : ""}</button>`; }).join("");
   const dayTitle = new Date(sel + "T12:00").toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
@@ -2166,6 +2198,34 @@ function tgPanel() {
       : `<li><span class="who"><strong>${esc(p.name)}</strong><span class="warn-text">${p.promo ? "Промокод для ссылки должен состоять из латинских букв, цифр, «-» и «_»" : "Задайте партнёру промокод, чтобы получить его ссылку"}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}
     </ul><p class="hint pad">Блогер ставит свою ссылку под видео вместо вашего личного аккаунта. Бот @${esc(tg.bot)} спрашивает согласие, имя и цель, и заявка попадает в блок «Без ментора» на экране «Сегодня».</p>`);
 }
+// Напоминания студентам о встречах: утром в день встречи и незадолго до начала, с кнопками «Буду» / «Не буду».
+// Рассылает сервер (backend/meetings.py, scheduler._student_meetings); здесь только настройки в config/main → meetRemind.
+const MEET_REMIND = { on: false, morning: "09:00", before: 15, textMorning: "📅 {имя}, сегодня в {время} — {название}.\nСсылка: {ссылка}\nПридёте?", textSoon: "⏰ {имя}, через {минут} мин начинаем: {название}.\nСсылка: {ссылка}" };
+const meetRemind = () => { const r = isObj(S.config.meetRemind) ? S.config.meetRemind : {}; return { ...MEET_REMIND, ...Object.fromEntries(Object.entries(r).filter(([k, v]) => k in MEET_REMIND && v !== "" && v !== null && v !== undefined)), on: r.on === true }; };
+function meetRemindPanel() {
+  const r = meetRemind(), tg = S.me?.telegram || {};
+  return panel("Напоминания студентам о встречах", "", `<ul class="rows"><li id="meet-remind"><span class="who wrap"><strong>${r.on ? "Включены" : "Выключены"}</strong>
+      <span>${r.on ? `утром в ${esc(r.morning)} и за ${esc(r.before)} мин до начала; студент отвечает «буду» или «не буду», ответы видны в карточке дня` : "Бот не пишет студентам о встречах"}</span></span>
+      <button class="btn small${r.on ? " ghost" : ""}" data-act="meet-remind">${r.on ? "Изменить" : "Настроить"}</button></li></ul>
+    <p class="hint pad">Сообщения получают студенты, подключённые к боту: тот, с кем назначена встреча, и учащиеся потока, если это занятие группы. Ссылка берётся из встречи или постоянная ссылка потока.${tg.enabled ? "" : " Сейчас бот не подключён, поэтому напоминания не уходят."}</p>`);
+}
+function meetRemindForm() {
+  const r = meetRemind();
+  openModal({
+    title: "Напоминания студентам о встречах", wide: true, values: r,
+    fields: [{ k: "on", label: "Напоминать студентам о встречах в Telegram", type: "checkbox", wide: true },
+      { k: "morning", label: "Утреннее напоминание в день встречи", type: "time", req: true }, { k: "before", label: "Второе — за сколько минут до начала", type: "number", req: true },
+      { k: "textMorning", label: "Текст утреннего напоминания", type: "textarea", rows: 4, wide: true },
+      { k: "textSoon", label: "Текст перед началом", type: "textarea", rows: 3, wide: true }],
+    extra: `<p class="hint">В тексте можно писать {имя}, {время}, {название}, {ссылка} и {минут} — бот подставит данные встречи. Строка со {ссылка} пропадает, если ссылки нет. Под сообщением бот сам добавит кнопки «Буду» и «Не буду»; кто ответил «не буду», второе напоминание не получает. Пустой текст — стандартный.</p>`,
+    onSubmit: v => {
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v.morning)) return "Время утреннего напоминания укажите в виде 09:00";
+      if (!(v.before >= 1 && v.before <= 180)) return "За сколько минут: от 1 до 180";
+      const data = { on: !!v.on, morning: v.morning, before: Math.round(v.before), textMorning: v.textMorning || MEET_REMIND.textMorning, textSoon: v.textSoon || MEET_REMIND.textSoon };
+      return save(() => updDoc("config", "main", { meetRemind: data }), data.on ? "Напоминания включены" : "Сохранено");
+    },
+  });
+}
 function themePanel() {
   return panel("Оформление", "", `<div class="pad"><div class="seg" role="group" aria-label="Тема">${THEMES.map(([v, l]) => `<button data-act="theme" data-v="${v}" class="${themePref() === v ? "on" : ""}" aria-pressed="${themePref() === v}">${l}</button>`).join("")}</div>
     <p class="hint" style="margin-top:8px">Выбор запоминается в этом браузере.</p></div>`);
@@ -2208,7 +2268,7 @@ function settingsView() {
   </div><div class="stack">
   ${directionsPanel()}
   ${panel("Партнёры", "", D().partners.length ? `<ul class="rows">${D().partners.map(p => `<li><span class="who"><strong>${esc(p.name)}</strong><span>${p.promo ? "промокод " + esc(p.promo) : "без промокода"}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Партнёров нет</p>`, `<button class="btn small" data-act="partner-new">+ Партнёр</button>`)}
-  ${S.server ? tgPanel() : ""}
+  ${S.server ? tgPanel() + meetRemindPanel() : ""}
   ${trashPanel()}
   ${panel("Резервная копия", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, встречи, команда, партнёры и выплаты. ${S.server ? "Сервер каждую ночь сохраняет копию сам, но она лежит на том же сервере. Раз в неделю скачивайте файл к себе: из него база восстанавливается на любом сервере." : "Этот же файл загружается в версию для своего сервера при переезде."}</p>
     <div class="actions"><button class="btn" data-act="backup">Скачать резервную копию</button>${S.server ? `<a class="btn" href="${esc(SRV.importUrl)}">Загрузить копию</a>` : ""}</div>
@@ -2661,8 +2721,8 @@ function paymentForm(s, p) {
   });
 }
 function meetingForm(m, prefill = {}) {
-  const vals = m ? { ...m, studentId: m.studentId || "", cohortId: m.cohortId || "", mentorId: m.mentorId || "", status: m.status || "planned" }
-    : { kind: "call", date: S.view === "calendar" ? S.cal.day : today(), time: "12:00", duration: 60, studentId: "", cohortId: "", mentorId: myTeam()?.id || "", status: "planned", ...prefill };
+  const vals = m ? { ...m, studentId: m.studentId || "", cohortId: m.cohortId || "", mentorId: m.mentorId || "", status: m.status || "planned", remind: m.remind !== false }
+    : { kind: "call", date: S.view === "calendar" ? S.cal.day : today(), time: "12:00", duration: 60, studentId: "", cohortId: "", mentorId: myTeam()?.id || "", status: "planned", remind: true, ...prefill };
   const students = sortBy(D().students.filter(s => isActive(s) || s.id === vals.studentId), s => String(s.name || "").toLowerCase());
   openModal({
     title: m ? "Встреча" : "Новая встреча", wide: true, values: vals, submit: m ? "Сохранить" : "Добавить",
@@ -2673,7 +2733,9 @@ function meetingForm(m, prefill = {}) {
       { k: "cohortId", label: "Поток", type: "select", options: cohortOpts(), help: "Для занятия всей группы" },
       ...(S.limited ? [] : [{ k: "mentorId", label: "Кто проводит", type: "select", options: teamOpts() }]),
       ...(m ? [{ k: "status", label: "Статус", type: "select", options: MEET_ST }] : []),
-      { k: "link", label: "Ссылка на созвон", type: "url", wide: true, ph: "https://" }, { k: "notes", label: "Заметки", type: "textarea", wide: true, rows: 2 }],
+      { k: "link", label: "Ссылка на созвон", type: "url", wide: true, ph: "https://", help: "Для занятия группы можно не заполнять: возьмётся постоянная ссылка потока" },
+      ...(S.server ? [{ k: "remind", label: "Напоминать студентам в Telegram и спрашивать, придут ли", type: "checkbox", wide: true }] : []),
+      { k: "notes", label: "Заметки", type: "textarea", wide: true, rows: 2 }],
     link: m && m.studentId && stu(m.studentId) ? { label: "Карточка студента", go: () => openStudent(m.studentId) } : null,
     onDelete: m ? () => save(() => delDoc("meetings", m.id), "Встреча удалена") : null,
     extra: m ? "" : `<p class="hint">Отметить встречу состоявшейся можно в календаре, на экране «Сегодня» или в карточке студента.</p>`,
@@ -2682,7 +2744,7 @@ function meetingForm(m, prefill = {}) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(v.date)) return "Укажите дату";
       if (v.time && !/^\d{2}:\d{2}$/.test(v.time)) return "Время укажите в виде 15:30";
       if (v.duration !== null && !(v.duration > 0 && v.duration <= 1440)) return "Длительность — от 1 до 1440 минут";
-      const doc = { title: v.title, date: v.date, time: v.time || "", kind: v.kind, duration: v.duration, studentId: v.studentId || null, cohortId: v.cohortId || null, mentorId: (S.limited ? vals.mentorId : v.mentorId) || null, link: v.link, notes: v.notes };
+      const doc = { title: v.title, date: v.date, time: v.time || "", kind: v.kind, duration: v.duration, studentId: v.studentId || null, cohortId: v.cohortId || null, mentorId: (S.limited ? vals.mentorId : v.mentorId) || null, link: v.link, notes: v.notes, ...(S.server ? { remind: !!v.remind } : {}) };
       // При правке пишем только изменённые поля: отметку «состоялась», поставленную другим человеком, форма не затрёт
       const changed = m ? Object.fromEntries(Object.entries(doc).filter(([k, val]) => blank(val) !== blank(vals[k]))) : null;
       const toStatus = m && v.status !== vals.status ? v.status : null, any = !m || Object.keys(changed).length > 0;
@@ -2756,9 +2818,11 @@ function cohortForm(c) {
     fields: [{ k: "name", label: "Название", req: true, ph: "Поток 4" }, { k: "price", label: "Базовая цена, ₽", type: "number" },
       ...(S.limited ? [] : [{ k: "directionId", label: "Направление", type: "select", options: [["", "—"], ...D().directions.map(d => [d.id, d.name])], help: "От направления зависит, между кем делится выручка потока" }]),
       { k: "start", label: "Старт", type: "date" }, { k: "end", label: "Окончание обучения", type: "date" }, { k: "active", label: "Идёт набор или обучение", type: "checkbox" },
+      { k: "link", label: "Постоянная ссылка на занятия", type: "url", wide: true, ph: "https://telemost.yandex.ru/…", help: "Бот пришлёт её студентам потока, если у самого занятия ссылки нет" },
       { k: "modules", label: "Программа: модули, по одному в строке", type: "textarea", rows: 7, wide: true, ph: "Введение в 1С\nОписание бизнес-процессов\nНаписание ТЗ", help: "По модулям отмечается прогресс студентов. Чтобы отметки сохранились, переименовывайте по одному модулю за сохранение." }],
     onDelete: c ? () => [...D().students, ...S.trash].some(s => s.cohortId === c.id) ? (showErr("В потоке есть студенты. Сначала перенесите их в другой поток."), false) : save(() => delDoc("cohorts", c.id), "Поток удалён") : null,
     onSubmit: v => {
+      if (v.link && !/^https?:\/\//i.test(v.link)) return "Ссылка должна начинаться с http:// или https://";
       const id = c?.id || newId("cohorts"), isNew = !c;
       return save(() => setDoc("cohorts", id, { ...(c || {}), ...v, directionId: S.limited ? (c?.directionId || null) : (v.directionId || null), modules: mergeModules(c?.modules || [], v.modules), id: undefined }), "Сохранено").then(ok => { if (ok && isNew) { S.cohortId = id; S.view = "cohort"; render(); } return ok; });
     },
@@ -3081,6 +3145,7 @@ const ACT = {
   "list-stuck": () => { S.f = { ...S.f, q: "", stage: "", stuck: "1" }; go("students"); },
   "more-rows": () => { S.rows = rowsMax() + ROWS_STEP; render(); },
   "col-more": d => { S.colMax[d.st] = (S.colMax[d.st] || COL_STEP) + COL_STEP; render(); },
+  "meet-remind": () => meetRemindForm(),
   "account-reset": d => { const a = S.accounts.find(x => String(x.id) === d.id); if (a) passwordResetForm(a); },
   "pw-gen": () => { const el = $("#m-password"); if (el) { el.value = genPassword(); el.focus(); el.select(); } },
   "pw-copy": () => { const el = $("#m-password"); if (el && el.value) copyText(el.value, "Пароль скопирован"); },

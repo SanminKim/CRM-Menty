@@ -136,6 +136,8 @@ class Access:
             self._check_proofs(old, new)
             return
         if collection == "meetings":
+            if new is not None and (old or {}).get("rsvp") != new.get("rsvp"):
+                raise Denied  # ответы студентов «буду / не буду» записывает только бот
             for data in (old, new):
                 if data is None:
                     continue
