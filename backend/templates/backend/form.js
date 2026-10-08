@@ -12,7 +12,9 @@
     btn.addEventListener("click", function () {
       var shown = input.type === "text";
       input.type = shown ? "password" : "text";
-      btn.textContent = shown ? "Показать" : "Скрыть";
+      var label = shown ? "Показать пароль" : "Скрыть пароль";
+      btn.setAttribute("aria-label", label);
+      btn.title = label;
       btn.setAttribute("aria-pressed", shown ? "false" : "true");
       input.focus();
     });

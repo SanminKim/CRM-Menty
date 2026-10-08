@@ -26,9 +26,14 @@ a { color: var(--brand); }
 .muted { color: var(--muted); font-size: 13px; }
 .error { color: var(--danger); display: flex; flex-direction: column; gap: 6px; }
 .warn { color: var(--warn); font-size: 13px; }
-.pass { display: flex; gap: 6px; }
-.pass input { flex: 1; min-width: 0; }
-.pass .show { flex: none; font-weight: 500; font-size: 13px; padding: 0 12px; background: transparent; color: var(--brand); border: 1px solid var(--border); }
+.pass { display: flex; position: relative; }
+.pass input { flex: 1; min-width: 0; padding-right: 44px; }
+.pass .show { position: absolute; top: 0; right: 0; bottom: 0; width: 42px; padding: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: 0; color: var(--muted, #6b7280); cursor: pointer; }
+.pass .show:hover { color: var(--brand); }
+.pass .show[hidden] { display: none; }
+.pass .show svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pass .show .eye-off, .pass .show[aria-pressed="true"] .eye { display: none; }
+.pass .show[aria-pressed="true"] .eye-off { display: block; }
 [hidden] { display: none !important; }
 .ok { color: var(--ok); }
 ul { margin: 0; padding-left: 18px; }
