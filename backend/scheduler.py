@@ -12,7 +12,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
-from . import backup, leads, reports, telegram
+from . import backup, health, leads, reports, telegram
 from .models import Account, Doc, TgChat
 
 log = logging.getLogger(__name__)
@@ -28,9 +28,14 @@ PHONE_RE = re.compile(r"\+?\d[\d\s()\-]{5,}\d")
 
 
 def run(now=None):
+    now = timezone.localtime(now) if now else timezone.localtime()
+    health.beat(now)  # отметка «планировщик жив» для /health/
+    try:
+        health.watch(now)
+    except Exception:
+        log.exception("Планировщик: проверка работы не выполнена")
     if not telegram.enabled():
         return
-    now = timezone.localtime(now) if now else timezone.localtime()
     for job in (_reminders, _digests, _pay_reminders, _backup):
         try:
             job(now)

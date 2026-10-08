@@ -102,6 +102,11 @@ LEAD_WEBHOOK_TOKEN = os.environ.get("LEAD_WEBHOOK_TOKEN", "")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 # Пароль, которым шифруется копия базы перед отправкой администратору в Telegram. Пусто или короче 12 символов — копии не отправляются
 BACKUP_PASSPHRASE = os.environ.get("BACKUP_PASSPHRASE", "").strip()
+# Ссылка проверки работы на Healthchecks.io (https://hc-ping.com/…). Если задана, планировщик раз в 5 минут открывает CRM
+# снаружи и сообщает результат; при сбое или молчании Healthchecks.io пишет в Telegram. Пусто — проверка выключена
+HEALTHCHECK_PING_URL = os.environ.get("HEALTHCHECK_PING_URL", "").strip().rstrip("/")
+if HEALTHCHECK_PING_URL and not HEALTHCHECK_PING_URL.startswith("https://"):
+    HEALTHCHECK_PING_URL = ""
 # Адрес CRM снаружи: на него Telegram присылает сообщения, он же ставится в уведомления
 PUBLIC_URL = (os.environ.get("PUBLIC_URL")
               or (f"https://{ALLOWED_HOSTS[0]}" if not DEBUG and ALLOWED_HOSTS else "http://127.0.0.1:8000")).rstrip("/")

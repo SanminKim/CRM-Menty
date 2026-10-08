@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
-from . import api, leads, telegram, views
+from . import api, health, leads, telegram, views
 
 urlpatterns = [
     path("", views.app, name="home"),
@@ -11,6 +11,7 @@ urlpatterns = [
     path("password/done/", views.password_done, name="password_done"),
     path("backup/import/", views.backup_import, name="backup_import"),
     path("fonts/<str:name>", views.font, name="font"),
+    path("health/", health.view, name="health"),
     path("api/me/", api.me),
     path("api/sync/", api.sync),
     path("api/db/<str:collection>/<str:doc_id>/", api.doc),

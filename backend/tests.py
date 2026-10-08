@@ -1621,3 +1621,77 @@ class SchedulerTests(BaseCase):
         with override_settings(TELEGRAM_BOT_TOKEN=""):
             self.run_at(9, 1)
         self.assertEqual((self.sent, self.files), ([], []))
+
+
+class HealthTests(BaseCase):
+    """Проверка работы: /health/ и сигнал Healthchecks.io из планировщика."""
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+
+    def test_health_page_reports_database_and_scheduler(self):
+        import datetime
+        from unittest import mock
+        from django.utils import timezone
+        from backend import health
+        self.client.logout()
+        res = self.client.get("/health/")
+        self.assertEqual(res.status_code, 503)
+        self.assertIn("планировщик", res.content.decode())
+        health.beat()
+        res = self.client.get("/health/")
+        self.assertEqual((res.status_code, res.content.decode()), (200, "ok"))  # без входа: внешний сервис должен его открыть
+        self.assertIn("no-cache", res["Cache-Control"])
+        health.beat(timezone.now() - datetime.timedelta(minutes=20))
+        self.assertEqual(self.client.get("/health/").status_code, 503)
+        cache.set(health.BEAT_KEY, "вчера")
+        self.assertEqual(self.client.get("/health/").status_code, 503)
+        health.beat()
+        with mock.patch.object(health.connection, "cursor", side_effect=Exception("down")):
+            res = self.client.get("/health/")
+        self.assertEqual(res.status_code, 503)
+        self.assertIn("база данных", res.content.decode())
+        self.assertEqual(self.client.post("/health/").status_code, 405)
+
+    @override_settings(HEALTHCHECK_PING_URL="https://hc-ping.com/test-uuid", PUBLIC_URL="https://crm.example.test", TELEGRAM_BOT_TOKEN="")
+    def test_scheduler_checks_the_site_from_outside_and_reports(self):
+        import urllib.error
+        from unittest import mock
+        from backend import health, scheduler
+        calls, answers = [], []
+
+        def fake(url, data=None):
+            calls.append((url, data))
+            answer = answers.pop(0) if url.startswith("https://crm.example.test") else (200, "OK")
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+
+        with mock.patch.object(health, "_open", side_effect=fake):
+            answers.append((200, "ok"))
+            scheduler.run()  # бот выключен, а проверка работает
+            self.assertEqual(calls, [("https://crm.example.test/health/", None), ("https://hc-ping.com/test-uuid", b"ok")])
+            scheduler.run()
+            self.assertEqual(len(calls), 2)  # не чаще раза в 5 минут
+            cache.delete(health.WATCH_KEY)
+            answers.append(urllib.error.URLError("no route"))
+            scheduler.run()
+            self.assertEqual(calls[-1][0], "https://hc-ping.com/test-uuid/fail")
+            self.assertIn("не открывается снаружи", calls[-1][1].decode())
+            cache.delete(health.WATCH_KEY)
+            answers.append(urllib.error.HTTPError("https://crm.example.test/health/", 503, "x", {}, None))
+            scheduler.run()
+            self.assertEqual(calls[-1][0], "https://hc-ping.com/test-uuid/fail")
+            self.assertIn("503", calls[-1][1].decode())
+        self.assertTrue(cache.get(health.BEAT_KEY))  # каждый проход отмечает, что планировщик жив
+
+    def test_failed_ping_does_not_stop_the_scheduler_and_nothing_is_sent_without_a_link(self):
+        from unittest import mock
+        from backend import health, scheduler
+        with mock.patch.object(health, "_open", side_effect=OSError("down")) as opened:
+            scheduler.run()
+            opened.assert_not_called()  # ссылка не задана
+            with self.settings(HEALTHCHECK_PING_URL="https://hc-ping.com/x"):
+                scheduler.run()  # и сайт, и Healthchecks.io недоступны: планировщик не падает
+            self.assertEqual(opened.call_count, 2)
