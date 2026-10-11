@@ -184,7 +184,8 @@ input[type=checkbox] { width: auto; accent-color: var(--brand); }
 .seg { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; max-width: 100%; overflow-x: auto; }
 .seg button { all: unset; cursor: pointer; padding: 4px 12px; border-radius: 8px; color: var(--muted); font-weight: 500; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
 .seg button.on { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
-.cohort-bar { margin: 0 0 12px; }
+.cohort-row { display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; margin: 0 0 12px; }
+.cohort-tools { display: flex; gap: 8px; }
 tr.sel td { background: var(--brand-soft); }
 .seg .n { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 500; }
 .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); overflow-x: auto; }
@@ -590,10 +591,12 @@ const MON = ["янв", "фев", "мар", "апр", "мая", "июн", "июл
 const $ = (s, r = document) => r.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const NF = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 });
-const money = v => (v === null || v === undefined || v === "" || isNaN(v)) ? "—" : NF.format(Math.round(+v)) + " ₽";
+const money = v => { if (v === null || v === undefined || v === "" || isNaN(v)) return "—"; const r = Math.round(+v); return NF.format(r === 0 ? 0 : r) + " ₽"; }; // без «-0 ₽» от копеек
 const pad = n => String(n).padStart(2, "0");
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const today = () => dstr(new Date());
+// День оплаты — по московскому времени, как у сервера: оплата около полуночи не уйдёт в соседний месяц
+const payDay = () => { try { return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); } catch (e) { return today(); } };
 const daysAhead = n => { const d = new Date(); d.setDate(d.getDate() + n); return dstr(d); };
 // Даты приходят из базы строками: показываем их, только если это действительно дата
 const isDay = s => typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s);
@@ -728,7 +731,8 @@ function personName(uid) {
 }
 
 // ---------- Расчёты ----------
-const paidSum = s => (Array.isArray(s.payments) ? s.payments : []).reduce((a, x) => a + (x && typeof x === "object" && x.paid ? nnum(x.amount) : 0), 0);
+// Сколько студент заплатил: платежи с датой оплаты; возврат — платёж с минусом
+const paidSum = s => (Array.isArray(s.payments) ? s.payments : []).reduce((a, x) => a + (x && typeof x === "object" && dayOf(x.paid) ? nnum(x.amount) : 0), 0);
 const debt = s => s.price ? Math.max(s.price - paidSum(s), 0) : null;
 const overdue = s => (s.payments || []).filter(p => !p.paid && p.due < today());
 const isActive = s => s.stage !== "lost" && s.stage !== "probation_passed";
@@ -767,7 +771,7 @@ function metrics(list) {
     graduates, employed: employed.length, rate: pct(employed.length, graduates),
     avgSalary: sal.length ? sum(sal, x => x) / sal.length : null,
     avgDays: dto.length ? Math.round(sum(dto, x => x) / dto.length) : null,
-    revMonth: sum(paid.filter(p => p.paid >= month), p => p.amount), revTotal: sum(paid, p => p.amount),
+    revMonth: sum(paid.filter(p => dayOf(p.paid).slice(0, 7) === month.slice(0, 7)), p => nnum(p.amount)), revTotal: sum(paid, p => nnum(p.amount)),
     stuck: sortBy(list.filter(isStuck), s => s.stageAt).slice(0, 12),
     lost: lost.length, reasons: Object.entries(reasons).sort((a, b) => b[1] - a[1]),
     funnel: funnel(list), ...firstContact(list),
@@ -827,8 +831,8 @@ function finance(list) {
   for (let i = -5; i <= 6; i++) { const d = new Date(now.getFullYear(), now.getMonth() + i, 1); months.push({ key: `${d.getFullYear()}-${pad(d.getMonth() + 1)}`, label: MON[d.getMonth()].slice(0, 3), year: d.getFullYear(), got: 0, exp: 0, cur: i === 0 }); }
   const byKey = Object.fromEntries(months.map(m => [m.key, m]));
   const pays = list.flatMap(s => (s.payments || []).map(p => ({ ...p, s })));
-  const paid = pays.filter(p => p.paid), open = pays.filter(p => !p.paid && p.s.stage !== "lost");
-  for (const p of paid) { const m = byKey[p.paid.slice(0, 7)]; if (m) m.got += +p.amount || 0; }
+  const paid = pays.filter(p => dayOf(p.paid)), open = pays.filter(p => !p.paid && p.s.stage !== "lost");
+  for (const p of paid) { const m = byKey[dayOf(p.paid).slice(0, 7)]; if (m) m.got += nnum(p.amount); }
   for (const p of open) if (p.due >= t) { const m = byKey[p.due.slice(0, 7)]; if (m) m.exp += +p.amount || 0; }
   const payers = list.filter(s => paidSum(s) > 0).length, total = sum(paid, p => p.amount);
   const group = (rows, name) => {
@@ -859,6 +863,15 @@ const textOf = (v, n) => typeof v === "string" ? v.slice(0, n) : "";
 const isObj = v => !!v && typeof v === "object" && !Array.isArray(v);
 const teamById = id => D().team.find(m => m.id === id);
 const dirById = id => D().directions.find(d => d.id === id);
+// Направление, в котором получены деньги: оплаченный платёж помнит его (dirId), у старых платежей — направление потока сейчас
+const payDir = (x, cur) => typeof x.dirId === "string" ? (x.dirId && dirById(x.dirId) ? x.dirId : "") : cur;
+// Отметка оплаты: дата и направление на этот момент. Снятая оплата снимает и направление
+// Пока у потока нет направления, отметка не ставится: такие деньги разделятся, когда поток привяжут к направлению
+const markPaid = (cur, x, day, extra = {}) => { const { dirId, ...rest } = x; if (!day) return { ...rest, ...extra, paid: null }; const d = typeof dirId === "string" && dayOf(x.paid) ? dirId : directionOf(cur); return d ? { ...rest, ...extra, paid: day, dirId: d } : { ...rest, ...extra, paid: day }; };
+// Оплату подтверждает администратор: от неё зависят начисления всех сторон
+const canConfirm = () => !S.limited && !S.readOnly;
+const isRefund = x => isObj(x) && x.refund === true;
+const owes = b => b > 0.5;  // копейки после выплаты целыми рублями долгом не считаются
 const directionOf = s => { const c = typeof s.cohortId === "string" ? D().cohorts.find(x => x.id === s.cohortId) : null; return c && typeof c.directionId === "string" && dirById(c.directionId) ? c.directionId : ""; };
 const validTerms = d => (Array.isArray(d.terms) ? d.terms : []).filter(t => isObj(t) && typeof t.from === "string" && /^\d{4}-\d{2}$/.test(t.from));
 // Стороны и ставки в этом месяце: последние условия, начавшие действовать не позже месяца; до первых условий — первые
@@ -881,9 +894,10 @@ function settle() {
   if (SETTLED) return SETTLED;
   const cells = new Map();
   const cell = (month, dirId) => { const k = month + "|" + dirId; if (!cells.has(k)) cells.set(k, { month, directionId: dirId, received: 0, expenses: 0 }); return cells.get(k); };
-  for (const st of sortBy(D().students, x => x.id)) {
-    const dirId = directionOf(st);
-    for (const x of Array.isArray(st.payments) ? st.payments : []) { if (!isObj(x)) continue; const day = dayOf(x.paid); if (day) cell(day.slice(0, 7), dirId).received += nnum(x.amount); }
+  // Студенты из корзины тоже: пришедшие от них деньги остаются в своих месяцах, корзина не переписывает начисленное
+  for (const st of sortBy([...D().students, ...S.trash], x => x.id)) {
+    const cur = directionOf(st);
+    for (const x of Array.isArray(st.payments) ? st.payments : []) { if (!isObj(x)) continue; const day = dayOf(x.paid); if (day) cell(day.slice(0, 7), payDir(x, cur)).received += nnum(x.amount); }
   }
   for (const e of sortBy(D().expenses, x => x.id)) {
     const day = dayOf(e.date); if (!day) continue;
@@ -1161,7 +1175,7 @@ function todayView() {
       ${tab !== "pays" ? "" : panel("Платежи студентов", ag.pays.length ? money(sum(ag.pays, p => p.amount)) : "", ag.pays.length ? `<ul class="rows">${ag.pays.map(p => `<li class="click" data-act="open" data-id="${esc(p.s.id)}">
           <span class="who"><strong>${esc(p.s.name)}</strong><span>${esc(p.comment || "Платёж")}</span></span>
           <span class="amt">${money(p.amount)}</span><span class="when${p.due < t ? " late" : ""}">${dueLabel(p.due)}</span>
-          <span class="acts">${remindBtn(p.s, p)}<button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button></span></li>`).join("")}</ul>`
+          <span class="acts">${remindBtn(p.s, p)}${canConfirm() ? `<button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">Оплачен</button>` : ""}</span></li>`).join("")}</ul>`
         : `<p class="empty">Просрочек и платежей на ближайшие три дня нет</p>`, "", "Просроченные и те, что подходят в ближайшие три дня.")}
       ${tab === "meets" && meets.length ? panel("Встречи на неделе", meets.length, `<ul class="rows">${meets.map(e => evRow(e, true)).join("")}</ul>`, `<button class="btn small ghost" data-act="nav" data-v="calendar">Календарь</button>`) : ""}
       ${tab === "nostep" && ag.noStep.length ? panel("Без следующего шага", ag.noStep.length, `<ul class="rows">${noStep.map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}">
@@ -1405,13 +1419,13 @@ function peopleHTML(m) {
 function dayHTML(d) {
   const list = filtered(["mentor"]), evs = events(d, d), t = today();
   const steps = list.filter(s => isActive(s) && hasStep(s) && s.next.date === d);
-  const pays = list.filter(s => s.stage !== "lost").flatMap(s => (s.payments || []).filter(x => x.due === d || x.paid === d).map(x => ({ ...x, s })));
+  const pays = list.flatMap(s => (s.payments || []).filter(x => x.paid === d || (s.stage !== "lost" && !x.paid && x.due === d)).map(x => ({ ...x, s }))); // пришедшие в этот день деньги видны и у выбывших
   const title = new Date(d + "T12:00").toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const shift = n => { const x = new Date(d + "T12:00"); x.setDate(x.getDate() + n); return dstr(x); };
   const sec = (name, n, body, empty) => `<section class="day-sec"><h3>${name}${n ? ` · ${n}` : ""}</h3>${n ? `<ul class="rows">${body}</ul>` : `<p class="hint">${empty}</p>`}</section>`;
   const payRow = x => `<li class="click" data-act="open" data-id="${esc(x.s.id)}"><span class="who"><strong>${esc(x.s.name)}</strong><span>${esc(x.comment || "Платёж")}</span></span>
     <span class="amt">${isPending(x) ? `${esc(pctText(x.percent))} от дохода` : money(x.amount)}</span>
-    ${x.paid ? `<span class="tag ok">оплачен${x.paid !== x.due ? " " + fDay(x.paid) : ""}</span>` : isPending(x) || S.readOnly ? `<span class="tag${x.due < t ? " danger" : ""}">${x.due < t ? "просрочен" : "ожидается"}</span>` : `${x.due < t ? `<span class="tag danger">просрочен</span>` : ""}<span class="acts"><button class="btn small" data-act="pay-done" data-id="${esc(x.s.id)}" data-pid="${esc(x.id)}">Оплачен</button></span>`}</li>`;
+    ${isRefund(x) ? `<span class="tag warn">возврат</span>` : x.paid ? `<span class="tag ok">оплачен${x.paid !== x.due ? " " + fDay(x.paid) : ""}</span>` : isPending(x) || !canConfirm() ? `<span class="tag${x.due < t ? " danger" : ""}">${x.due < t ? "просрочен" : "ожидается"}</span>` : `${x.due < t ? `<span class="tag danger">просрочен</span>` : ""}<span class="acts"><button class="btn small" data-act="pay-done" data-id="${esc(x.s.id)}" data-pid="${esc(x.id)}">Оплачен</button></span>`}</li>`;
   return `<div class="scrim" data-act="d-close"></div>
   <aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <header class="d-head"><h2 id="day-title">${esc(title[0].toUpperCase() + title.slice(1))}${d === t ? ` <span class="tag ok">сегодня</span>` : ""}</h2>
@@ -1457,10 +1471,13 @@ function calendarView() {
 function cohortBar(list) {
   const cur = S.f.cohort || "", n = id => list.filter(s => id === "none" ? !cohortName(s.cohortId) : s.cohortId === id).length;
   const shown = sortBy(D().cohorts, c => c.start || "").reverse().filter(c => c.active !== false || n(c.id) || cur === c.id);
-  if (!shown.length) return "";
+  if (!shown.length && (S.limited || S.readOnly)) return "";
   const btn = (v, l, k) => `<button data-act="fcohort" data-v="${esc(v)}" class="${cur === v ? "on" : ""}" role="tab" aria-selected="${cur === v}">${esc(l)}<span class="n">${k}</span></button>`;
   const none = n("none");
-  return `<div class="seg cohort-bar" id="cohort-bar" role="tablist" aria-label="Поток">${btn("", "Все потоки", list.length)}${shown.map(c => btn(c.id, c.name, n(c.id))).join("")}${none || cur === "none" ? btn("none", "Без потока", none) : ""}</div>`;
+  const sel = D().cohorts.find(c => c.id === cur), admin = !S.limited && !S.readOnly;
+  // Потоками управляют прямо отсюда: «+ Поток» создаёт новый и сразу выбирает его, «Изменить поток» открывает выбранный (там же «Удалить»)
+  const tools = admin ? `<span class="cohort-tools">${sel ? `<button class="btn small ghost" data-act="cohort-edit-board" data-id="${esc(sel.id)}">Изменить поток</button>` : ""}<button class="btn small" data-act="cohort-new-board">+ Поток</button></span>` : "";
+  return `<div class="cohort-row"><div class="seg cohort-bar" id="cohort-bar" role="tablist" aria-label="Поток">${btn("", "Все потоки", list.length)}${shown.map(c => btn(c.id, c.name, n(c.id))).join("")}${none || cur === "none" ? btn("none", "Без потока", none) : ""}</div>${tools}</div>`;
 }
 function boardView() {
   const keys = ["cohort", "mentor", "partner"], list = filtered(keys), byCohort = filtered(["mentor", "partner"]).filter(s => S.showLost || s.stage !== "lost");
@@ -1548,7 +1565,8 @@ function cohortStats(c) {
   const open = act.flatMap(s => (s.payments || []).filter(p => !p.paid));
   return {
     list, act, studying, leads: act.length - studying.length, mods: c.modules || [], avg: progs.length ? Math.round(sum(progs, p => p.pct) / progs.length) : null,
-    paid: sum(act, paidSum), price: sum(act, s => s.price), overdue: sum(open.filter(p => p.due < today()), p => p.amount),
+    // пришедшие деньги считаются и у выбывших, как в выплатах
+    paid: sum(list, paidSum), price: sum(act, s => s.price), overdue: sum(open.filter(p => p.due < today()), p => nnum(p.amount)),
     noStep: act.filter(s => isActive(s) && !hasStep(s)).length, employed: act.filter(s => EMPLOYED.includes(s.stage)).length,
   };
 }
@@ -1641,8 +1659,9 @@ const gapText = p => { const g = payGap(p); return g ? `<div class="sub ${g < 0 
 function receivedForm(s, p) {
   const diff = v => { const g = v - nnum(p.amount); return !(v > 0) ? "" : g === 0 ? "Совпадает с ожидаемой суммой" : `${g < 0 ? "Недоплата" : "Переплата"}: ${money(Math.abs(g))}`; };
   openModal({
-    title: `Платёж с зарплаты: ${s.name}`, submit: "Отметить оплаченным", values: { received: nnum(p.amount), paid: today() },
-    fields: [{ k: "received", label: "Сколько пришло, ₽", type: "number", req: true, help: `Ожидалось ${money(p.amount)}, срок ${fDate(p.due)}` }, { k: "paid", label: "Дата оплаты", type: "date", req: true }],
+    title: `Платёж с зарплаты: ${s.name}`, submit: "Отметить оплаченным", values: { received: nnum(p.amount), paid: payDay(), rest: true, restDue: daysAhead(7) },
+    fields: [{ k: "received", label: "Сколько пришло, ₽", type: "number", req: true, help: `Ожидалось ${money(p.amount)}, срок ${fDate(p.due)}` }, { k: "paid", label: "Дата оплаты", type: "date", req: true },
+      { section: "Если пришло меньше" }, { k: "rest", label: "Создать платёж на недостающую сумму", type: "checkbox" }, { k: "restDue", label: "Срок доплаты", type: "date" }],
     extra: `<p><strong id="m-sum">${diff(nnum(p.amount))}</strong></p>`,
     onInput: () => { const el = $("#m-sum"); if (el) el.textContent = diff(+($("#m-received")?.value) || 0); },
     onSubmit: v => {
@@ -1651,8 +1670,11 @@ function receivedForm(s, p) {
       return save(() => patchStudent(s.id, cur => {
         const old = (cur.payments || []).find(x => x.id === p.id); if (!old || old.paid || isPending(old)) return null;
         const want = nnum(old.amount), g = v.received - want;
-        return { payments: cur.payments.map(x => x.id === p.id ? { ...x, amount: v.received, expected: want, paid: v.paid } : x),
-          log: withLog(cur, logItem(`Платёж с зарплаты оплачен: пришло ${money(v.received)}, ожидалось ${money(want)}${g ? `, ${g < 0 ? "недоплата" : "переплата"} ${money(Math.abs(g))}` : ""}`)) };
+        const pays = cur.payments.map(x => x.id === p.id ? markPaid(cur, x, v.paid, { amount: v.received, expected: want }) : x);
+        const rest = g < 0 && v.rest ? { id: newId("x"), amount: -g, due: isDay(v.restDue) ? v.restDue : daysAhead(7), paid: null, comment: `Доплата: ${old.comment || "с зарплаты"}`, salary: true } : null;
+        if (rest) pays.push(rest);
+        return { payments: pays,
+          log: withLog(cur, logItem(`Платёж с зарплаты оплачен: пришло ${money(v.received)}, ожидалось ${money(want)}${g ? `, ${g < 0 ? "недоплата" : "переплата"} ${money(Math.abs(g))}` : ""}${rest ? `; создан платёж на доплату ${money(rest.amount)}, срок ${fDate(rest.due)}` : ""}`)) };
       }), "Платёж отмечен оплаченным");
     },
   });
@@ -1682,9 +1704,9 @@ function botLine(s) {
   return `<p class="hint" style="margin-top:6px">${s.tgId ? "Студент подключён к боту: в день платежа бот ему напомнит." : `Студент не подключён к боту и напоминаний о платежах не получит. ${S.readOnly ? "" : `<button class="link" data-act="tg-student" data-id="${esc(s.id)}">Получить ссылку для студента</button>`}`}</p>`;
 }
 // ----- История оплат: вовремя или с опозданием. Считается из срока и даты оплаты каждого платежа -----
-const payDelay = x => { if (!isObj(x) || !isDay(x.due) || !isDay(x.paid)) return null; const d = daysBetween(x.due.slice(0, 10), x.paid.slice(0, 10)); return Number.isNaN(d) ? null : Math.max(d, 0); }; // дата вроде 2026-13-45 не считается
+const payDelay = x => { if (!isObj(x) || isRefund(x) || !isDay(x.due) || !isDay(x.paid)) return null; const d = daysBetween(x.due.slice(0, 10), x.paid.slice(0, 10)); return Number.isNaN(d) ? null : Math.max(d, 0); }; // дата вроде 2026-13-45 не считается
 function payHistory(s) {
-  const t = today(), pays = (Array.isArray(s.payments) ? s.payments : []).filter(x => isObj(x) && isDay(x.due));
+  const t = today(), pays = (Array.isArray(s.payments) ? s.payments : []).filter(x => isObj(x) && isDay(x.due) && !isRefund(x));
   const delays = pays.map(payDelay).filter(d => d !== null), late = delays.filter(d => d > 0);
   const open = pays.filter(x => !x.paid && x.due.slice(0, 10) < t && !Number.isNaN(daysBetween(x.due.slice(0, 10), t)));
   return {
@@ -1718,12 +1740,12 @@ function proofSection(s) {
 function paySection(s) {
   const t = today(), pays = sortBy(s.payments || [], x => x.due);
   return `<section class="sec"><header><h3>Платежи</h3><span class="sub">${s.price ? `${money(paidSum(s))} из ${money(s.price)}` : pays.length ? money(paidSum(s)) : ""}</span><span class="right"></span>
-      <button class="btn small" data-act="pay-new" data-id="${esc(s.id)}">+ Платёж</button>${SGROUP[s.stage] === "job" ? `<button class="btn small" data-act="pay-salary" data-id="${esc(s.id)}">+ С зарплаты</button>` : ""}</header>
+      <button class="btn small" data-act="pay-new" data-id="${esc(s.id)}">+ Платёж</button>${SGROUP[s.stage] === "job" ? `<button class="btn small" data-act="pay-salary" data-id="${esc(s.id)}">+ С зарплаты</button>` : ""}${canConfirm() && paidSum(s) > 0 ? `<button class="btn small ghost" data-act="pay-refund" data-id="${esc(s.id)}">Возврат</button>` : ""}</header>
     ${payHistoryLine(s)}<div class="box">${pays.length ? `<div class="table-wrap"><table class="compact"><tbody>
       ${pays.map(x => { const od = !x.paid && x.due < t; return `<tr><td>${fShort(x.due)}${x.comment ? `<div class="sub">${esc(x.comment)}</div>` : ""}</td><td class="num">${isPending(x) ? `<span class="sub">${esc(pctText(x.percent))} от дохода</span>` : money(x.amount) + gapText(x)}</td>
-        <td>${x.paid ? (payDelay(x) > 0 ? `<span class="tag warn" title="Срок был ${esc(fDate(x.due))}">оплачен ${fDay(x.paid)} · на ${days(payDelay(x))} позже</span>` : `<span class="tag ok">оплачен ${fDay(x.paid)}</span>`) : isPending(x) ? `<span class="tag ${od ? "danger" : "warn"}">${od ? "ждём доход" : "сумма по доходу"}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
-        <td class="row-actions">${x.paid ? "" : isPending(x) ? `<button class="btn small" data-act="pay-income" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Указать доход</button> ` : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(s.id)}" data-pid="${esc(x.id)}" title="Скопировать текст напоминания">Напомнить</button> <button class="btn small" data-act="pay-done" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Оплачен</button> `}<button class="btn small ghost" data-act="pay-edit" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Изменить</button></td></tr>`; }).join("")}
-    </tbody></table></div>` : `<p class="empty">Платежей пока нет</p>`}</div>${pays.some(x => !x.paid) ? botLine(s) : ""}</section>${proofSection(s)}`;
+        <td>${isRefund(x) ? `<span class="tag warn">возврат ${fDay(x.paid)}</span>` : x.paid ? (payDelay(x) > 0 ? `<span class="tag warn" title="Срок был ${esc(fDate(x.due))}">оплачен ${fDay(x.paid)} · на ${days(payDelay(x))} позже</span>` : `<span class="tag ok">оплачен ${fDay(x.paid)}</span>`) : isPending(x) ? `<span class="tag ${od ? "danger" : "warn"}">${od ? "ждём доход" : "сумма по доходу"}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
+        <td class="row-actions">${x.paid ? "" : isPending(x) ? `<button class="btn small" data-act="pay-income" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Указать доход</button> ` : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(s.id)}" data-pid="${esc(x.id)}" title="Скопировать текст напоминания">Напомнить</button> ${canConfirm() ? `<button class="btn small" data-act="pay-done" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Оплачен</button> ` : ""}`}${x.paid && !canConfirm() ? "" : `<button class="btn small ghost" data-act="pay-edit" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Изменить</button>`}</td></tr>`; }).join("")}
+    </tbody></table></div>` : `<p class="empty">Платежей пока нет</p>`}</div>${S.limited && pays.some(x => !x.paid && !isPending(x)) ? `<p class="hint" style="margin-top:6px">Оплату отмечает администратор, когда деньги пришли.</p>` : ""}${pays.some(x => !x.paid) ? botLine(s) : ""}</section>${proofSection(s)}`;
 }
 function appSection(s) {
   const apps = sortBy(s.apps || [], a => a.date || "").reverse();
@@ -1764,6 +1786,7 @@ const NEXT_STEP = {
 };
 const tgUser = s => { const u = s.telegram ? String(s.telegram).replace(/^@/, "") : ""; return /^[A-Za-z0-9_]{3,}$/.test(u) ? u : ""; };
 const firstUnpaid = s => sortBy((s.payments || []).filter(x => !x.paid), x => x.due || "")[0] || null;
+const firstPayable = s => sortBy((s.payments || []).filter(x => !x.paid && !isPending(x)), x => x.due || "")[0] || null; // у платежа от дохода ещё нет суммы
 // Переход на следующий этап, которому нужны данные (дата созвона, стоимость, оффер), всегда идёт через форму:
 // на доске и в списке этапов так же, как по кнопке «Дальше»
 const ASK_ON = ["call", "waiting_payment", "studying", "offer"];
@@ -1784,13 +1807,13 @@ function pathHTML(s) {
 }
 function advanceForm(s) {
   const to = nextStage(s); if (!to) return;
-  const def = NEXT_STEP[to], c = D().cohorts.find(x => x.id === s.cohortId), unpaid = firstUnpaid(s);
+  const def = NEXT_STEP[to], c = D().cohorts.find(x => x.id === s.cohortId), unpaid = firstUnpaid(s), payable = firstPayable(s);
   const own = {
     contacted: [{ k: "note", label: "О чём договорились", type: "textarea", wide: true, rows: 2, ph: "Хочет перейти в аналитики, готов начать в ноябре", help: "Попадёт в заметки" }],
     call: [{ k: "mdate", label: "Дата созвона", type: "date", req: true, quick: true }, { k: "mtime", label: "Время", type: "time", help: "Встреча появится в календаре" }],
     waiting_payment: [{ k: "price", label: "Стоимость, ₽", type: "number", req: true, wide: !!unpaid },
       ...(unpaid ? [] : [{ k: "first", label: "Срок оплаты", type: "date", quick: true, help: "В этот день платёж появится на экране «Сегодня»" }])],
-    studying: [...(unpaid ? [{ k: "paid", label: `Платёж получен: ${payText(unpaid)}`, type: "checkbox" }] : []),
+    studying: [...(payable && canConfirm() ? [{ k: "paid", label: `Платёж получен: ${payText(payable)}`, type: "checkbox" }] : []),
       { k: "cohortId", label: "Поток", type: "select", options: cohortOpts() }, ...(S.limited ? [] : [{ k: "mentorId", label: "Ментор", type: "select", options: teamOpts() }])],
     offer: [{ k: "jobCompany", label: "Компания", req: true }, { k: "jobPosition", label: "Должность" }, { k: "jobSalary", label: "Зарплата, ₽", type: "number" }, { k: "offerDate", label: "Дата оффера", type: "date" },
       { section: "Оплата с зарплаты" }, { k: "splan", label: "Создать платежи с зарплаты", type: "checkbox" }, { k: "skind", label: "Как платят", type: "select", options: SALARY_KINDS },
@@ -1838,8 +1861,9 @@ async function advance(id, to, v) {
         }
       }
       if (to === "studying") {
-        const pay = v.paid ? firstUnpaid(cur) : null;
-        if (pay) { p.payments = (cur.payments || []).map(x => x.id === pay.id ? { ...x, paid: today() } : x); m.paidId = pay.id; log.push(logItem(`Платёж отмечен оплаченным: ${payText(pay)}`)); }
+        const pay = v.paid && canConfirm() ? firstPayable(cur) : null;
+        const after = { ...cur, cohortId: v.cohortId || null }; // направление — того потока, в который студент идёт учиться
+        if (pay) { p.payments = (cur.payments || []).map(x => x.id === pay.id ? markPaid(after, x, payDay()) : x); m.paidId = pay.id; log.push(logItem(`Платёж отмечен оплаченным: ${payText(pay)}`)); }
         set("cohortId", v.cohortId || null);
         if (!S.limited) set("mentorId", v.mentorId || null);
       }
@@ -1870,7 +1894,7 @@ async function advance(id, to, v) {
       const prev = m.prev, back = { stage: prev.stage, stageAt: prev.stageAt, next: prev.next, history: (cur.history || []).filter(h => !(h.at === m.at && h.to === to)) };
       for (const k of m.keys) back[k] = prev[k];
       if (m.note) back.notes = (cur.notes || []).filter(n => n.id !== m.note);
-      if (m.pays.length || m.paidId) back.payments = (cur.payments || []).filter(x => !m.pays.includes(x.id)).map(x => x.id === m.paidId ? { ...x, paid: null } : x);
+      if (m.pays.length || m.paidId) back.payments = (cur.payments || []).filter(x => !m.pays.includes(x.id)).map(x => x.id === m.paidId ? markPaid(cur, x, null) : x);
       if (m.logs.length) back.log = (cur.log || []).filter(l => !m.logs.includes(l.id));
       return back;
     });
@@ -1947,7 +1971,7 @@ function moneyHTML(r) {
   const cur = today().slice(0, 7), months = Array.isArray(r.months) ? r.months : [];
   return `<section class="kpis">
     ${kpiHTML(`Начислено за ${esc(monthName(cur).toLowerCase())}`, signed(sum(months.filter(m => m.month === cur), m => m.accrued)), "от чистой выручки направлений")}
-    ${kpiHTML("К выплате сейчас", money(Math.max(r.balance, 0)), r.balance < 0 ? `выплачено вперёд: ${money(-r.balance)}` : "начислено минус выплачено", " accent")}
+    ${kpiHTML("К выплате сейчас", money(Math.max(r.balance, 0)), r.balance < -0.5 ? `выплачено вперёд: ${money(-r.balance)}` : "начислено минус выплачено", " accent")}
     ${kpiHTML("Начислено всего", signed(r.accrued))}${kpiHTML("Выплачено всего", money(r.paidOut))}</section>
   <div class="stack">${panel("Начисления по месяцам", "", monthsTable(months))}${panel("Выплаты", "", payoutList(Array.isArray(r.payouts) ? r.payouts : [], false))}</div>
   <p class="hint" style="margin-top:12px">Чистая выручка — оплаты студентов направления за месяц минус расходы. Ваша доля считается от неё по ставке, действовавшей в этом месяце. Если расходы месяца больше оплат, начисление отрицательное и уменьшает остаток.</p>`;
@@ -1965,7 +1989,7 @@ function myMoneyHTML(r) {
     : panel("Расходы, которые учтены в расчёте", exps.length ? money(sum(exps, e => nnum(e.amount))) : "", exps.length ? `<ul class="rows" id="my-expenses">${exps.map(e => `<li><span class="who"><strong>${esc(e.comment || "Расход")}</strong><span>${esc(e.direction)}</span></span><span class="amt">${money(e.amount)}</span><span class="when">${fDate(e.date)}</span></li>`).join("")}</ul>` : `<p class="empty">${Array.isArray(r.expenses) ? "Расходов в ваших направлениях не было" : "Список расходов появится после ближайшего пересчёта отчёта: при следующей оплате, расходе или выплате"}</p>`, "", "Расходы направлений, в которых у вас есть доля. Они вычитаются из оплат студентов до расчёта вашего процента.");
   return `<section class="kpis" id="my-kpis">
     ${kpiHTML(`Вам начислено за ${mName}`, signed(accr), now.length ? `${now.map(m => `${esc(m.share)}% от ${signed(m.net)}`).join(" + ")} чистой выручки` : "оплат в этом месяце пока не было", " accent")}
-    ${kpiHTML("Осталось получить", money(Math.max(r.balance, 0)), r.balance < 0 ? `вам выплатили вперёд ${money(-r.balance)}` : "начислено за всё время минус выплачено")}
+    ${kpiHTML("Осталось получить", money(Math.max(r.balance, 0)), r.balance < -0.5 ? `вам выплатили вперёд ${money(-r.balance)}` : "начислено за всё время минус выплачено")}
     ${kpiHTML("Уже выплачено", money(r.paidOut), pays.length ? `последняя выплата ${fDate(pays[0].date)}` : "выплат пока не было")}</section>
   <nav class="tabs" id="my-tabs">${tab("months", "По месяцам")}${tab("paid", `Выплаты мне${pays.length ? ` · ${pays.length}` : ""}`)}${tab("expenses", `Расходы${exps.length ? ` · ${exps.length}` : ""}`)}</nav>
   <div class="stack">${body}</div>`;
@@ -1997,7 +2021,7 @@ function payoutsView() {
   for (const x of D().payouts) { if (typeof x.partnerId === "string" && partnerById(x.partnerId)) add("partner", x.partnerId); if (typeof x.mentorId === "string" && teamById(x.mentorId)) add("mentor", x.mentorId); }
   const prow = parties.map(x => { const st = partyStats(x.kind, x.id); return { ...x, st, month: sum(st.months.filter(m => m.month === month), m => m.accrued) }; });
   const got = sum(cells, c => c.received), exp = sum(cells, c => c.expenses), net = got - exp, own = sum(cells, c => c.owner);
-  const due = sum(prow, r => Math.max(r.st.balance, 0));
+  const due = sum(prow.filter(r => owes(r.st.balance)), r => r.st.balance);
   const open = S.payOpen && prow.find(r => r.kind + ":" + r.id === S.payOpen);
   const loose = D().cohorts.filter(c => !dirById(c.directionId)).length;
   const dirPanel = c => {
@@ -2009,7 +2033,7 @@ function payoutsView() {
     ${d ? "" : `<p class="hint pad">Оплаты студентов без потока и потоков без направления. Они ни с кем не делятся. Привяжите потоки к направлению в их настройках.</p>`}`);
   };
   const exps = sortBy(D().expenses.filter(e => dayOf(e.date).slice(0, 7) === month), e => String(e.date)).reverse();
-  const mName = esc(monthName(month).toLowerCase()), owing = prow.filter(r => r.st.balance > 0).length;
+  const mName = esc(monthName(month).toLowerCase()), owing = prow.filter(r => owes(r.st.balance)).length;
   const f = S.f, q = f.q.trim().toLowerCase(), has = v => !q || String(v || "").toLowerCase().includes(q);
   const dirOpts = [["", "Все направления"], ...D().directions.map(d => [d.id, d.name])];
   const inDir = id => !f.dir || (dirById(id)?.id || "") === f.dir;
@@ -2021,8 +2045,8 @@ function payoutsView() {
     : filtersHTML(["q", "dir"], { ph: "Что за расход", extra: D().directions.length > 1 ? fsel("dir", "Направление", dirOpts) : "" });
   const partiesHTML = panel("Кому сколько выплатить", prow.length || "", prow.length ? `<div class="table-wrap"><table id="pay-parties"><thead><tr><th>Кому</th><th class="num">Начислено за ${mName}</th><th class="num">Начислено всего</th><th class="num">Уже выплачено</th><th class="num">Осталось выплатить</th><th></th></tr></thead>
     <tbody>${prowF.map(r => `<tr class="click${open === r ? " sel" : ""}" data-act="pay-open" data-id="${esc(r.kind + ":" + r.id)}"><td><strong>${esc(partyName(r))}</strong> <span class="sub">${r.kind === "partner" ? "партнёр" : "ментор"}</span></td>
-      <td class="num">${signed(r.month)}</td><td class="num">${signed(r.st.accrued)}</td><td class="num">${money(r.st.paidOut)}</td><td class="num"><strong class="${r.st.balance > 0 ? "warn-text" : ""}">${money(r.st.balance)}</strong></td>
-      <td class="row-actions">${S.readOnly ? "" : `<button class="btn small${r.st.balance > 0 ? " primary" : ""}" data-act="payout-new" data-kind="${esc(r.kind)}" data-id="${esc(r.id)}">Выплатить</button>`}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">По этому отбору никого нет. Нажмите «Сбросить».</td></tr>`}</tbody>
+      <td class="num">${signed(r.month)}</td><td class="num">${signed(r.st.accrued)}</td><td class="num">${money(r.st.paidOut)}</td><td class="num"><strong class="${owes(r.st.balance) ? "warn-text" : ""}"${r.st.balance < -0.5 ? ' title="Выплачено больше начисленного"' : ""}>${r.st.balance < -0.5 ? signed(r.st.balance) : money(r.st.balance)}</strong></td>
+      <td class="row-actions">${S.readOnly ? "" : `<button class="btn small${owes(r.st.balance) ? " primary" : ""}" data-act="payout-new" data-kind="${esc(r.kind)}" data-id="${esc(r.id)}">Выплатить</button>`}</td></tr>`).join("") || `<tr><td colspan="6" class="empty">По этому отбору никого нет. Нажмите «Сбросить».</td></tr>`}</tbody>
       ${prowF.length > 1 ? `<tfoot><tr><td>Итого${prowF.length < prowAll ? ` по отбору: ${prowF.length} из ${prowAll}` : ""}</td><td class="num">${signed(sum(prowF, r => r.month))}</td><td class="num">${signed(sum(prowF, r => r.st.accrued))}</td><td class="num">${money(sum(prowF, r => r.st.paidOut))}</td><td class="num">${money(sum(prowF, r => Math.max(r.st.balance, 0)))}</td><td></td></tr></tfoot>` : ""}</table></div>`
     : `<p class="empty">Добавьте стороны в условиях направления: Настройки → Направления</p>`, "", prow.length ? "Когда перевели деньги, нажмите «Выплатить» — остаток уменьшится. Нажмите на строку, чтобы увидеть расчёт по месяцам и прошлые выплаты." : "")
     + (open ? panel(`${esc(partyName(open))}: начисления`, "", monthsTable(open.st.months)) + panel(`${esc(partyName(open))}: выплаты`, open.st.payouts.length ? money(open.st.paidOut) : "", payoutList(open.st.payouts, !S.readOnly)) : "");
@@ -2040,7 +2064,7 @@ function payoutsView() {
   ${tabs}
   ${bar}<div class="stack">${view === "parties" ? partiesHTML : view === "calc" ? calcHTML : expHTML}</div>`;
 }
-const EXPENSE_HINTS = ["Реклама", "Налоги", "Комиссия банка", "Сервисы и подписки", "Возврат студенту", "Непредвиденный расход"];
+const EXPENSE_HINTS = ["Реклама", "Налоги", "Комиссия банка", "Сервисы и подписки", "Непредвиденный расход"]; // возврат студенту записывается в его карточке
 function expenseForm(e) {
   const dirs = D().directions;
   openModal({
@@ -2114,14 +2138,14 @@ function paymentsView() {
   const amt = l => money(sum(l, p => nnum(p.amount)));
   const checked = all.filter(p => p.paid && p.expected != null), gapAll = sum(checked, payGap), short = checked.filter(p => payGap(p) < 0).length;
   const head = headHTML("Платежи студентов") + `<section class="kpis" id="pay-kpis">
-    <div class="kpi"><span class="kpi-label">Ожидается</span><span class="kpi-value">${amt(up)}</span><span class="kpi-sub">${up.length ? plural(up.length, "платёж", "платежа", "платежей").replace(/^/, up.length + " ") + ", срок ещё не наступил" : "ближайших платежей нет"}</span></div>
-    <div class="kpi"><span class="kpi-label">Просрочено</span><span class="kpi-value${od.length ? " danger-text" : ""}">${amt(od)}</span><span class="kpi-sub">${od.length ? `${od.length} ${plural(od.length, "платёж", "платежа", "платежей")}: напомните студентам` : "просрочек нет"}</span></div>
+    <div class="kpi"><span class="kpi-label">Ожидается</span><span class="kpi-value">${amt(up)}</span><span class="kpi-sub">${up.length ? plural(up.length, "платёж", "платежа", "платежей").replace(/^/, up.length + " ") + ", срок сегодня или позже" + (up.some(isPending) ? ` · без суммы: ${up.filter(isPending).length}` : "") : "ближайших платежей нет"}</span></div>
+    <div class="kpi"><span class="kpi-label">Просрочено</span><span class="kpi-value${od.length ? " danger-text" : ""}">${amt(od)}</span><span class="kpi-sub">${od.length ? `${od.length} ${plural(od.length, "платёж", "платежа", "платежей")}${od.some(isPending) ? `, без суммы: ${od.filter(isPending).length}` : ""}: напомните студентам` : "просрочек нет"}</span></div>
     <div class="kpi"><span class="kpi-label">${f.pmonth ? `Получено за ${esc(monthName(f.pmonth).toLowerCase())}` : "Получено в этом месяце"}</span><span class="kpi-value">${amt(paidM)}</span><span class="kpi-sub">${paidM.length ? `${paidM.length} ${plural(paidM.length, "платёж", "платежа", "платежей")}` : "оплат пока не было"}</span></div>
     ${checked.length ? `<div class="kpi" id="pay-gap"><span class="kpi-label">С зарплат: ожидали и получили</span><span class="kpi-value${gapAll < 0 ? " danger-text" : ""}">${gapAll ? (gapAll < 0 ? "−" : "+") + money(Math.abs(gapAll)) : "сходится"}</span><span class="kpi-sub">ожидали ${money(sum(checked, p => nnum(p.expected)))}, пришло ${money(sum(checked, p => nnum(p.amount)))}${short ? ` · недоплат: ${short}` : ""}</span></div>` : ""}</section>
   <nav class="tabs">${tab("upcoming", `Ожидаются${up.length ? ` · ${up.length}` : ""}`)}${tab("overdue", `Просроченные${od.length ? ` · ${od.length}` : ""}`)}${tab("paid", "Оплаченные")}</nav>${bar}${filtering ? `<p class="hint" id="pay-filtered" style="margin:-6px 0 10px">Показаны платежи по отбору: ${all.length} из ${every.length}. Суммы сверху посчитаны по ним же.</p>` : ""}`;
   let list;
-  if (S.payTab === "overdue") list = sortBy(all.filter(p => !p.paid && p.due < t), p => p.due);
-  else if (S.payTab === "upcoming") list = sortBy(all.filter(p => !p.paid && p.due >= t), p => p.due);
+  if (S.payTab === "overdue") list = sortBy(od, p => p.due);         // выбывшие в списках ожидаемых не держатся, как и в суммах сверху
+  else if (S.payTab === "upcoming") list = sortBy(up, p => p.due);
   else list = sortBy(all.filter(p => p.paid), p => p.paid).reverse();
   const paidTab = !["overdue", "upcoming"].includes(S.payTab);
   const shown = list.slice(0, rowsMax());
@@ -2132,7 +2156,7 @@ function paymentsView() {
       <td>${esc(cohortName(p.s.cohortId) || "—")}</td><td${!p.paid && p.due < t ? ' class="danger-text"' : ""}>${fDate(paidTab ? p.paid : p.due)}</td>
       ${paidTab ? `<td class="muted">${fDate(p.due)}</td><td>${payDelay(p) > 0 ? `<span class="tag warn">на ${days(payDelay(p))} позже</span>` : payDelay(p) === 0 ? `<span class="tag ok">вовремя</span>` : ""}</td>` : ""}
       <td class="num">${isPending(p) ? `<span class="sub">${esc(pctText(p.percent))} от дохода</span>` : money(p.amount) + gapText(p)}</td><td class="muted">${esc(p.comment)}</td>
-      <td class="row-actions">${p.paid ? "" : `${remindBtn(p.s, p)} <button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">${isPending(p) ? "Указать доход" : "Оплачен"}</button>`}</td></tr>`).join("") || `<tr><td colspan="${paidTab ? 8 : 6}" class="empty">${emptyText}</td></tr>`}${moreRow(shown.length, list.length, paidTab ? 8 : 6)}</tbody>
+      <td class="row-actions">${isRefund(p) ? `<span class="tag warn">возврат</span>` : p.paid ? "" : `${remindBtn(p.s, p)} ${isPending(p) || canConfirm() ? `<button class="btn small" data-act="pay-done" data-id="${esc(p.s.id)}" data-pid="${esc(p.id)}">${isPending(p) ? "Указать доход" : "Оплачен"}</button>` : ""}`}</td></tr>`).join("") || `<tr><td colspan="${paidTab ? 8 : 6}" class="empty">${emptyText}</td></tr>`}${moreRow(shown.length, list.length, paidTab ? 8 : 6)}</tbody>
     ${list.length ? `<tfoot><tr><td colspan="${paidTab ? 5 : 3}">Итого${shown.length < list.length ? ` по всем ${list.length}` : ""}</td><td class="num">${money(sum(list, p => p.amount))}</td><td colspan="2"></td></tr></tfoot>` : ""}
   </table></div>`;
 }
@@ -2420,13 +2444,14 @@ async function payDone(id, pid) {
   const s = stu(id); if (!s) return;
   const first = (s.payments || []).find(x => x.id === pid);
   if (isPending(first)) return incomeForm(s, first); // сумма ещё неизвестна: сначала доход за месяц
-  if (first?.salary === true && !first.paid && !S.readOnly) return receivedForm(s, first); // с зарплаты: спрашиваем, сколько пришло на самом деле
-  const mark = paid => cur => (cur.payments || []).map(p => p.id === pid ? { ...p, paid } : p);
+  if (!canConfirm()) return toast("Оплату отмечает администратор");
+  if (first?.salary === true && !first.paid) return receivedForm(s, first); // с зарплаты: спрашиваем, сколько пришло на самом деле
+  const mark = paid => cur => (cur.payments || []).map(p => p.id === pid ? markPaid(cur, p, paid) : p);
   let item = null;
   const ok = await save(() => patchStudent(id, cur => {
     const p = (cur.payments || []).find(x => x.id === pid); if (!p || p.paid) return null;
     item = logItem(`Платёж отмечен оплаченным: ${payText(p)}`);
-    return { payments: mark(today())(cur), log: withLog(cur, item) };
+    return { payments: mark(payDay())(cur), log: withLog(cur, item) };
   }));
   if (ok && item) toast("Платёж отмечен оплаченным", () => save(() => patchStudent(id, cur => ({ payments: mark(null)(cur), log: (cur.log || []).filter(l => l.id !== item.id) })), "Отметка снята"));
 }
@@ -2711,12 +2736,38 @@ async function saveStudent(s, v, orig = {}) {
     return stageTo && stageTo !== cur.stage ? { ...patch, ...stageChange(cur, stageTo) } : patch;
   }), "Сохранено");
 }
+// Возврат — платёж с минусом в месяце возврата: уменьшает оплаченное студентом и выручку этого месяца
+function refundForm(s, r) {
+  openModal({
+    title: r ? "Возврат" : `Возврат денег: ${s.name}`, submit: r ? "Сохранить" : "Записать возврат",
+    values: r ? { amount: -nnum(r.amount), paid: r.paid, comment: r.comment } : { paid: payDay() },
+    fields: [{ k: "amount", label: "Сколько вернули, ₽", type: "number", req: true, help: `Студент заплатил всего ${money(paidSum(s))}` }, { k: "paid", label: "Дата возврата", type: "date", req: true },
+      { k: "comment", label: "Причина", wide: true, ph: "Например, «Отказался после первой недели»" }],
+    extra: `<p class="hint">Возврат уменьшает выручку месяца, в котором деньги вернули, и доли всех сторон направления за этот месяц.</p>`,
+    onDelete: r ? () => save(() => patchStudent(s.id, cur => {
+      const old = (cur.payments || []).find(x => x.id === r.id); if (!old) return null;
+      return { payments: cur.payments.filter(x => x.id !== r.id), log: withLog(cur, logItem(`Возврат удалён: ${money(-nnum(old.amount))} от ${fDate(old.paid)}`)) };
+    }), "Возврат удалён") : null,
+    onSubmit: v => {
+      if (!(v.amount > 0)) return "Укажите сумму возврата";
+      if (!isDay(v.paid)) return "Укажите дату возврата";
+      if (v.amount > paidSum(s) + (r ? -nnum(r.amount) : 0) + 0.005) return `Вернуть можно не больше, чем студент заплатил: ${money(paidSum(s) + (r ? -nnum(r.amount) : 0))}`;
+      return save(() => patchStudent(s.id, cur => {
+        const list = cur.payments || [], old = r ? list.find(x => x.id === r.id) : null;
+        if (r && !old) throw { code: "gone-item" };
+        const item = markPaid(cur, { ...(old || {}), id: old?.id || newId("x"), amount: -v.amount, due: v.paid, refund: true, comment: v.comment || "Возврат" }, v.paid);
+        if (old && old.paid === v.paid && typeof old.dirId === "string") item.dirId = old.dirId;
+        return { payments: old ? list.map(x => x.id === r.id ? item : x) : [...list, item], log: withLog(cur, logItem(`${old ? "Возврат изменён" : "Возврат студенту"}: ${money(v.amount)}, ${fDate(v.paid)}${v.comment ? ` — ${v.comment}` : ""}`)) };
+      }), r ? "Сохранено" : "Возврат записан");
+    },
+  });
+}
 function paymentForm(s, p) {
   openModal({
     title: p ? "Платёж" : "Новый платёж", values: p ? { ...p } : { due: today() },
     // У платежа от дохода суммы ещё нет: здесь меняются только срок и комментарий, сумму вносит «Указать доход»
     fields: [...(isPending(p) ? [] : [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }]), { k: "due", label: isPending(p) ? "День расчёта" : "Срок оплаты", type: "date", req: true },
-      ...(isPending(p) ? [] : [{ k: "paid", label: "Дата оплаты", type: "date", help: "Пусто, если ещё не оплачен" }]), { k: "comment", label: "Комментарий", ph: "Например, «Вторая часть, СБП»", wide: true }],
+      ...(isPending(p) || !canConfirm() ? [] : [{ k: "paid", label: "Дата оплаты", type: "date", help: "Пусто, если ещё не оплачен" }]), { k: "comment", label: "Комментарий", ph: "Например, «Вторая часть, СБП»", wide: true }],
     onDelete: p ? () => save(() => patchStudent(s.id, cur => {
       const old = (cur.payments || []).find(x => x.id === p.id); if (!old) return null;
       return { payments: cur.payments.filter(x => x.id !== p.id), log: withLog(cur, logItem(`Платёж удалён: ${payText(old)}${old.paid ? `, был оплачен ${fDate(old.paid)}` : ""}`)) };
@@ -2725,7 +2776,7 @@ function paymentForm(s, p) {
       const pending = isPending(p);
       if (!pending && !(v.amount > 0)) return "Сумма должна быть больше нуля";
       const item = pending ? { id: p.id, amount: null, percent: p.percent, due: v.due, paid: null, comment: v.comment }
-        : { id: p?.id || newId("x"), amount: v.amount, due: v.due, paid: v.paid || null, comment: v.comment };
+        : { id: p?.id || newId("x"), amount: v.amount, due: v.due, paid: canConfirm() ? v.paid || null : null, comment: v.comment };
       if (p?.salary === true) item.salary = true; // по этой отметке бот просит у студента фото начисления
       if (p?.income != null && !pending) item.income = p.income;
       if (p?.expected != null && item.paid) item.expected = p.expected;
@@ -2743,7 +2794,8 @@ function paymentForm(s, p) {
           if ((old.paid || null) !== item.paid) ch.push(`оплата ${old.paid ? fDate(old.paid) : "нет"} → ${item.paid ? fDate(item.paid) : "нет"}`);
           if (ch.length) text = `Платёж изменён (${payText(old)}): ${ch.join("; ")}`;
         }
-        const patch = { payments: old ? list.map(x => x.id === p.id ? item : x) : [...list, item] };
+        const fixed = item.paid ? markPaid(cur, { ...item, ...(old && dayOf(old.paid) && typeof old.dirId === "string" ? { dirId: old.dirId, paid: old.paid } : {}) }, item.paid) : item;
+        const patch = { payments: old ? list.map(x => x.id === p.id ? fixed : x) : [...list, fixed] };
         if (text) patch.log = withLog(cur, logItem(text));
         return patch;
       }), "Сохранено");
@@ -2842,7 +2894,7 @@ function lostForm(s) {
     onSubmit: v => stu(s.id)?.stage === "lost" ? save(() => patchStudent(s.id, () => ({ lostReason: v.reason })), "Сохранено") : moveStage(s.id, "lost", { lostReason: v.reason, next: null }),
   });
 }
-function cohortForm(c) {
+function cohortForm(c, { board = false } = {}) {
   openModal({
     title: c ? "Поток" : "Новый поток", wide: true, values: c ? { ...c, directionId: c.directionId || "", modules: (c.modules || []).map(m => m.title).join("\n") } : { active: true, directionId: D().directions.length === 1 ? D().directions[0].id : "" },
     fields: [{ k: "name", label: "Название", req: true, ph: "Поток 4" }, { k: "price", label: "Базовая цена, ₽", type: "number" },
@@ -2850,11 +2902,11 @@ function cohortForm(c) {
       { k: "start", label: "Старт", type: "date" }, { k: "end", label: "Окончание обучения", type: "date" }, { k: "active", label: "Идёт набор или обучение", type: "checkbox" },
       { k: "link", label: "Постоянная ссылка на занятия", type: "url", wide: true, ph: "https://telemost.yandex.ru/…", help: "Бот пришлёт её студентам потока, если у самого занятия ссылки нет" },
       { k: "modules", label: "Программа: модули, по одному в строке", type: "textarea", rows: 7, wide: true, ph: "Введение в 1С\nОписание бизнес-процессов\nНаписание ТЗ", help: "По модулям отмечается прогресс студентов. Чтобы отметки сохранились, переименовывайте по одному модулю за сохранение." }],
-    onDelete: c ? () => [...D().students, ...S.trash].some(s => s.cohortId === c.id) ? (showErr("В потоке есть студенты. Сначала перенесите их в другой поток."), false) : save(() => delDoc("cohorts", c.id), "Поток удалён") : null,
+    onDelete: c ? () => [...D().students, ...S.trash].some(s => s.cohortId === c.id) ? (showErr("В потоке есть студенты. Сначала перенесите их в другой поток."), false) : save(() => delDoc("cohorts", c.id), "Поток удалён").then(ok => { if (ok && S.f.cohort === c.id) { S.f.cohort = ""; render(); } return ok; }) : null,
     onSubmit: v => {
       if (v.link && !/^https?:\/\//i.test(v.link)) return "Ссылка должна начинаться с http:// или https://";
       const id = c?.id || newId("cohorts"), isNew = !c;
-      return save(() => setDoc("cohorts", id, { ...(c || {}), ...v, directionId: S.limited ? (c?.directionId || null) : (v.directionId || null), modules: mergeModules(c?.modules || [], v.modules), id: undefined }), "Сохранено").then(ok => { if (ok && isNew) { S.cohortId = id; S.view = "cohort"; render(); } return ok; });
+      return save(() => setDoc("cohorts", id, { ...(c || {}), ...v, directionId: S.limited ? (c?.directionId || null) : (v.directionId || null), modules: mergeModules(c?.modules || [], v.modules), id: undefined }), "Сохранено").then(ok => { if (ok && isNew) { if (board) S.f.cohort = id; else { S.cohortId = id; S.view = "cohort"; } render(); } return ok; }); // с доски новый поток сразу выбирается на ней
     },
   });
 }
@@ -2977,10 +3029,18 @@ function payoutForm(kind, id) {
   const who = kind === "partner" ? partnerById(id) : teamById(id); if (!who) return;
   const st = partyStats(kind, id);
   openModal({
-    title: `Выплата: ${who.name}`, values: { amount: st.balance > 0 ? Math.round(st.balance) : null, date: today() },
-    fields: [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }, { k: "date", label: "Дата", type: "date", req: true }, { k: "comment", label: "Комментарий", wide: true, ph: "За октябрь" }],
-    extra: `<p class="hint">К выплате сейчас: ${money(st.balance)}</p>`,
-    onSubmit: v => !(v.amount > 0) ? "Сумма должна быть больше нуля" : !isDay(v.date) ? "Укажите дату" : save(() => setDoc("payouts", newId("payouts"), { [kind === "partner" ? "partnerId" : "mentorId"]: id, ...v }), "Выплата записана"),
+    // Остаток подставляется с копейками: после выплаты долг обнуляется точно
+    title: `Выплата: ${who.name}`, values: { amount: owes(st.balance) ? Math.round(st.balance * 100) / 100 : null, date: payDay(), over: false },
+    fields: [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }, { k: "date", label: "Дата", type: "date", req: true }, { k: "comment", label: "Комментарий", wide: true, ph: "За октябрь" },
+      { k: "over", label: "Выплатить больше остатка (аванс)", type: "checkbox" }],
+    extra: `<p class="hint">К выплате сейчас: ${money(Math.max(st.balance, 0))}</p>`,
+    onSubmit: v => {
+      if (!(v.amount > 0)) return "Сумма должна быть больше нуля";
+      if (!isDay(v.date)) return "Укажите дату";
+      if (v.amount > Math.max(st.balance, 0) + 0.5 && !v.over) return `Сумма больше остатка (${money(Math.max(st.balance, 0))}). Если это аванс, отметьте «Выплатить больше остатка».`;
+      const { over, ...rest } = v;
+      return save(() => setDoc("payouts", newId("payouts"), { [kind === "partner" ? "partnerId" : "mentorId"]: id, ...rest }), "Выплата записана");
+    },
   });
 }
 const reportDoc = p => partyReport("partner", p.id);
@@ -3252,8 +3312,9 @@ const ACT = {
     try { navigator.clipboard.writeText(remindText(s, p)).then(done, done); } catch (e) { done(); }
   },
   "pay-new": d => paymentForm(stu(d.id)),
-  "pay-edit": d => { const s = stu(d.id); paymentForm(s, (s.payments || []).find(p => p.id === d.pid)); },
+  "pay-edit": d => { const s = stu(d.id), x = (s?.payments || []).find(p => p.id === d.pid); if (!s) return; if (isRefund(x)) { if (canConfirm()) refundForm(s, x); return; } paymentForm(s, x); },
   "pay-done": d => payDone(d.id, d.pid),
+  "pay-refund": d => { const x = stu(d.id); if (x) refundForm(x); },
   "app-new": d => appForm(stu(d.id)),
   "app-edit": d => { const s = stu(d.id); appForm(s, (s.apps || []).find(a => a.id === d.aid)); },
   "note-add": d => {
@@ -3273,7 +3334,8 @@ const ACT = {
   "payout-del": (d, el) => { if (el.dataset.armed) return save(() => delDoc("payouts", d.id), "Выплата удалена"); el.dataset.armed = "1"; el.textContent = "Точно удалить?"; },
   "report-publish": d => publishReport(partnerById(d.id)),
   "report-tab": d => { S.reportId = d.id; render(); },
-  "cohort-new": () => cohortForm(null), "cohort-edit": d => cohortForm(D().cohorts.find(c => c.id === d.id)),
+  "cohort-new": () => cohortForm(null), "cohort-new-board": () => cohortForm(null, { board: true }),
+  "cohort-edit-board": d => cohortForm(D().cohorts.find(c => c.id === d.id), { board: true }), "cohort-edit": d => cohortForm(D().cohorts.find(c => c.id === d.id)),
   "team-new": () => teamForm(null), "team-edit": d => teamForm(D().team.find(m => m.id === d.id)),
   "team-me": d => save(async () => { for (const m of D().team.filter(m => m.userId === S.myId && m.id !== d.id)) await updDoc("team", m.id, { userId: null }); await updDoc("team", d.id, { userId: S.myId }); }, "Готово"),
   "demo-load": () => loadDemo(),

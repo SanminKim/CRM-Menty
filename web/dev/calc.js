@@ -34,6 +34,7 @@ vm.createContext(sandbox);
 vm.runInContext(script + `
 ;globalThis.__calc = (data, parties) => {
   const rows = name => Object.entries(data[name] || {}).filter(([, d]) => d && typeof d === "object" && !Array.isArray(d)).map(([id, d]) => ({ ...d, id }));
+  S.trash = rows("students").filter(s => s.deletedAt);  // как на странице: студенты из корзины лежат отдельно
   S.data = { students: rows("students").filter(s => !s.deletedAt), cohorts: rows("cohorts"), partners: rows("partners"), payouts: rows("payouts"),
     team: rows("team"), reports: [], meetings: [], directions: rows("directions"), expenses: rows("expenses") };
   SETTLED = null;

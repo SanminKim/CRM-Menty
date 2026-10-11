@@ -134,6 +134,8 @@ class Access:
                 raise Denied  # ментор не может забрать чужого студента или отдать своего
             self._check_partner_fields(old, new)
             self._check_proofs(old, new)
+            self._check_money(old, new)
+            self._check_direction(old, new)
             return
         if collection == "meetings":
             if new is not None and (old or {}).get("rsvp") != new.get("rsvp"):
@@ -150,6 +152,30 @@ class Access:
                     raise Denied  # занятие группы правит тот, кто его проводит
             return
         raise Denied
+
+    @staticmethod
+    def _check_direction(old, new):
+        """Ментор переводит студента только в поток того же направления: иначе он сам решал бы, с кем делятся будущие оплаты."""
+        if old is None or (old.get("cohortId") or None) == (new.get("cohortId") or None):
+            return
+        before = reports.current_direction(old)
+        if before and reports.current_direction(new) != before:
+            raise Denied
+
+    @staticmethod
+    def _check_money(old, new):
+        """Оплату подтверждает администратор: ментор не отмечает платёж оплаченным, не меняет и не удаляет оплаченные.
+        От оплаченных платежей зависят начисления всех сторон направления, в том числе самого ментора."""
+        def paid(data):
+            pays = (data or {}).get("payments")
+            if not isinstance(pays, list):
+                return []
+            # суммы сравниваются числами: 1000, 1000.0 и "1000" — одно и то же
+            return sorted(json.dumps({k: reports._number(p.get(k)) if k in ("amount", "expected") else p.get(k) for k in MONEY_KEYS},
+                                     sort_keys=True, ensure_ascii=False, default=str)
+                          for p in pays if isinstance(p, dict) and p.get("paid"))
+        if paid(old) != paid(new):
+            raise Denied
 
     @staticmethod
     def _check_proofs(old, new):
@@ -292,6 +318,52 @@ def _touch_meetings(student_id, rev):
     Doc.objects.filter(collection="meetings", data__studentId=student_id).update(rev=rev)
 
 
+MONEY_KEYS = ("id", "paid", "amount", "expected", "dirId", "refund")
+
+
+def _check_payment_ids(data):
+    """У платежей студента разные идентификаторы: по ним страница отмечает оплату, и двойник оплатился бы дважды."""
+    pays = data.get("payments") if isinstance(data, dict) else None
+    ids = [p["id"] for p in pays if isinstance(p, dict) and isinstance(p.get("id"), str)] if isinstance(pays, list) else []
+    if len(ids) != len(set(ids)):
+        raise Invalid("У двух платежей одинаковый номер")
+
+
+def _pin_payments(old, new):
+    """Оплаченный платёж запоминает направление, в котором получены деньги (dirId). Позже перевод студента в другой поток
+    или потока в другое направление прошлые начисления сторон не меняет. С неоплаченного платежа отметка снимается."""
+    pays = new.get("payments") if isinstance(new, dict) else None
+    if not isinstance(pays, list):
+        return
+    before = {}
+    if isinstance(old, dict) and isinstance(old.get("payments"), list):
+        before = {p["id"]: p for p in old["payments"] if isinstance(p, dict) and isinstance(p.get("id"), str)}
+    cache = {}
+
+    def direction(student):
+        key = student.get("cohortId") if isinstance(student.get("cohortId"), str) else ""
+        if key not in cache:
+            cache[key] = reports.current_direction(student)
+        return cache[key]
+
+    for p in pays:
+        if not isinstance(p, dict):
+            continue
+        if not reports._day(p.get("paid")):
+            p.pop("dirId", None)
+            continue
+        if isinstance(p.get("dirId"), str):
+            continue
+        was = before.get(p.get("id")) if isinstance(p.get("id"), str) else None
+        was_paid = was is not None and bool(reports._day(was.get("paid")))
+        if was_paid and isinstance(was.get("dirId"), str):
+            p["dirId"] = was["dirId"]
+            continue
+        found = direction(old if was_paid else new)  # оплачен раньше — по прежнему потоку, только что — по нынешнему
+        if found:
+            p["dirId"] = found  # пока у потока нет направления, отметки нет: деньги разделятся, когда поток привяжут
+
+
 @transaction.atomic
 def write(access, collection, doc_id, data, partial):
     """set (partial=False) или update (partial=True). Возвращает (ревизия, документ для пользователя)."""
@@ -309,6 +381,11 @@ def write(access, collection, doc_id, data, partial):
     new = merge(json.loads(json.dumps(old)), patch) if partial else patch
     _validate(collection, doc_id, new)
     access.check_write(collection, old, new)
+    if collection == "directions" and new is not None and reports.terms_problem(new):
+        raise Invalid(reports.terms_problem(new))
+    if collection == "students":
+        _check_payment_ids(new)
+        _pin_payments(old, new)
     if doc is None:
         doc = Doc(collection=collection, doc_id=doc_id)
         Tombstone.objects.filter(collection=collection, doc_id=doc_id).delete()
@@ -379,7 +456,7 @@ def _save(doc):
 
 
 @transaction.atomic
-def system_write(collection, doc_id, data):
+def system_write(collection, doc_id, data, refresh=True):
     """Запись от имени сервера (заявки с сайта, импорт копии): без проверки прав пользователя."""
     _validate(collection, doc_id, data)
     rev = _next_rev()
@@ -387,11 +464,15 @@ def system_write(collection, doc_id, data):
     doc = Doc.objects.filter(collection=collection, doc_id=doc_id).first() or Doc(collection=collection, doc_id=doc_id)
     old_mentor = doc.data.get("mentorId") if doc.pk else None
     old = doc.data if doc.pk else None
-    doc.data, doc.rev, doc.updated_by = _clean(collection, data), rev, None
+    data = _clean(collection, data)
+    if collection == "students":
+        _pin_payments(old, data)
+    doc.data, doc.rev, doc.updated_by = data, rev, None
     _save(doc)
     if collection == "students" and doc.data.get("mentorId") != old_mentor:
         _touch_meetings(doc_id, rev)
-    _refresh_reports(collection, rev, old, doc.data)
+    if refresh:
+        _refresh_reports(collection, rev, old, doc.data)
     return rev
 
 

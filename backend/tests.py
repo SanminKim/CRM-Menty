@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import random
@@ -40,7 +41,9 @@ def calc_case(seed):
         return [{"from": month(), "parties": [dict(zip(("kind", "id"), party()), share=share()) for _ in range(rnd.randint(1, 4))]}
                 for _ in range(rnd.randint(1, 3))]
 
-    payment = lambda: mostly(lambda: {"id": "x", "amount": amount(), "paid": mostly(day, [None], 0.7), "due": day()},
+    # у части оплат направление уже отмечено (dirId), в том числе удалённое или кривое
+    pinned = lambda: {} if rnd.random() < .5 else {"dirId": mostly(lambda: pick(["d0", "d1", ""]), ["d9", None, 4, ["d0"]])}
+    payment = lambda: mostly(lambda: {"id": "x", "amount": amount(), "paid": mostly(day, [None], 0.7), "due": day(), **pinned()},
                              [{"amount": None, "percent": 30, "paid": "2026-08-01"}, None, "строка", 5, [], {"paid": "2026-09-01"}])
     payout = lambda kind, party_id: {("partnerId" if kind == "partner" else "mentorId"): party_id, "amount": amount(), "date": day(),
                                      "comment": mostly(lambda: "аванс", [None, 5, "длинный " * 80])}
@@ -633,18 +636,21 @@ class ReportTests(BaseCase):
         self.assertEqual(r["rows"], [{"name": "Одноимённый", "stage": "lost", "date": "2026-09-01", "paid": 0},
                                      {"name": "Пётр И.", "stage": "offer", "date": "2026-08-01", "paid": 83333}])
         self.assertEqual([f["count"] for f in r["funnel"]], [2, 2, 1, 1, 1, 1, 1, 1, 0])
-        self.assertEqual([(m["month"], m["received"], m["accrued"]) for m in r["months"]], [("2026-09", 33333, 13333.2), ("2026-08", 50000, 20000)])
+        self.assertEqual([(m["month"], m["received"], m["accrued"]) for m in r["months"]], [("2026-09", 33333, 13333.2), ("2026-08", 51000, 20400)])   # студент в корзине: его оплата остаётся в своём месяце
         self.assertEqual(r["payouts"], [{"date": "", "amount": 5000, "comment": ""}])
         dumped = json.dumps(r, ensure_ascii=False)
         for secret in ("+7 900", "Сергеевич", "Удалённая", "Подделка", "777777", "карта 0000"):
             self.assertNotIn(secret, dumped)
 
-    def test_mentor_edit_refreshes_reports_and_partner_gets_them_by_sync(self):
+    def test_payment_confirmed_by_admin_refreshes_reports_and_partner_gets_them_by_sync(self):
         store.system_write("students", "s1", student("t1", cohortId="c1", partnerId="p1", partnerShare=40))
         self.login("blogger")
         first = self.sync()
         self.login("mentor")
-        self.send("patch", "students", "s1", {"payments": [{"id": "a", "amount": 20000, "paid": "2026-10-01"}]})
+        self.assertEqual(self.send("patch", "students", "s1", {"payments": [{"id": "a", "amount": 20000, "paid": "2026-10-01"}]}).status_code, 403)  # оплату подтверждает администратор
+        self.assertEqual(self.send("patch", "students", "s1", {"payments": [{"id": "a", "amount": 20000, "due": "2026-10-01", "paid": None}]}).status_code, 200)  # а ждать её ментор может
+        self.login("admin")
+        self.send("patch", "students", "s1", {"payments": [{"id": "a", "amount": 20000, "due": "2026-10-01", "paid": "2026-10-01"}]})
         self.assertEqual((self.report("p1")["accrued"], self.report("t1")["accrued"]), (8000, 6000))
         self.login("blogger")
         later = self.sync(since=first["rev"], epoch=first["epoch"])
@@ -681,23 +687,25 @@ class ReportTests(BaseCase):
         store.system_write("students", "s1", student("t1", cohortId="c1", partnerId="p1", partnerShare=40))
         self.login("mentor")
         weird = [
-            {"payments": "не список", "history": [{"to": ["x"]}, {"to": {}}, "мусор"], "stage": ["x"]},
-            {"payments": [{"amount": 10 ** 400, "paid": "2026-01-01"}, {"amount": 1e308, "paid": "x"}, {"amount": "1_000", "paid": "x"},
-                          {"amount": ["x"], "paid": "x"}, "мусор", {"amount": "12.5", "paid": "2026-01-02"}, {"amount": 5, "paid": ["2026-01-03"]}]},
-            {"createdAt": {"a": 1}, "name": ["Список"], "stage": "<b>x", "cohortId": ["c1"]}, {"cohortId": "c1"},
+            {"history": [{"to": ["x"]}, {"to": {}}, "мусор"], "stage": ["x"]},
+            {"createdAt": {"a": 1}, "name": ["Список"], "stage": "<b>x"},
             {"name": "+7 900 123-45-67"}, {"name": "lead@example.com"},
         ]
         for patch in weird:
             self.assertEqual(self.send("patch", "students", "s1", patch).status_code, 200, patch)
-        self.login("admin")
+        self.login("admin")   # оплаты отмечает администратор: кривые платежи присылает он
+        for patch in ({"cohortId": ["c1"]}, {"cohortId": "c1"}, {"payments": "не список"}, {"payments": [{"amount": 10 ** 400, "paid": "2026-01-01"}, {"amount": 1e308, "paid": "x"}, {"amount": "1_000", "paid": "x"},
+                       {"amount": ["x"], "paid": "x"}, "мусор", {"amount": "12.5", "paid": "2026-01-02"}, {"amount": 5, "paid": ["2026-01-03"]}]}):
+            self.assertEqual(self.send("patch", "students", "s1", patch).status_code, 200, patch)
         for body in ({"terms": "x"}, {"terms": [{"from": 5}, "мусор", {"from": "2026-13x", "parties": 1}, {"from": "2020-01", "parties": [
                 {"kind": "partner", "id": "p1", "share": "сорок"}, {"kind": "partner", "id": "p1", "share": 40}, {"kind": "owner", "id": "p1", "share": 9},
                 {"kind": "mentor", "id": ["t1"], "share": 5}, {"kind": "mentor", "id": "t1", "share": 1e9}, "мусор"]}]}):
-            self.assertEqual(self.send("patch", "directions", "d1", body).status_code, 200, body)
+            # такие условия страница не пропустит (доли больше 100%), но в базе они могут оказаться — расчёт не должен падать
+            store.system_write("directions", "d1", {**Doc.objects.get(collection="directions", doc_id="d1").data, **body})
         for body in ({"directionId": ["d1"], "date": "2026-01-05", "amount": 2.5}, {"directionId": "d1", "date": 5, "amount": 1}, {"directionId": "d1", "date": "2026-01-06", "amount": "мусор"}):
             self.assertEqual(self.send("put", "expenses", f"e{len(str(body))}", body).status_code, 200, body)
         r = self.report()
-        self.assertEqual((r["revenue"], r["rows"][0]["stage"], r["rows"][0]["date"], r["rows"][0]["name"]), (17.5, "", "", "Без имени"))
+        self.assertEqual((r["revenue"], r["rows"][0]["stage"], r["rows"][0]["date"], r["rows"][0]["name"]), (12.5, "", "", "Без имени"))   # оплата без даты не считается
         self.assertEqual([(m["received"], m["share"], m["accrued"]) for m in r["months"]], [(12.5, 0, 0)])   # повтор стороны не считается дважды
         self.assertEqual([(m["share"], m["accrued"]) for m in self.report("t1")["months"]], [(100, 12.5)])   # ставка не выходит за 100%
         self.assertEqual(self.send("put", "students", "n9", student("t1", partnerId=[], name="Список вместо партнёра")).status_code, 200)
@@ -742,6 +750,62 @@ class ReportTests(BaseCase):
                 checked += len(server["months"])
         self.assertGreater(checked, 100)  # в наборах есть что сравнивать
 
+    def test_paid_payment_keeps_the_direction_it_was_paid_in(self):
+        store.system_write("directions", "d2", {"name": "Собеседования", "terms": [{"from": "2000-01", "parties": [{"kind": "mentor", "id": "t2", "share": 60}]}]})
+        store.system_write("cohorts", "c2", {"name": "Интенсив", "directionId": "d2"})
+        self.pay("s1", (100000, "2026-09-03"))
+        self.assertEqual(Doc.objects.get(collection="students", doc_id="s1").data["payments"][0]["dirId"], "d1")   # оплата запомнила направление
+        self.send("patch", "students", "s1", {"cohortId": "c2", "payments": [{"id": "x0", "amount": 100000, "paid": "2026-09-03"},
+                                                                         {"id": "n", "amount": 50000, "paid": "2026-10-03"}]})
+        pays = Doc.objects.get(collection="students", doc_id="s1").data["payments"]
+        self.assertEqual([p["dirId"] for p in pays], ["d1", "d2"])   # прошлая оплата — где была, новая — в новом направлении
+        self.assertEqual([(m["month"], m["accrued"]) for m in self.report("t1")["months"]], [("2026-09", 30000)])
+        self.assertEqual([(m["month"], m["accrued"]) for m in self.report("t2")["months"]], [("2026-10", 30000)])
+        self.send("patch", "students", "s1", {"payments": [{"id": "x0", "amount": 100000, "paid": None}]})
+        self.assertNotIn("dirId", Doc.objects.get(collection="students", doc_id="s1").data["payments"][0])   # оплату сняли — направление тоже
+
+    def test_old_paid_payments_get_their_direction_once(self):
+        Doc.objects.create(collection="students", doc_id="old", rev=1, data=student("t1", cohortId="c1", payments=[{"id": "a", "amount": 1000, "paid": "2026-05-01"}, {"id": "b", "amount": 5, "paid": None}]))
+        from django.core.management import call_command
+        call_command("pin_payments", stdout=io.StringIO())
+        pays = Doc.objects.get(collection="students", doc_id="old").data["payments"]
+        self.assertEqual((pays[0].get("dirId"), "dirId" in pays[1]), ("d1", False))
+        rev = Doc.objects.get(collection="students", doc_id="old").rev
+        call_command("pin_payments", stdout=io.StringIO())
+        self.assertEqual(Doc.objects.get(collection="students", doc_id="old").rev, rev)   # повторный запуск ничего не трогает
+
+    def test_refund_is_a_negative_payment_in_its_month(self):
+        self.pay("s1", (60000, "2026-09-03"), (-20000, "2026-10-05"), partnerId="p1")
+        r = self.report("p1")
+        self.assertEqual([(m["month"], m["received"]) for m in r["months"]], [("2026-10", -20000), ("2026-09", 60000)])
+        self.assertEqual(r["revenue"], 40000)
+
+    def test_mentor_cannot_confirm_change_or_drop_paid_payments(self):
+        self.pay("s1", (1000, "2026-10-01"))
+        self.login("mentor")
+        paid = Doc.objects.get(collection="students", doc_id="s1").data["payments"]
+        for changed in ([{**paid[0], "amount": 5000}], [{**paid[0], "paid": None}], [], [*paid, {"id": "new", "amount": 9, "paid": "2026-10-02"}], [{**paid[0], "dirId": "d9"}]):
+            self.assertEqual(self.send("patch", "students", "s1", {"payments": changed}).status_code, 403, changed)
+        self.assertEqual(self.send("patch", "students", "s1", {"payments": [*paid, {"id": "u", "amount": 9, "due": "2026-11-01", "paid": None}], "stage": "studying"}).status_code, 200)
+
+    def test_mentor_moves_students_only_within_the_direction(self):
+        store.system_write("directions", "d2", {"name": "Другое", "terms": []})
+        store.system_write("cohorts", "c2", {"name": "Чужое направление", "directionId": "d2"})
+        store.system_write("cohorts", "c3", {"name": "То же направление", "directionId": "d1"})
+        store.system_write("students", "s1", student("t1", cohortId="c1"))
+        self.login("mentor")
+        self.assertEqual(self.send("patch", "students", "s1", {"cohortId": "c2"}).status_code, 403)
+        self.assertEqual(self.send("patch", "students", "s1", {"cohortId": "c3"}).status_code, 200)
+
+    def test_payment_ids_are_unique(self):
+        self.assertEqual(self.send("patch", "students", "s1", {"payments": [{"id": "a", "amount": 1, "paid": None}, {"id": "a", "amount": 2, "paid": None}]}).status_code, 400)
+
+    def test_shares_above_100_percent_are_rejected(self):
+        body = {"terms": [{"from": "2026-01", "parties": [{"kind": "partner", "id": "p1", "share": 70}, {"kind": "mentor", "id": "t1", "share": 40}]}]}
+        self.assertEqual(self.send("patch", "directions", "d1", body).status_code, 400)
+        body["terms"][0]["parties"][1]["share"] = 30
+        self.assertEqual(self.send("patch", "directions", "d1", body).status_code, 200)
+
     def test_moving_and_trashing_students_updates_reports(self):
         store.system_write("partners", "p2", {"name": "Другой"})
         self.send("put", "reports", "p2", {})
@@ -751,11 +815,11 @@ class ReportTests(BaseCase):
         self.assertEqual((self.report("p1")["revenue"], self.report("p2")["revenue"]), (0, 1000))
         self.assertEqual(self.report("p1")["accrued"], 400)                 # доля считается от выручки направления, а не от своих студентов
         self.send("patch", "students", "s1", {"deletedAt": "2026-10-03T00:00:00Z"})
-        self.assertEqual((self.report("p2")["leads"], self.report("p1")["accrued"]), (0, 0))
+        self.assertEqual((self.report("p2")["leads"], self.report("p1")["accrued"]), (0, 400))  # из трафика ушёл, а пришедшие деньги остались
         self.send("patch", "students", "s1", {"deletedAt": None})
         self.assertEqual((self.report("p2")["leads"], self.report("p1")["accrued"]), (1, 400))
-        self.send("patch", "cohorts", "c1", {"directionId": None})          # поток вывели из направления
-        self.assertEqual(self.report("p1")["accrued"], 0)
+        self.send("patch", "cohorts", "c1", {"directionId": None})          # поток вывели из направления: прошлые деньги остаются, где были
+        self.assertEqual(self.report("p1")["accrued"], 400)
 
     def test_report_follows_accounts_and_removal(self):
         Doc.objects.filter(collection="reports").delete()

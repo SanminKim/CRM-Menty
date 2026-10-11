@@ -80,7 +80,8 @@ def _list(value):
 
 
 def paid_sum(student):
-    return _total(_number(p.get("amount")) for p in _list(student.get("payments")) if p.get("paid"))
+    """Сколько студент заплатил: только платежи с датой оплаты. Возврат хранится платежом с минусом и уменьшает сумму."""
+    return _total(_number(p.get("amount")) for p in _list(student.get("payments")) if _day(p.get("paid")))
 
 
 def reached(student):
@@ -125,6 +126,40 @@ def _rows(data, collection):
     return [(doc_id, docs[doc_id]) for doc_id in sorted(docs) if isinstance(docs[doc_id], dict)]
 
 
+def payment_direction(payment, current, data):
+    """Направление, в котором получены деньги. Оплаченный платёж помнит его (dirId): перевод студента в другой поток
+    или потока в другое направление прошлые начисления не меняет. У старых платежей без отметки — направление потока сейчас."""
+    pinned = payment.get("dirId")
+    if isinstance(pinned, str):
+        return pinned if pinned and isinstance(data["directions"].get(pinned), dict) else ""
+    return current
+
+
+def current_direction(student):
+    """Направление потока студента по базе — им отмечается платёж в момент оплаты."""
+    from .models import Doc
+    cohort_id = student.get("cohortId")
+    if not isinstance(cohort_id, str) or not cohort_id:
+        return ""
+    cohort = Doc.objects.filter(collection="cohorts", doc_id=cohort_id).first()
+    linked = cohort.data.get("directionId") if cohort is not None and isinstance(cohort.data, dict) else None
+    if not isinstance(linked, str) or not linked:
+        return ""
+    direction = Doc.objects.filter(collection="directions", doc_id=linked).first()
+    return linked if direction is not None and isinstance(direction.data, dict) else ""
+
+
+def terms_problem(direction):
+    """Текст ошибки, если в каком-то из условий направления доли сторон вместе больше 100%, иначе пустая строка."""
+    terms = direction.get("terms") if isinstance(direction, dict) else None
+    for term in terms if isinstance(terms, list) else []:
+        parties = term.get("parties") if isinstance(term, dict) else None
+        total = sum(min(max(_number(p.get("share")), 0), 100) for p in parties if isinstance(p, dict)) if isinstance(parties, list) else 0
+        if total > 100 + 1e-9:
+            return "Доли сторон вместе больше 100%: владельцу ничего не остаётся"
+    return ""
+
+
 def direction_of(student, data):
     """Направление студента — направление его потока. Без потока или направления оплата ни с кем не делится."""
     cohort_id = student.get("cohortId")
@@ -165,14 +200,13 @@ def settle(data):
     def cell(month, direction_id):
         return cells.setdefault((month, direction_id), {"month": month, "directionId": direction_id, "received": 0, "expenses": 0})
 
+    # Студенты из корзины тоже: деньги, которые от них пришли, остаются в своих месяцах, и корзина не переписывает начисленное
     for _, student in _rows(data, "students"):
-        if student.get("deletedAt"):
-            continue
-        direction_id = direction_of(student, data)
+        current = direction_of(student, data)
         for payment in _list(student.get("payments")):
             day = _day(payment.get("paid"))
             if day:
-                cell(day[:7], direction_id)["received"] += _number(payment.get("amount"))
+                cell(day[:7], payment_direction(payment, current, data))["received"] += _number(payment.get("amount"))
     for _, expense in _rows(data, "expenses"):
         day = _day(expense.get("date"))
         if not day:
