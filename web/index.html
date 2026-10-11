@@ -184,8 +184,16 @@ input[type=checkbox] { width: auto; accent-color: var(--brand); }
 .seg { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; max-width: 100%; overflow-x: auto; }
 .seg button { all: unset; cursor: pointer; padding: 4px 12px; border-radius: 8px; color: var(--muted); font-weight: 500; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
 .seg button.on { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
-.cohort-row { display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; margin: 0 0 12px; }
-.cohort-tools { display: flex; gap: 8px; }
+.lanes { display: flex; flex-direction: column; gap: 24px; }
+.lane-head { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 0 0 8px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.lane-head h2 { font-size: 18px; }
+.lane-head .cnt { color: var(--muted); font-variant-numeric: tabular-nums; }
+.lane.folded .lane-head { margin-bottom: 0; }
+.lane-fold { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--r-ctl); color: var(--muted); }
+.lane-fold:hover { background: var(--surface-2); color: var(--text); }
+.lane-stats { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.lane-stats b { color: var(--text); font-weight: 600; }
+.lanes-away { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 24px; padding-top: 16px; border-top: 1px dashed var(--border); }
 tr.sel td { background: var(--brand-soft); }
 .seg .n { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 500; }
 .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); overflow-x: auto; }
@@ -284,7 +292,8 @@ button.kpi.on, button.kpi.on:hover { background: var(--brand-soft); box-shadow: 
 /* Доска */
 .board-bar { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .board-bar .filters { margin: 0; }
-.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(232px, 1fr); gap: 10px; overflow-x: auto; padding-bottom: 12px; align-items: start; }
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(232px, 1fr); gap: 10px; overflow-x: auto; padding-bottom: 4px; align-items: start; }
+.lane-board .col { max-height: 560px; }
 .col { background: var(--surface-2); border-radius: var(--radius); display: flex; flex-direction: column; max-height: calc(100vh - 190px); min-width: 0; }
 .col > header { display: flex; align-items: center; gap: 8px; padding: 12px 8px 8px 12px; font-weight: 600; font-size: 13px; }
 .col > header::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--g-sales); flex: none; }
@@ -699,9 +708,11 @@ function loadUi() {
   S.showLost = v.showLost === true;
   if (["upcoming", "overdue", "paid"].includes(v.payTab)) S.payTab = v.payTab;
   if (["funnel", "money"].includes(v.anTab)) S.anTab = v.anTab;
+  const ids = x => Array.isArray(x) ? x.filter(y => typeof y === "string" && y.length <= 64).slice(0, 200) : [];
+  S.hiddenLanes = ids(v.hiddenLanes); S.foldedLanes = ids(v.foldedLanes);   // скрытые и свёрнутые потоки на доске
   uiSaved = uiState();
 }
-function uiState() { const f = {}; for (const k of UI_FILTERS) if (S.f[k]) f[k] = S.f[k]; return JSON.stringify({ f, sorts: S.sorts, showLost: S.showLost, payTab: S.payTab, anTab: S.anTab }); }
+function uiState() { const f = {}; for (const k of UI_FILTERS) if (S.f[k]) f[k] = S.f[k]; return JSON.stringify({ f, sorts: S.sorts, showLost: S.showLost, payTab: S.payTab, anTab: S.anTab, hiddenLanes: S.hiddenLanes || [], foldedLanes: S.foldedLanes || [] }); }
 function saveUi() { if (S.status !== "ready" || S.mode !== "staff") return; const now = uiState(); if (now !== uiSaved) { uiSaved = now; lsSet(UI_KEY(), now); } }
 // Запомненный отбор по записи, которой больше нет (или которая этой роли не видна), молча прятал бы людей: такие значения сбрасываются
 function dropStaleFilters() {
@@ -996,7 +1007,8 @@ function render() {
   SETTLED = null; // расчёт по направлениям считается один раз на отрисовку
   const active = document.activeElement, aid = active?.id, sel = active && "selectionStart" in active ? [active.selectionStart, active.selectionEnd] : null;
   const kept = {}; document.querySelectorAll("[data-keep]").forEach(el => kept[el.id] = el.value);
-  const boardX = $("#board")?.scrollLeft, drawerY = $("#d-body")?.scrollTop, tblX = $("#tbl")?.scrollLeft;
+  const laneX = {}; document.querySelectorAll(".lane").forEach(l => { const b = l.querySelector(".lane-board"); if (b && b.scrollLeft) laneX[l.dataset.lane] = b.scrollLeft; });
+  const boardX = 0, drawerY = $("#d-body")?.scrollTop, tblX = $("#tbl")?.scrollLeft;
   const ready = S.status === "ready" && S.mode === "staff";
   $("#gsearch").hidden = !ready;
   $("#nav").innerHTML = navHTML();
@@ -1009,7 +1021,7 @@ function render() {
   $("#drawer").hidden = !open && !day;
   document.documentElement.classList.toggle("locked", !!open || !!day);
   for (const [id, v] of Object.entries(kept)) { const el = document.getElementById(id); if (el) el.value = v; }
-  if (boardX && $("#board")) $("#board").scrollLeft = boardX;
+  document.querySelectorAll(".lane").forEach(l => { const b = l.querySelector(".lane-board"); if (b && laneX[l.dataset.lane]) b.scrollLeft = laneX[l.dataset.lane]; });
   if (drawerY && $("#d-body")) $("#d-body").scrollTop = drawerY;
   if (tblX && $("#tbl")) $("#tbl").scrollLeft = tblX;
   if (aid && aid !== "mform" && aid !== "gq" && !aid.startsWith("m-")) { const el = document.getElementById(aid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) { } } }
@@ -1082,7 +1094,7 @@ function mainHTML() {
 const ABOUT = {
   today: "Что нужно сделать сегодня: кому написать, чей платёж подошёл, какая встреча впереди",
   calendar: "Встречи, занятия и собеседования по дням. Нажмите на день, чтобы открыть его карточку",
-  board: "Колонка — этап пути. Перетащите карточку в следующую колонку, чтобы перевести человека дальше. Нажмите на карточку, чтобы открыть её.",
+  board: "У каждого потока своя доска, они идут друг под другом. Перетащите карточку в следующую колонку, чтобы перевести человека дальше. Поток можно свернуть или скрыть.",
   students: "Все люди в базе одним списком. Отметьте несколько строк галочками, чтобы разом назначить им ментора, поток или следующий шаг.",
   cohorts: "Группы обучения: программа по модулям, состав и прогресс студентов.",
   payments: "Оплаты студентов: кто просрочил, кто платит на днях, кто уже заплатил. Новый платёж добавляется в карточке студента.",
@@ -1189,7 +1201,7 @@ function helpView() {
   const adm = !S.limited, to = (v, l) => `<button class="link" data-act="nav" data-v="${v}">${l}</button>`;
   const secs = [["today", "Сегодня", "Начинайте день здесь. Список «Сделать» — шаги на сегодня: кружок слева отмечает шаг выполненным и сразу спрашивает следующий."],
     ["calendar", "Календарь", "Встречи и собеседования. Нажмите на день, чтобы увидеть всё, что на него назначено, и добавить встречу."],
-    ["board", "Воронка", "Все люди по этапам. Карточку можно перетащить в следующую колонку."],
+    ["board", "Воронка", "Доски потоков одна под другой. Карточку можно перетащить в следующую колонку, поток — свернуть, скрыть или создать новый кнопкой «+ Поток»."],
     ["students", "Студенты", "Поиск и список всех людей, выгрузка в файл, действия сразу над несколькими."],
     ["cohorts", "Потоки", "Группы, программа и прогресс по модулям."],
     ["payments", "Платежи студентов", "Кто должен заплатить и кто опаздывает."],
@@ -1468,37 +1480,52 @@ function calendarView() {
 
 // ----- Воронка -----
 // Потоки строкой кнопок: сколько людей в каждом и выбор одним нажатием. Завершённые потоки видны, только пока в них кто-то есть
-function cohortBar(list) {
-  const cur = S.f.cohort || "", n = id => list.filter(s => id === "none" ? !cohortName(s.cohortId) : s.cohortId === id).length;
-  const shown = sortBy(D().cohorts, c => c.start || "").reverse().filter(c => c.active !== false || n(c.id) || cur === c.id);
-  if (!shown.length && (S.limited || S.readOnly)) return "";
-  const btn = (v, l, k) => `<button data-act="fcohort" data-v="${esc(v)}" class="${cur === v ? "on" : ""}" role="tab" aria-selected="${cur === v}">${esc(l)}<span class="n">${k}</span></button>`;
-  const none = n("none");
-  const sel = D().cohorts.find(c => c.id === cur), admin = !S.limited && !S.readOnly;
-  // Потоками управляют прямо отсюда: «+ Поток» создаёт новый и сразу выбирает его, «Изменить поток» открывает выбранный (там же «Удалить»)
-  const tools = admin ? `<span class="cohort-tools">${sel ? `<button class="btn small ghost" data-act="cohort-edit-board" data-id="${esc(sel.id)}">Изменить поток</button>` : ""}<button class="btn small" data-act="cohort-new-board">+ Поток</button></span>` : "";
-  return `<div class="cohort-row"><div class="seg cohort-bar" id="cohort-bar" role="tablist" aria-label="Поток">${btn("", "Все потоки", list.length)}${shown.map(c => btn(c.id, c.name, n(c.id))).join("")}${none || cur === "none" ? btn("none", "Без потока", none) : ""}</div>${tools}</div>`;
-}
+// Доска — потоки один под другим: у каждого потока своя доска с колонками этапов.
+// Поток можно свернуть или скрыть; скрытые собраны внизу, их можно вернуть. Выбор запоминается в браузере
 function boardView() {
-  const keys = ["cohort", "mentor", "partner"], list = filtered(keys), byCohort = filtered(["mentor", "partner"]).filter(s => S.showLost || s.stage !== "lost");
+  const keys = ["mentor", "partner"], list = filtered(keys).filter(s => S.showLost || s.stage !== "lost");
   const inPipe = k => list.filter(s => k === "all" ? s.stage !== "lost" : SGROUP[s.stage] === k).length;
   const stages = STAGES.filter(s => (S.pipe === "all" ? s[2] !== "closed" : s[2] === S.pipe) || (S.showLost && s[0] === "lost"));
-  const cols = stages.map(([st, label, g]) => {
-    const items = sortBy(list.filter(s => s.stage === st), s => (hasStep(s) ? s.next.date : "9999") + (s.stageAt || ""));
-    return `<section class="col g-${g}" data-stage="${st}"><header><span>${label}</span><span class="count">${items.length}</span>${st !== "lost" ? `<button class="col-add" data-act="quick" data-st="${st}" aria-label="Добавить в «${label}»" title="Добавить">+</button>` : ""}</header>
-      <div class="col-body">${items.slice(0, S.colMax[st] || COL_STEP).map(tileHTML).join("") || `<p class="empty">Пусто</p>`}${items.length > (S.colMax[st] || COL_STEP) ? `<button class="col-more" data-act="col-more" data-st="${st}">Показать ещё: ${items.length - (S.colMax[st] || COL_STEP)}</button>` : ""}</div></section>`;
-  }).join("");
-  return headHTML("Воронка", "", `<button class="btn" data-act="import">Импорт списка</button>` + addBtn) + `
+  const inStages = s => stages.some(x => x[0] === s.stage);
+  const admin = !S.limited && !S.readOnly, hidden = new Set(S.hiddenLanes || []), folded = new Set(S.foldedLanes || []);
+  const lanes = sortBy(D().cohorts, c => c.start || "").reverse().map(c => ({ id: c.id, name: c.name, c, people: list.filter(s => s.cohortId === c.id) }));
+  const loose = list.filter(s => !cohortName(s.cohortId));
+  if (loose.length) lanes.push({ id: "none", name: "Без потока", c: null, people: loose });
+  // Завершённый поток без людей на доске не занимает место; новый пустой поток виден, чтобы в него можно было добавлять
+  const relevant = lanes.filter(l => l.people.length || (l.c && l.c.active !== false));
+  const shown = relevant.filter(l => !hidden.has(l.id)), away = relevant.filter(l => hidden.has(l.id));
+  const lane = l => {
+    const here = l.people.filter(inStages), isFolded = folded.has(l.id);
+    const cols = stages.map(([st, label, g]) => {
+      const items = sortBy(here.filter(s => s.stage === st), s => (hasStep(s) ? s.next.date : "9999") + (s.stageAt || ""));
+      const key = l.id + "|" + st, max = S.colMax[key] || COL_STEP;
+      return `<section class="col g-${g}" data-stage="${st}" data-lane="${esc(l.id)}"><header><span>${label}</span><span class="count">${items.length}</span>${st !== "lost" && !S.readOnly ? `<button class="col-add" data-act="quick" data-st="${st}" data-cohort="${esc(l.id === "none" ? "" : l.id)}" aria-label="Добавить в «${label}» потока «${esc(l.name)}»" title="Добавить">+</button>` : ""}</header>
+        <div class="col-body">${items.slice(0, max).map(tileHTML).join("") || `<p class="empty">Пусто</p>`}${items.length > max ? `<button class="col-more" data-act="col-more" data-st="${esc(key)}">Показать ещё: ${items.length - max}</button>` : ""}</div></section>`;
+    }).join("");
+    const counts = stages.map(([st, label]) => { const n = here.filter(s => s.stage === st).length; return n ? `<span class="lane-stat">${esc(label)} <b>${n}</b></span>` : ""; }).join("");
+    return `<section class="lane${isFolded ? " folded" : ""}" data-lane="${esc(l.id)}">
+      <header class="lane-head">
+        <button class="lane-fold" data-act="lane-fold" data-id="${esc(l.id)}" aria-expanded="${!isFolded}" title="${isFolded ? "Развернуть" : "Свернуть"}" aria-label="${isFolded ? "Развернуть" : "Свернуть"} поток ${esc(l.name)}">${isFolded ? "▸" : "▾"}</button>
+        <h2>${esc(l.name)}</h2><span class="cnt">${here.length}</span>
+        ${l.c ? `<span class="sub">${esc(cohortDates(l.c))}${l.c.active === false ? " · завершён" : ""}</span>` : ""}
+        ${isFolded ? `<span class="lane-stats">${counts || `<span class="sub">на этих этапах никого</span>`}</span>` : ""}
+        <span class="right"></span>
+        ${admin && l.c ? `<button class="btn small ghost" data-act="cohort-edit-board" data-id="${esc(l.c.id)}">Изменить</button>` : ""}
+        <button class="btn small ghost" data-act="lane-hide" data-id="${esc(l.id)}">Скрыть</button></header>
+      ${isFolded ? "" : `<div class="board lane-board">${cols}</div>`}</section>`;
+  };
+  const empty = !relevant.length ? `<div class="card welcome"><h2>Потоков пока нет</h2><p class="muted">Поток — это группа студентов со своей доской. Создайте первый поток, и заявки можно будет вести по нему.</p>${admin ? `<div class="actions"><button class="btn primary" data-act="cohort-new-board">+ Поток</button></div>` : ""}</div>` : "";
+  return headHTML("Воронка", "", `${admin ? `<button class="btn" data-act="cohort-new-board">+ Поток</button>` : ""}<button class="btn" data-act="import">Импорт списка</button>` + addBtn) + `
   <div class="board-bar">
     <div class="seg" role="tablist">${PIPES.map(([k, l]) => `<button data-act="pipe" data-v="${k}" class="${S.pipe === k ? "on" : ""}" role="tab" aria-selected="${S.pipe === k}">${l}<span class="n">${inPipe(k)}</span></button>`).join("")}</div>
-    ${filtersHTML(["mentor", "partner"], { lost: true })}
+    ${filtersHTML(keys, { lost: true })}
   </div>
-  ${cohortBar(byCohort)}
-  <div class="board" id="board">${cols}</div>`;
+  <div class="lanes" id="board">${shown.map(lane).join("") || (relevant.length ? `<p class="hint">Все потоки скрыты. Верните нужные ниже.</p>` : "")}${empty}</div>
+  ${away.length ? `<div class="lanes-away" id="lanes-away"><span class="sub">Скрытые потоки:</span>${away.map(l => `<button class="btn small" data-act="lane-show" data-id="${esc(l.id)}">${esc(l.name)} <span class="sub">${l.people.filter(inStages).length}</span></button>`).join("")}</div>` : ""}`;
 }
 function tileHTML(s) {
   const od = overdue(s).length > 0, late = stepLate(s);
-  const meta = [cohortName(s.cohortId), partnerById(s.partnerId)?.name].filter(Boolean).join(" · ");
+  const meta = [partnerById(s.partnerId)?.name].filter(Boolean).join(" · "); // поток виден по доске, на которой лежит карточка
   const mentor = teamName(s.mentorId);
   const step = hasStep(s) ? `<span class="tile-step${late ? " late" : ""}"><span class="t">${esc(s.next.text)}</span><span class="d">${dueLabel(s.next.date)}</span></span>`
     : isActive(s) ? `<span class="tile-step none">Нет следующего шага</span>` : "";
@@ -2632,7 +2659,7 @@ function bulkForm(kind) {
   }[kind];
   if (cfg) openModal(cfg);
 }
-function quickForm(stage = "new") {
+function quickForm(stage = "new", cohortId = "") {
   openModal({
     title: stage === "new" ? "Новая заявка" : `Новый студент: ${SLABEL[stage]}`, submit: "Добавить", values: { partnerId: "" },
     fields: [{ k: "name", label: "Имя", req: true, ph: "Фамилия Имя", wide: true },
@@ -2642,7 +2669,8 @@ function quickForm(stage = "new") {
     onSubmit: v => {
       const c = parseContact(v.contact), dup = findDuplicate(c);
       if (dup) return dup.deletedAt ? `Этот человек лежит в корзине: ${dup.name}. Верните его в настройках или добавьте заново через «Все поля».` : `Уже есть в базе: ${dup.name} (${SLABEL[dup.stage]}). Если это другой человек, добавьте его через «Все поля».`;
-      return save(() => setDoc("students", newId("students"), leadDoc(v.name, c, v.partnerId || null, stage)), stage === "new" ? "Заявка добавлена, шаг «Связаться» на сегодня" : "Студент добавлен");
+      const doc = leadDoc(v.name, c, v.partnerId || null, stage); if (cohortId && D().cohorts.some(x => x.id === cohortId)) doc.cohortId = cohortId; // «+» в колонке потока — человек сразу в этом потоке
+      return save(() => setDoc("students", newId("students"), doc), stage === "new" ? "Заявка добавлена, шаг «Связаться» на сегодня" : "Студент добавлен");
     },
   });
 }
@@ -2902,11 +2930,11 @@ function cohortForm(c, { board = false } = {}) {
       { k: "start", label: "Старт", type: "date" }, { k: "end", label: "Окончание обучения", type: "date" }, { k: "active", label: "Идёт набор или обучение", type: "checkbox" },
       { k: "link", label: "Постоянная ссылка на занятия", type: "url", wide: true, ph: "https://telemost.yandex.ru/…", help: "Бот пришлёт её студентам потока, если у самого занятия ссылки нет" },
       { k: "modules", label: "Программа: модули, по одному в строке", type: "textarea", rows: 7, wide: true, ph: "Введение в 1С\nОписание бизнес-процессов\nНаписание ТЗ", help: "По модулям отмечается прогресс студентов. Чтобы отметки сохранились, переименовывайте по одному модулю за сохранение." }],
-    onDelete: c ? () => [...D().students, ...S.trash].some(s => s.cohortId === c.id) ? (showErr("В потоке есть студенты. Сначала перенесите их в другой поток."), false) : save(() => delDoc("cohorts", c.id), "Поток удалён").then(ok => { if (ok && S.f.cohort === c.id) { S.f.cohort = ""; render(); } return ok; }) : null,
+    onDelete: c ? () => [...D().students, ...S.trash].some(s => s.cohortId === c.id) ? (showErr("В потоке есть студенты. Сначала перенесите их в другой поток."), false) : save(() => delDoc("cohorts", c.id), "Поток удалён") : null,
     onSubmit: v => {
       if (v.link && !/^https?:\/\//i.test(v.link)) return "Ссылка должна начинаться с http:// или https://";
       const id = c?.id || newId("cohorts"), isNew = !c;
-      return save(() => setDoc("cohorts", id, { ...(c || {}), ...v, directionId: S.limited ? (c?.directionId || null) : (v.directionId || null), modules: mergeModules(c?.modules || [], v.modules), id: undefined }), "Сохранено").then(ok => { if (ok && isNew) { if (board) S.f.cohort = id; else { S.cohortId = id; S.view = "cohort"; } render(); } return ok; }); // с доски новый поток сразу выбирается на ней
+      return save(() => setDoc("cohorts", id, { ...(c || {}), ...v, directionId: S.limited ? (c?.directionId || null) : (v.directionId || null), modules: mergeModules(c?.modules || [], v.modules), id: undefined }), "Сохранено").then(ok => { if (ok && isNew) { if (board) { S.hiddenLanes = (S.hiddenLanes || []).filter(x => x !== id); } else { S.cohortId = id; S.view = "cohort"; } render(); } return ok; }); // с доски новый поток сразу появляется на ней
     },
   });
 }
@@ -3228,12 +3256,15 @@ const ACT = {
   open: d => openStudent(d.id),
   "d-close": () => { if (S.openId) S.openId = null; else S.openDay = null; render(); },
   pipe: d => { S.pipe = d.v; lsSet("crm-menti-pipe", d.v); render(); },
-  quick: d => quickForm(d.st || "new"),
+  quick: d => quickForm(d.st || "new", d.cohort || ""),
   import: () => importForm(),
   antab: d => { S.anTab = d.v; render(); },
   "money-open": () => { S.anTab = "money"; go("analytics"); },
   "list-stuck": () => { S.f = { ...S.f, q: "", stage: "", stuck: "1" }; go("students"); },
   "more-rows": () => { S.rows = rowsMax() + ROWS_STEP; render(); },
+  "lane-hide": d => { S.hiddenLanes = [...new Set([...(S.hiddenLanes || []), d.id])]; render(); },
+  "lane-show": d => { S.hiddenLanes = (S.hiddenLanes || []).filter(x => x !== d.id); render(); },
+  "lane-fold": d => { const f = new Set(S.foldedLanes || []); f.has(d.id) ? f.delete(d.id) : f.add(d.id); S.foldedLanes = [...f]; render(); },
   "col-more": d => { S.colMax[d.st] = (S.colMax[d.st] || COL_STEP) + COL_STEP; render(); },
   "meet-remind": () => meetRemindForm(),
   "account-reset": d => { const a = S.accounts.find(x => String(x.id) === d.id); if (a) passwordResetForm(a); },
@@ -3411,9 +3442,10 @@ document.addEventListener("keydown", e => {
 // Перетаскивание карточек на доске
 document.addEventListener("dragstart", e => { const t = e.target.closest?.(".tile"); if (!t || S.readOnly) return; S.drag = t.dataset.id; t.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", t.dataset.id); });
 document.addEventListener("dragend", () => { S.drag = null; document.querySelectorAll(".dragging, .col.drop").forEach(x => x.classList.remove("dragging", "drop")); });
-document.addEventListener("dragover", e => { const c = e.target.closest?.(".col"); if (!c || !S.drag) return; e.preventDefault(); document.querySelectorAll(".col.drop").forEach(x => x !== c && x.classList.remove("drop")); c.classList.add("drop"); });
+const sameLane = (c, id) => { const s = stu(id); return !!s && (c.dataset.lane || "") === (cohortName(s.cohortId) ? s.cohortId : "none"); }; // в другой поток карточка не переносится
+document.addEventListener("dragover", e => { const c = e.target.closest?.(".col"); if (!c || !S.drag || !sameLane(c, S.drag)) return; e.preventDefault(); document.querySelectorAll(".col.drop").forEach(x => x !== c && x.classList.remove("drop")); c.classList.add("drop"); });
 document.addEventListener("drop", e => {
-  const c = e.target.closest?.(".col"); if (!c || !S.drag) return; e.preventDefault();
+  const c = e.target.closest?.(".col"); if (!c || !S.drag || !sameLane(c, S.drag)) return; e.preventDefault();
   const id = S.drag; S.drag = null; c.classList.remove("drop");
   requestMove(stu(id), c.dataset.stage);
 });
