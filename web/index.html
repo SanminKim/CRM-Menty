@@ -189,6 +189,13 @@ input[type=checkbox] { width: auto; accent-color: var(--brand); }
 .lane-head h2 { font-size: 18px; }
 .lane-head .cnt { color: var(--muted); font-variant-numeric: tabular-nums; }
 .lane.folded .lane-head { margin-bottom: 0; }
+.lane-grip { cursor: grab; user-select: none; width: 20px; height: 28px; display: grid; place-items: center; border-radius: var(--r-ctl); color: var(--muted); letter-spacing: -3px; font-weight: 700; }
+.lane-grip:hover { background: var(--surface-2); color: var(--text); }
+.lane.dragging { opacity: .5; }
+.lane.drop-before { box-shadow: 0 -3px 0 var(--brand); }
+.lane.drop-after { box-shadow: 0 3px 0 var(--brand); }
+.lane-move { display: none; gap: 2px; }
+@media (hover: none) { .lane-move { display: inline-flex; } .lane-grip { display: none; } } /* на телефоне перетаскивание неудобно: стрелки */
 .lane-fold { all: unset; cursor: pointer; width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--r-ctl); color: var(--muted); }
 .lane-fold:hover { background: var(--surface-2); color: var(--text); }
 .lane-stats { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
@@ -709,10 +716,10 @@ function loadUi() {
   if (["upcoming", "overdue", "paid"].includes(v.payTab)) S.payTab = v.payTab;
   if (["funnel", "money"].includes(v.anTab)) S.anTab = v.anTab;
   const ids = x => Array.isArray(x) ? x.filter(y => typeof y === "string" && y.length <= 64).slice(0, 200) : [];
-  S.hiddenLanes = ids(v.hiddenLanes); S.foldedLanes = ids(v.foldedLanes);   // скрытые и свёрнутые потоки на доске
+  S.hiddenLanes = ids(v.hiddenLanes); S.foldedLanes = ids(v.foldedLanes); S.laneOrder = ids(v.laneOrder);   // скрытые и свёрнутые потоки на доске
   uiSaved = uiState();
 }
-function uiState() { const f = {}; for (const k of UI_FILTERS) if (S.f[k]) f[k] = S.f[k]; return JSON.stringify({ f, sorts: S.sorts, showLost: S.showLost, payTab: S.payTab, anTab: S.anTab, hiddenLanes: S.hiddenLanes || [], foldedLanes: S.foldedLanes || [] }); }
+function uiState() { const f = {}; for (const k of UI_FILTERS) if (S.f[k]) f[k] = S.f[k]; return JSON.stringify({ f, sorts: S.sorts, showLost: S.showLost, payTab: S.payTab, anTab: S.anTab, hiddenLanes: S.hiddenLanes || [], foldedLanes: S.foldedLanes || [], laneOrder: S.laneOrder || [] }); }
 function saveUi() { if (S.status !== "ready" || S.mode !== "staff") return; const now = uiState(); if (now !== uiSaved) { uiSaved = now; lsSet(UI_KEY(), now); } }
 // Запомненный отбор по записи, которой больше нет (или которая этой роли не видна), молча прятал бы людей: такие значения сбрасываются
 function dropStaleFilters() {
@@ -1492,7 +1499,9 @@ function boardView() {
   const loose = list.filter(s => !cohortName(s.cohortId));
   if (loose.length) lanes.push({ id: "none", name: "Без потока", c: null, people: loose });
   // Завершённый поток без людей на доске не занимает место; новый пустой поток виден, чтобы в него можно было добавлять
-  const relevant = lanes.filter(l => l.people.length || (l.c && l.c.active !== false));
+  // Порядок досок задаёт пользователь перетаскиванием; потоки, которых в его порядке ещё нет (новые), идут сверху
+  const pos = id => { const i = (S.laneOrder || []).indexOf(id); return i < 0 ? -1 : i; };
+  const relevant = lanes.filter(l => l.people.length || (l.c && l.c.active !== false)).map((l, i) => ({ ...l, i })).sort((a, b) => pos(a.id) - pos(b.id) || a.i - b.i);
   const shown = relevant.filter(l => !hidden.has(l.id)), away = relevant.filter(l => hidden.has(l.id));
   const lane = l => {
     const here = l.people.filter(inStages), isFolded = folded.has(l.id);
@@ -1505,12 +1514,14 @@ function boardView() {
     const counts = stages.map(([st, label]) => { const n = here.filter(s => s.stage === st).length; return n ? `<span class="lane-stat">${esc(label)} <b>${n}</b></span>` : ""; }).join("");
     return `<section class="lane${isFolded ? " folded" : ""}" data-lane="${esc(l.id)}">
       <header class="lane-head">
+        <span class="lane-grip" role="button" tabindex="0" draggable="true" data-lane-drag="${esc(l.id)}" title="Перетащите, чтобы поменять порядок потоков" aria-label="Переставить поток ${esc(l.name)}: стрелки вверх и вниз">⋮⋮</span>
         <button class="lane-fold" data-act="lane-fold" data-id="${esc(l.id)}" aria-expanded="${!isFolded}" title="${isFolded ? "Развернуть" : "Свернуть"}" aria-label="${isFolded ? "Развернуть" : "Свернуть"} поток ${esc(l.name)}">${isFolded ? "▸" : "▾"}</button>
         <h2>${esc(l.name)}</h2><span class="cnt">${here.length}</span>
         ${l.c ? `<span class="sub">${esc(cohortDates(l.c))}${l.c.active === false ? " · завершён" : ""}</span>` : ""}
         ${isFolded ? `<span class="lane-stats">${counts || `<span class="sub">на этих этапах никого</span>`}</span>` : ""}
         <span class="right"></span>
         ${admin && l.c ? `<button class="btn small ghost" data-act="cohort-edit-board" data-id="${esc(l.c.id)}">Изменить</button>` : ""}
+        <span class="lane-move"><button class="btn small ghost" data-act="lane-move" data-id="${esc(l.id)}" data-n="-1" aria-label="Поднять поток ${esc(l.name)}">↑</button><button class="btn small ghost" data-act="lane-move" data-id="${esc(l.id)}" data-n="1" aria-label="Опустить поток ${esc(l.name)}">↓</button></span>
         <button class="btn small ghost" data-act="lane-hide" data-id="${esc(l.id)}">Скрыть</button></header>
       ${isFolded ? "" : `<div class="board lane-board">${cols}</div>`}</section>`;
   };
@@ -3262,6 +3273,7 @@ const ACT = {
   "money-open": () => { S.anTab = "money"; go("analytics"); },
   "list-stuck": () => { S.f = { ...S.f, q: "", stage: "", stuck: "1" }; go("students"); },
   "more-rows": () => { S.rows = rowsMax() + ROWS_STEP; render(); },
+  "lane-move": d => moveLane(d.id, +d.n),
   "lane-hide": d => { S.hiddenLanes = [...new Set([...(S.hiddenLanes || []), d.id])]; render(); },
   "lane-show": d => { S.hiddenLanes = (S.hiddenLanes || []).filter(x => x !== d.id); render(); },
   "lane-fold": d => { const f = new Set(S.foldedLanes || []); f.has(d.id) ? f.delete(d.id) : f.add(d.id); S.foldedLanes = [...f]; render(); },
@@ -3442,6 +3454,37 @@ document.addEventListener("keydown", e => {
 // Перетаскивание карточек на доске
 document.addEventListener("dragstart", e => { const t = e.target.closest?.(".tile"); if (!t || S.readOnly) return; S.drag = t.dataset.id; t.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", t.dataset.id); });
 document.addEventListener("dragend", () => { S.drag = null; document.querySelectorAll(".dragging, .col.drop").forEach(x => x.classList.remove("dragging", "drop")); });
+// Порядок досок потоков: текущий порядок на экране, в нём один поток переставляется на новое место
+const laneIds = () => [...document.querySelectorAll(".lane")].map(x => x.dataset.lane);
+function placeLane(id, beforeId) {
+  const ids = laneIds().filter(x => x !== id), at = beforeId === null ? ids.length : ids.indexOf(beforeId);
+  if (at < 0) return;
+  ids.splice(at, 0, id);
+  S.laneOrder = [...ids, ...(S.laneOrder || []).filter(x => !ids.includes(x))]; // скрытые сохраняют своё место в конце
+  render();
+}
+function moveLane(id, n) {
+  const ids = laneIds(), i = ids.indexOf(id), j = i + n;
+  if (i < 0 || j < 0 || j >= ids.length) return;
+  placeLane(id, n < 0 ? ids[j] : (ids[j + 1] ?? null));
+  document.querySelector(`.lane[data-lane="${CSS.escape(id)}"] .lane-grip`)?.focus();
+}
+document.addEventListener("dragstart", e => { const g = e.target.closest?.("[data-lane-drag]"); if (!g) return; S.laneDrag = g.dataset.laneDrag; g.closest(".lane")?.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", S.laneDrag); });
+document.addEventListener("dragover", e => {
+  if (!S.laneDrag) return; const l = e.target.closest?.(".lane"); if (!l || l.dataset.lane === S.laneDrag) return; e.preventDefault();
+  const r = l.getBoundingClientRect(), after = e.clientY > r.top + Math.min(r.height / 2, 60);
+  document.querySelectorAll(".lane.drop-before, .lane.drop-after").forEach(x => x.classList.remove("drop-before", "drop-after"));
+  l.classList.add(after ? "drop-after" : "drop-before");
+});
+document.addEventListener("drop", e => {
+  if (!S.laneDrag) return; const l = e.target.closest?.(".lane"), id = S.laneDrag; S.laneDrag = null;
+  document.querySelectorAll(".lane.drop-before, .lane.drop-after, .lane.dragging").forEach(x => x.classList.remove("drop-before", "drop-after", "dragging"));
+  if (!l || l.dataset.lane === id) return; e.preventDefault();
+  const r = l.getBoundingClientRect(), after = e.clientY > r.top + Math.min(r.height / 2, 60), ids = laneIds();
+  placeLane(id, after ? (ids[ids.indexOf(l.dataset.lane) + 1] ?? null) : l.dataset.lane);
+});
+document.addEventListener("dragend", () => { if (S.laneDrag) S.laneDrag = null; document.querySelectorAll(".lane.drop-before, .lane.drop-after, .lane.dragging").forEach(x => x.classList.remove("drop-before", "drop-after", "dragging")); });
+document.addEventListener("keydown", e => { const g = e.target.closest?.("[data-lane-drag]"); if (!g || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return; e.preventDefault(); moveLane(g.dataset.laneDrag, e.key === "ArrowUp" ? -1 : 1); });
 const sameLane = (c, id) => { const s = stu(id); return !!s && (c.dataset.lane || "") === (cohortName(s.cohortId) ? s.cohortId : "none"); }; // в другой поток карточка не переносится
 document.addEventListener("dragover", e => { const c = e.target.closest?.(".col"); if (!c || !S.drag || !sameLane(c, S.drag)) return; e.preventDefault(); document.querySelectorAll(".col.drop").forEach(x => x !== c && x.classList.remove("drop")); c.classList.add("drop"); });
 document.addEventListener("drop", e => {
