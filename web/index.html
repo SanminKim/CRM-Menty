@@ -553,9 +553,88 @@ td.mxc { padding: 4px 2px; text-align: center; }
 .loading::after { height: 180px; margin-top: 16px; }
 
 /* Календарь встреч */
-.cal-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.cal-bar h2 { margin: 0 4px; font-size: 18px; min-width: 150px; text-align: center; }
-.cal-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 16px; align-items: start; }
+/* Календарь: слева «+ Встреча», маленький месяц и виды событий; справа выбранный вид */
+.calx { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 20px; align-items: start; }
+.cal-side { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 12px; }
+.cal-create { width: 100%; justify-content: center; }
+.cal-create-m { display: none; }
+.mini { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; }
+.mini-top { display: flex; align-items: center; justify-content: space-between; font-size: 14px; margin-bottom: 4px; }
+.mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; text-align: center; }
+.mini-wd { font-size: 11px; color: var(--muted); padding: 2px 0; }
+.mini-d { all: unset; cursor: pointer; font-size: 12px; height: 26px; line-height: 26px; border-radius: 6px; font-variant-numeric: tabular-nums; }
+.mini-d:hover { background: var(--surface-2); }
+.mini-d.out { color: var(--muted); }
+.mini-d.in { background: var(--brand-soft); }
+.mini-d.now { color: var(--brand); font-weight: 700; }
+.mini-d:focus-visible { outline: 2px solid var(--brand); }
+.cal-kinds { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.cal-kinds b { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+.cal-k { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 2px 0; }
+.cal-k input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.cal-k i { width: 14px; height: 14px; border-radius: 4px; border: 2px solid var(--kc); flex: none; }
+.cal-k input:checked + i { background: var(--kc); box-shadow: inset 0 0 0 2px var(--surface); }
+.cal-k input:focus-visible + i { outline: 2px solid var(--brand); outline-offset: 2px; }
+.cal-side select { width: 100%; }
+.cal-late .panel { margin: 0; }
+/* Цвета видов событий: и у галочек, и у событий */
+.k-call { --kc: var(--brand); --ks: var(--brand-soft); } .k-lesson { --kc: var(--g-study); --ks: var(--g-study-soft); } .k-consult { --kc: var(--g-sales); --ks: var(--g-sales-soft); }
+.k-other { --kc: var(--g-closed); --ks: var(--g-closed-soft); } .k-interview { --kc: var(--warn); --ks: var(--warn-soft); } .k-step { --kc: var(--ok); --ks: var(--ok-soft); } .k-pay { --kc: var(--danger); --ks: var(--danger-soft); }
+.tag.k-step, .tag.k-pay { background: var(--ks); color: var(--kc); }
+.cal-main { min-width: 0; }
+.cal-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.cal-bar h2 { margin: 0 6px; font-size: 18px; }
+.cal-bar .right { flex: 1; }
+.cal-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+/* Неделя и день по часам */
+.wk { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.wk-head, .wk-all, .wk-body { display: grid; grid-template-columns: 52px repeat(var(--days), minmax(0, 1fr)); }
+.wk-head { border-bottom: 1px solid var(--border); }
+.wk-day { all: unset; box-sizing: border-box; cursor: pointer; padding: 6px 4px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 1px; border-left: 1px solid var(--border); }
+.wk-day span { font-size: 12px; color: var(--muted); }
+.wk-day b { font-size: 18px; font-weight: 600; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; font-variant-numeric: tabular-nums; }
+.wk-day.now b { background: var(--brand); color: var(--brand-ink); }
+.wk-day:hover { background: var(--surface-2); }
+.wk-day:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.wk-g { font-size: 11px; color: var(--muted); padding: 4px 6px 0 0; text-align: right; }
+.wk-all { border-bottom: 1px solid var(--border); min-height: 28px; }
+.wk-allc { border-left: 1px solid var(--border); padding: 3px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wk-allc .ev { all: unset; box-sizing: border-box; cursor: pointer; font-size: 12px; line-height: 18px; padding: 0 6px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--ks); color: var(--text); border-left: 3px solid var(--kc); }
+.wk-allc .ev-more { all: unset; cursor: pointer; font-size: 12px; color: var(--muted); padding-left: 6px; }
+.wk-scroll { height: min(70vh, 640px); overflow-y: auto; overscroll-behavior: contain; }
+.wk-body { position: relative; height: calc(24 * var(--hour)); }
+.wk-hours { position: relative; }
+.wk-hours span { position: absolute; right: 6px; transform: translateY(-50%); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wk-col { position: relative; border-left: 1px solid var(--border); background: repeating-linear-gradient(to bottom, var(--border) 0 1px, transparent 1px var(--hour)); cursor: cell; user-select: none; touch-action: pan-y; }
+.wk-col.now { background-color: color-mix(in srgb, var(--brand) 4%, transparent); }
+.wk-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--danger); z-index: 3; pointer-events: none; }
+.wk-now::before { content: ""; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--danger); }
+.wev { position: absolute; box-sizing: border-box; overflow: hidden; border-radius: 6px; padding: 3px 6px; font-size: 12px; line-height: 15px; background: var(--ks); border-left: 3px solid var(--kc); color: var(--text); cursor: pointer; z-index: 2; display: flex; flex-direction: column; box-shadow: 0 0 0 1px var(--surface); }
+.wev.can { cursor: grab; }
+.wev.short { flex-direction: row; gap: 6px; align-items: center; padding-block: 0; }
+.wev.short .wev-s, .wev.mid .wev-s { display: none; }
+.wev:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.wev-t { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wev-n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wev-s { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wev-r { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; cursor: ns-resize; }
+.wev.st-done { opacity: .6; }
+.wev.st-missed, .wev.st-cancelled { opacity: .55; }
+.wev.st-missed .wev-n, .wev.st-cancelled .wev-n { text-decoration: line-through; }
+.wev.dragging, .wev.lifted { z-index: 5; box-shadow: var(--pop); opacity: .95; cursor: grabbing; }
+.wk-sel { position: absolute; left: 2px; right: 2px; background: var(--brand-soft); border: 1px dashed var(--brand); border-radius: 6px; font-size: 12px; padding: 2px 6px; color: var(--brand); z-index: 4; pointer-events: none; }
+.cal-dragging, .cal-dragging * { user-select: none; }
+/* Карточка события и быстрое создание */
+.calpop { position: fixed; z-index: 30; width: min(340px, calc(100vw - 16px)); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--pop); }
+.calpop header { display: flex; gap: 10px; align-items: flex-start; padding: 12px 10px 4px 14px; }
+.calpop header > div { flex: 1; min-width: 0; }
+.calpop h3 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+.pop-dot { width: 12px; height: 12px; border-radius: 4px; background: var(--kc); flex: none; margin-top: 5px; }
+.pop-body { padding: 4px 14px 8px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.pop-body p { margin: 0; }
+.pop-body input { width: 100%; }
+.calpop footer { display: flex; gap: 6px; align-items: center; padding: 8px 14px 12px; flex-wrap: wrap; }
+.calpop footer .sp { flex: 1; }
 .cal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .cal-head, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .cal-head span { padding: 6px 8px; font-size: 12px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
@@ -568,11 +647,7 @@ td.mxc { padding: 4px 2px; text-align: center; }
 .cal-cell:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 .cal-cell .dn { font-size: 13px; font-weight: 600; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; font-variant-numeric: tabular-nums; }
 .cal-cell.now .dn { background: var(--brand); color: var(--brand-ink); }
-.ev { display: block; font-size: 12px; line-height: 17px; padding: 0 5px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--brand-soft); color: var(--text); border-left: 3px solid var(--brand); }
-.ev.k-lesson { background: var(--g-study-soft); border-left-color: var(--g-study); }
-.ev.k-consult { background: var(--g-sales-soft); border-left-color: var(--g-sales); }
-.ev.k-interview { background: var(--warn-soft); border-left-color: var(--warn); }
-.ev.k-other { background: var(--surface-2); border-left-color: var(--g-closed); }
+.ev { display: block; font-size: 12px; line-height: 17px; padding: 0 5px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--ks, var(--brand-soft)); color: var(--text); border-left: 3px solid var(--kc, var(--brand)); }
 .ev.st-done { opacity: .6; }
 .ev.st-missed, .ev.st-cancelled { opacity: .6; text-decoration: line-through; }
 .ev-more { font-size: 12px; color: var(--muted); padding-left: 5px; }
@@ -597,12 +672,23 @@ details + details { margin-top: 6px; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpis > :last-child:nth-child(odd) { grid-column: 1 / -1; }
   .cal-wrap { grid-template-columns: minmax(0, 1fr); }
+  .calx { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .cal-side { position: static; order: 2; }
+  .cal-side .mini, .cal-create { display: none; }
+  .cal-create-m { display: inline-flex; }
+  .cal-kinds { flex-direction: row; flex-wrap: wrap; gap: 4px 12px; }
+  .cal-kinds b { width: 100%; }
+  .cal-bar h2 { order: -1; width: 100%; margin: 0 0 4px; }
+  .wk-scroll { height: 62vh; }
+  .wk-head, .wk-all, .wk-body { grid-template-columns: 40px repeat(var(--days), minmax(0, 1fr)); }
   .cal-cell { min-height: 58px; align-items: center; }
   .cal-cell .ev { font-size: 0; line-height: 0; height: 5px; width: 70%; padding: 0; border: 0; border-radius: 3px; background: var(--brand); }
   .cal-cell .ev.k-lesson { background: var(--g-study); }
   .cal-cell .ev.k-consult { background: var(--g-sales); }
   .cal-cell .ev.k-interview { background: var(--warn); }
   .cal-cell .ev.k-other { background: var(--g-closed); }
+  .cal-cell .ev.k-step { background: var(--ok); }
+  .cal-cell .ev.k-pay { background: var(--danger); }
   .cal-cell .ev-more { padding: 0; font-size: 11px; }
   .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; background: var(--bg); }
   .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 10px 16px; gap: 8px 12px; background: var(--side); }
@@ -825,7 +911,8 @@ applyStages({});
 const ROUTE_RE = /^#\/([a-z]+)(?:\/([A-Za-z0-9_-]{1,64}))?(?:\?(s|d)=([A-Za-z0-9_-]{1,64}))?$/;
 function routeHash() {
   if (S.status !== "ready" || S.mode !== "staff") return null;
-  const tail = S.view === "cohort" ? "/" + S.cohortId : S.view === "partner" ? "/" + S.partnerId : "";
+  // У календаря в адресе вид и дата: ссылка на неделю откроется у коллеги на той же неделе
+  const tail = S.view === "cohort" ? "/" + S.cohortId : S.view === "partner" ? "/" + S.partnerId : S.view === "calendar" ? `/${calMode()}-${S.cal.day}` : "";
   const h = "#/" + S.view + tail + (S.openId ? "?s=" + S.openId : S.openDay ? "?d=" + S.openDay : "");
   return ROUTE_RE.test(h) ? h : "#/" + S.view;
 }
@@ -835,18 +922,24 @@ function readHash() {
   const [, view, id, key, val] = m;
   if (view === "cohort" && id) { S.view = "cohort"; S.cohortId = id; }
   else if (view === "partner" && id) { S.view = "partner"; S.partnerId = id; }
+  else if (view === "calendar" && id) {
+    const c = /^(day|week|month|list)-(\d{4}-\d{2}-\d{2})$/.exec(id); if (!c || !isDay(c[2])) return false;
+    S.view = "calendar"; S.cal = { ...S.cal, mode: c[1], day: c[2], ym: c[2].slice(0, 7) };
+  }
   else if (VIEWS.includes(view)) S.view = view;
   else return false;
   S.openId = key === "s" ? val : null;
   S.openDay = key === "d" && isDay(val) && val.length === 10 ? val : null;
-  if (S.openDay) S.cal = { ym: S.openDay.slice(0, 7), day: S.openDay };
+  if (S.openDay) S.cal = { ...S.cal, ym: S.openDay.slice(0, 7), day: S.openDay };
   return true;
 }
 let ROUTING = !readHash();   // адрес не задал раздел: первая запись в историю заменяет текущую, а не добавляет шаг
 function syncUrl() {
   const h = routeHash(); let cur = ""; try { cur = location.hash; } catch (e) { return; }
   if (h === null) return;
-  if (h !== cur) { try { history[ROUTING || !cur ? "replaceState" : "pushState"](null, "", h); } catch (e) { } }
+  // Листание календаря (другая неделя, вид) заменяет адрес, а не добавляет шаг в историю «Назад»
+  const calStep = h.split("?")[0].startsWith("#/calendar/") && cur.split("?")[0].startsWith("#/calendar/") && h.includes("?") === cur.includes("?");
+  if (h !== cur) { try { history[ROUTING || !cur || calStep ? "replaceState" : "pushState"](null, "", h); } catch (e) { } }
   ROUTING = false;
 }
 
@@ -865,11 +958,13 @@ function loadUi() {
   if (["upcoming", "overdue", "paid"].includes(v.payTab)) S.payTab = v.payTab;
   if (["funnel", "money"].includes(v.anTab)) S.anTab = v.anTab;
   if (SET_GROUPS.some(g => g[0] === v.setTab)) S.setTab = v.setTab;
+  if (CAL_MODES.some(x => x[0] === v.calMode) && !S.cal.mode) S.cal.mode = v.calMode;   // вид из адреса важнее запомненного
+  if (Array.isArray(v.calHide)) S.calHide = v.calHide.filter(k => CAL_KINDS.some(x => x[0] === k));
   const ids = x => Array.isArray(x) ? x.filter(y => typeof y === "string" && y.length <= 64).slice(0, 200) : [];
   S.hiddenLanes = ids(v.hiddenLanes); S.foldedLanes = ids(v.foldedLanes); S.laneOrder = ids(v.laneOrder);   // скрытые и свёрнутые потоки на доске
   uiSaved = uiState();
 }
-function uiState() { const f = {}; for (const k of UI_FILTERS) if (S.f[k]) f[k] = S.f[k]; return JSON.stringify({ f, sorts: S.sorts, showLost: S.showLost, payTab: S.payTab, anTab: S.anTab, setTab: S.setTab || "", hiddenLanes: S.hiddenLanes || [], foldedLanes: S.foldedLanes || [], laneOrder: S.laneOrder || [] }); }
+function uiState() { const f = {}; for (const k of UI_FILTERS) if (S.f[k]) f[k] = S.f[k]; return JSON.stringify({ f, sorts: S.sorts, showLost: S.showLost, payTab: S.payTab, anTab: S.anTab, setTab: S.setTab || "", calMode: S.cal.mode || "", calHide: S.calHide || [], hiddenLanes: S.hiddenLanes || [], foldedLanes: S.foldedLanes || [], laneOrder: S.laneOrder || [] }); }
 function saveUi() { if (S.status !== "ready" || S.mode !== "staff") return; const now = uiState(); if (now !== uiSaved) { uiSaved = now; lsSet(UI_KEY(), now); } }
 // Запомненный отбор по записи, которой больше нет (или которая этой роли не видна), молча прятал бы людей: такие значения сбрасываются
 function dropStaleFilters() {
@@ -1163,11 +1258,13 @@ function filtersHTML(keys, { lost = false, ph = "Имя, телефон, email",
 let rq = false;
 function scheduleRender() { if (rq) return; rq = true; requestAnimationFrame(() => { rq = false; render(); }); }
 function render() {
+  if (CALDRAG && CALDRAG.moved) { CALRENDER = true; return; }   // идёт перетаскивание в календаре: перерисуем после
+  CALRENDER = false;
   SETTLED = null; // расчёт по направлениям считается один раз на отрисовку
   const active = document.activeElement, aid = active?.id, sel = active && "selectionStart" in active ? [active.selectionStart, active.selectionEnd] : null;
   const kept = {}; document.querySelectorAll("[data-keep]").forEach(el => kept[el.id] = el.value);
   const laneX = {}; document.querySelectorAll(".lane").forEach(l => { const b = l.querySelector(".lane-board"); if (b && b.scrollLeft) laneX[l.dataset.lane] = b.scrollLeft; });
-  const boardX = 0, drawerY = $("#d-body")?.scrollTop, tblX = $("#tbl")?.scrollLeft;
+  const boardX = 0, drawerY = $("#d-body")?.scrollTop, tblX = $("#tbl")?.scrollLeft, wkY = $("#wk-scroll")?.scrollTop;
   const ready = S.status === "ready" && S.mode === "staff";
   $("#gsearch").hidden = !ready;
   $("#nav").innerHTML = navHTML();
@@ -1183,6 +1280,7 @@ function render() {
   document.querySelectorAll(".lane").forEach(l => { const b = l.querySelector(".lane-board"); if (b && laneX[l.dataset.lane]) b.scrollLeft = laneX[l.dataset.lane]; });
   if (drawerY && $("#d-body")) $("#d-body").scrollTop = drawerY;
   if (tblX && $("#tbl")) $("#tbl").scrollLeft = tblX;
+  if ($("#wk-scroll")) $("#wk-scroll").scrollTop = wkY ?? 8 * HOUR_PX - 12;   // неделя открывается с утра, дальше помнит прокрутку
   if (aid && aid !== "mform" && aid !== "gq" && !aid.startsWith("m-")) { const el = document.getElementById(aid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) { } } }
   renderSync();
   resolveNames();
@@ -1610,31 +1708,176 @@ function dayHTML(d) {
       ${sec("Платежи студентов", pays.length, pays.map(payRow).join(""), "Платежей с этим сроком нет.")}
     </div></aside>`;
 }
-function calendarView() {
+// ----- Календарь как в почтовых календарях: слева «+ Встреча», маленький месяц и галочки видов событий;
+// справа неделя или день по часам, месяц или список. Встречу создают нажатием на свободное время или протяжкой,
+// переносят перетаскиванием, длительность меняют за нижний край. Права на изменение проверяет сервер
+const CAL_MODES = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"], ["list", "Список"]];
+const CAL_KINDS = [["call", "Созвоны"], ["lesson", "Занятия"], ["consult", "Консультации"], ["other", "Другое"], ["interview", "Собеседования"], ["step", "Шаги студентов"], ["pay", "Платежи"]];
+const HOUR_PX = 48, SNAP_MIN = 15;
+const calMode = () => CAL_MODES.some(x => x[0] === S.cal.mode) ? S.cal.mode : (typeof matchMedia === "function" && matchMedia("(max-width: 860px)").matches ? "day" : "week");
+const addDays = (d, n) => { const x = new Date(d + "T12:00"); x.setDate(x.getDate() + n); return dstr(x); };
+const weekStart = d => addDays(d, -((new Date(d + "T12:00").getDay() + 6) % 7));
+const toMin = t => { const m = /^(\d{2}):(\d{2})/.exec(t || ""); return m && +m[1] < 24 && +m[2] < 60 ? +m[1] * 60 + +m[2] : null; };
+const fromMin = n => `${pad(Math.floor(n / 60))}:${pad(n % 60)}`;
+const snapMin = n => Math.max(0, Math.min(1440 - SNAP_MIN, Math.round(n / SNAP_MIN) * SNAP_MIN));
+const dayLong = d => { const s = new Date(d + "T12:00").toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "long" }); return s[0].toUpperCase() + s.slice(1); };
+// Можно ли переносить встречу: администратор — любую, ментор — свою (то же правило на сервере, Access.check_write)
+const canMove = m => !S.readOnly && (!S.limited || (!!S.me?.linkId && m.mentorId === S.me.linkId && (!m.studentId || !!stu(m.studentId))) || (!m.mentorId && !!m.studentId && !!stu(m.studentId)));
+const evKey = e => e.type === "m" ? "m:" + e.m.id : e.type === "i" ? `i:${e.s.id}:${e.a.id || e.date}` : e.type === "step" ? "s:" + e.s.id : `p:${e.s.id}:${e.p.id}`;
+let CALMAP = new Map(), CALDRAG = null, CALRENDER = false, QDRAFT = null;
+// Всё, что видно в календаре за период: встречи и собеседования (events), шаги и сроки платежей. Скрытые виды пропускаются
+function calItems(from, to) {
+  const hide = new Set(S.calHide || []), out = [];
+  for (const e of events(from, to)) {
+    const ck = e.type === "i" ? "interview" : MEET_KINDS.some(x => x[0] === e.kind) ? e.kind : "other";
+    if (!hide.has(ck)) out.push({ ...e, ck, start: toMin(e.time), dur: e.type === "m" && nnum(e.m.duration) > 0 ? Math.min(Math.round(nnum(e.m.duration)), 1440) : 60 });
+  }
+  const list = filtered(["mentor"]);
+  if (!hide.has("step")) for (const s of list) if (isActive(s) && hasStep(s) && isDay(s.next.date) && s.next.date.slice(0, 10) >= from && s.next.date.slice(0, 10) <= to)
+    out.push({ type: "step", ck: "step", date: s.next.date.slice(0, 10), time: "", title: s.next.text, status: "planned", s, start: null });
+  if (!hide.has("pay")) for (const s of list) {
+    if (isClosed(s.stage)) continue;
+    for (const p of Array.isArray(s.payments) ? s.payments : []) if (isObj(p) && !p.paid && isDay(p.due) && p.due.slice(0, 10) >= from && p.due.slice(0, 10) <= to)
+      out.push({ type: "pay", ck: "pay", date: p.due.slice(0, 10), time: "", title: isPending(p) ? `${pctText(p.percent)} от дохода` : money(p.amount), status: "planned", s, p, start: null });
+  }
+  const sorted = sortBy(out, e => e.date + (e.time || "") + e.ck);
+  for (const e of sorted) CALMAP.set(evKey(e), e);
+  return sorted;
+}
+const going = e => { if (e.type !== "m") return ""; const p = meetPeople(e.m); return p.length > 1 ? `${p.filter(x => x.a === "yes").length}/${p.length}` : ""; };
+const chipText = e => `${e.time ? e.time + " " : ""}${going(e) ? going(e) + " " : ""}${e.title}${e.s && e.type !== "m" ? " · " + e.s.name : ""}`;
+// Пересекающиеся по времени встречи встают рядом: каждой — своя колонка в группе пересечений
+function layoutDay(list) {
+  const evs = sortBy(list, e => e.start).map(e => ({ e, s: e.start, f: Math.min(e.start + Math.max(e.dur, 20), 1440) })), out = [];
+  let group = [], end = -1;
+  const flush = () => { const cols = []; for (const x of group) { let c = cols.findIndex(f => f <= x.s); if (c < 0) { c = cols.length; cols.push(0); } cols[c] = x.f; x.c = c; } for (const x of group) { x.n = cols.length; out.push(x); } group = []; };
+  for (const x of evs) { if (x.s >= end) { flush(); end = -1; } group.push(x); end = Math.max(end, x.f); }
+  flush();
+  return out;
+}
+function blockHTML(x) {
+  const e = x.e, w = 100 / x.n, can = e.type === "m" && canMove(e.m), h = Math.max((x.f - x.s) * HOUR_PX / 60, 18);
+  return `<div class="wev k-${esc(e.ck)} st-${esc(e.status || "planned")}${can ? " can" : ""}${h < 30 ? " short" : h < 50 ? " mid" : ""}" data-ev="${esc(evKey(e))}" role="button" tabindex="0" title="${esc(chipText(e))}"
+    style="top:${x.s * HOUR_PX / 60}px;height:${h}px;left:calc(${x.c * w}% + 1px);width:calc(${w}% - 3px)">
+    <span class="wev-t">${esc(e.time)}${e.type === "m" ? "–" + fromMin(Math.min(x.s + e.dur, 1440)) : ""}${going(e) ? ` · ${esc(going(e))}` : ""}</span><span class="wev-n">${esc(e.title)}</span>${e.s ? `<span class="wev-s">${esc(e.s.name)}</span>` : ""}${can ? `<span class="wev-r" data-resize aria-hidden="true"></span>` : ""}</div>`;
+}
+const allChip = e => `<button class="ev k-${esc(e.ck)} st-${esc(e.status || "planned")}" data-ev="${esc(evKey(e))}" data-act="ev-open" title="${esc(chipText(e))}">${esc(chipText(e))}</button>`;
+function weekHTML(days) {
+  const t = today(), now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes(), items = calItems(days[0], days[days.length - 1]);
+  const head = days.map(d => { const x = new Date(d + "T12:00"); return `<button class="wk-day${d === t ? " now" : ""}${d === S.cal.day ? " sel" : ""}" id="cal-${d}" data-act="cal-day" data-d="${d}" title="Открыть карточку дня"><span>${WD[(x.getDay() + 6) % 7]}</span><b>${x.getDate()}</b></button>`; }).join("");
+  const all = days.map(d => { const l = items.filter(e => e.date === d && e.start === null); return `<div class="wk-allc">${l.slice(0, 3).map(allChip).join("")}${l.length > 3 ? `<button class="ev-more" data-act="cal-day" data-d="${d}">ещё ${l.length - 3}</button>` : ""}</div>`; }).join("");
+  const cols = days.map(d => `<div class="wk-col${d === t ? " now" : ""}" data-date="${d}">${layoutDay(items.filter(e => e.date === d && e.start !== null)).map(blockHTML).join("")}${d === t ? `<span class="wk-now" style="top:${nowMin * HOUR_PX / 60}px"></span>` : ""}</div>`).join("");
+  const hours = Array.from({ length: 24 }, (_, h) => `<span style="top:${h * HOUR_PX}px">${h ? pad(h) + ":00" : ""}</span>`).join("");
+  return `<div class="wk" id="cal-week" style="--days:${days.length};--hour:${HOUR_PX}px">
+    <div class="wk-head"><span class="wk-g"></span>${head}</div>
+    <div class="wk-all"><span class="wk-g">весь день</span>${all}</div>
+    <div class="wk-scroll" id="wk-scroll"><div class="wk-body"><div class="wk-hours" aria-hidden="true">${hours}</div>${cols}</div></div></div>`;
+}
+// Строка события в списках: встречи и собеседования — как раньше (evRow), шаги и платежи ведут в карточку студента
+const calRow = (e, withDate) => e.type === "m" || e.type === "i" ? evRow(e, withDate)
+  : `<li class="click" data-act="open" data-id="${esc(e.s.id)}"><span class="evt">${withDate ? esc(e.date === today() ? "Сегодня" : fShort(e.date)) : "весь день"}</span><span class="who"><strong>${esc(e.title)}</strong><span>${esc(e.s.name)}</span></span><span class="tag k-${esc(e.ck)}">${e.type === "step" ? "шаг" : "платёж"}</span></li>`;
+function monthHTML() {
   const t = today(), [y, mo] = S.cal.ym.split("-").map(Number);
   const lead = (new Date(y, mo - 1, 1).getDay() + 6) % 7, total = Math.ceil((lead + new Date(y, mo, 0).getDate()) / 7) * 7;
   const cells = Array.from({ length: total }, (_, i) => dstr(new Date(y, mo - 1, 1 - lead + i)));
-  const by = {}; for (const e of events(cells[0], cells[total - 1])) (by[e.date] = by[e.date] || []).push(e);
-  const sel = S.cal.day, dayEvs = by[sel] || [], late = unmarked();
-  const planned = Object.entries(by).filter(([d]) => d.slice(0, 7) === S.cal.ym).flatMap(([, l]) => l).filter(e => e.status === "planned").length;
-  // У занятия группы сразу после времени — сколько ответили «буду»: «19:00 3/8 Занятие потока»
-  const going = e => { if (e.type !== "m") return ""; const p = meetPeople(e.m); return p.length > 1 ? `${p.filter(x => x.a === "yes").length}/${p.length}` : ""; };
-  const chip = e => `<span class="ev k-${esc(e.kind)} st-${esc(e.status)}" title="${esc((e.time ? e.time + " " : "") + e.title + (e.s ? " · " + e.s.name : "") + (going(e) ? `, будут ${going(e).replace("/", " из ")}` : ""))}">${esc((e.time ? e.time + " " : "") + (going(e) ? going(e) + " " : "") + (e.s ? mask(e.s.name) : e.title))}</span>`;
-  const grid = cells.map(d => { const l = by[d] || []; return `<button class="cal-cell${d.slice(0, 7) !== S.cal.ym ? " out" : ""}${d === t ? " now" : ""}${d === sel ? " sel" : ""}" id="cal-${d}" data-act="cal-day" data-d="${d}" aria-pressed="${d === sel}" aria-label="${fShort(d)}${l.length ? `, событий: ${l.length}` : ""}">
+  const by = {}; for (const e of calItems(cells[0], cells[total - 1])) (by[e.date] = by[e.date] || []).push(e);
+  const sel = S.cal.day, dayEvs = by[sel] || [];
+  const chip = e => `<span class="ev k-${esc(e.ck)} st-${esc(e.status)}" title="${esc(chipText(e))}">${esc(chipText(e))}</span>`;
+  const grid = cells.map(d => { const l = by[d] || []; return `<button class="cal-cell${d.slice(0, 7) !== S.cal.ym ? " out" : ""}${d === t ? " now" : ""}${d === sel ? " sel" : ""}" id="cal-${d}" data-act="cal-day" data-d="${d}" aria-label="${esc(new Date(d + "T12:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" }))}${l.length ? `, событий: ${l.length}` : ""}">
       <span class="dn">${+d.slice(8)}</span>${l.slice(0, 3).map(chip).join("")}${l.length > 3 ? `<span class="ev-more">ещё ${l.length - 3}</span>` : ""}</button>`; }).join("");
-  const dayTitle = new Date(sel + "T12:00").toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
-  const add = S.readOnly ? "" : `<button class="btn small" data-act="meet-new" data-date="${esc(sel)}">+ Встреча</button>`;
-  return headHTML("Календарь", "", mentorSelect() + add.replace("btn small", "btn primary"), `Запланировано на месяц: ${planned}${late.length ? ` · не отмечено прошедших: ${late.length}` : ""}`) + `
-  <div class="cal-bar"><button class="btn small" id="cal-prev" data-act="cal-go" data-n="-1" aria-label="Предыдущий месяц">←</button><h2>${MONTHS[mo - 1]} ${y}</h2><button class="btn small" id="cal-next" data-act="cal-go" data-n="1" aria-label="Следующий месяц">→</button>
-    <button class="btn small ghost" data-act="cal-go" data-n="0">Сегодня</button></div>
-  <div class="cal-wrap">
+  const dayTitle = dayLong(sel);
+  return `<div class="cal-wrap">
     <div class="cal"><div class="cal-head">${WD.map(w => `<span>${w}</span>`).join("")}</div><div class="cal-grid">${grid}</div></div>
-    <div class="stack">
-      ${panel(esc(dayTitle[0].toUpperCase() + dayTitle.slice(1)), dayEvs.length || "", dayEvs.length ? `<ul class="rows">${dayEvs.map(e => evRow(e)).join("")}</ul>` : `<p class="empty">На этот день встреч нет</p>`, add)}
-      ${late.length ? panel("Прошли и не отмечены", late.length, `<ul class="rows">${late.map(e => evRow(e, true)).join("")}</ul>`) : ""}
-      <p class="hint">Нажмите на день, чтобы открыть его карточку: встречи, шаги и платежи этого дня. Собеседования попадают сюда из откликов студентов. Состоявшаяся встреча со студентом записывается в его заметки.</p>
-    </div>
-  </div>`;
+    <div class="stack">${panel(esc(dayTitle), dayEvs.length || "", dayEvs.length ? `<ul class="rows">${dayEvs.map(e => calRow(e)).join("")}</ul>` : `<p class="empty">На этот день ничего нет</p>`,
+      S.readOnly ? "" : `<button class="btn small" data-act="meet-new" data-date="${esc(sel)}">+ Встреча</button>`)}</div></div>`;
+}
+function listHTML() {
+  const from = S.cal.day, to = addDays(from, 13), items = calItems(from, to), days = [...new Set(items.map(e => e.date))];
+  return `<div class="stack" id="cal-list">${days.length ? days.map(d => panel(esc(dayLong(d)) + (d === today() ? ` <span class="tag ok">сегодня</span>` : ""), "", `<ul class="rows">${items.filter(e => e.date === d).map(e => calRow(e)).join("")}</ul>`)).join("")
+    : `<div class="card welcome"><p>С ${fDate(from)} на две недели вперёд ничего не запланировано.</p></div>`}</div>`;
+}
+function miniHTML(sel, mode) {
+  const ym = S.cal.mini || sel.slice(0, 7), [y, mo] = ym.split("-").map(Number), t = today();
+  const lead = (new Date(y, mo - 1, 1).getDay() + 6) % 7, total = Math.ceil((lead + new Date(y, mo, 0).getDate()) / 7) * 7;
+  const ws = weekStart(sel), inSel = d => mode === "week" ? d >= ws && d <= addDays(ws, 6) : mode === "month" ? d.slice(0, 7) === S.cal.ym : d === sel;
+  const cells = Array.from({ length: total }, (_, i) => dstr(new Date(y, mo - 1, 1 - lead + i)));
+  return `<div class="mini" id="cal-mini"><div class="mini-top"><button class="btn small ghost" data-act="cal-mini" data-n="-1" aria-label="Предыдущий месяц">‹</button><b>${MONTHS[mo - 1]} ${y}</b><button class="btn small ghost" data-act="cal-mini" data-n="1" aria-label="Следующий месяц">›</button></div>
+    <div class="mini-grid">${WD.map(w => `<span class="mini-wd">${w[0]}</span>`).join("")}${cells.map(d => `<button class="mini-d${d.slice(0, 7) !== ym ? " out" : ""}${d === t ? " now" : ""}${inSel(d) ? " in" : ""}" data-act="cal-pick" data-d="${d}" aria-label="${esc(dayLong(d))}">${+d.slice(8)}</button>`).join("")}</div></div>`;
+}
+function calendarView() {
+  const mode = calMode(), sel = S.cal.day, late = unmarked(), hide = new Set(S.calHide || []);
+  const ws = weekStart(sel), days = mode === "week" ? Array.from({ length: 7 }, (_, i) => addDays(ws, i)) : [sel];
+  const [y, mo] = S.cal.ym.split("-").map(Number), fmt = (d, o) => new Date(d + "T12:00").toLocaleDateString("ru-RU", o);
+  const title = mode === "month" ? `${MONTHS[mo - 1]} ${y}` : mode === "week" ? (ws.slice(0, 7) === days[6].slice(0, 7) ? `${+ws.slice(8)} – ${fmt(days[6], { day: "numeric", month: "long", year: "numeric" })}` : `${fmt(ws, { day: "numeric", month: "long" })} – ${fmt(days[6], { day: "numeric", month: "long", year: "numeric" })}`)
+    : mode === "day" ? fmt(sel, { weekday: "long", day: "numeric", month: "long", year: "numeric" }) : `С ${fmt(sel, { day: "numeric", month: "long" })} на две недели`;
+  CALMAP = new Map();
+  const body = mode === "month" ? monthHTML() : mode === "list" ? listHTML() : weekHTML(days);
+  const side = `<aside class="cal-side" aria-label="Календарь">
+      ${S.readOnly ? "" : `<button class="btn primary cal-create" data-act="meet-new" data-date="${esc(sel)}">+ Встреча</button>`}
+      ${miniHTML(sel, mode)}
+      <div class="cal-kinds" id="cal-kinds"><b>Показывать</b>${CAL_KINDS.map(([k, l]) => `<label class="cal-k k-${k}"><input type="checkbox" data-calk="${k}"${hide.has(k) ? "" : " checked"}><i aria-hidden="true"></i>${l}</label>`).join("")}</div>
+      ${mentorSelect()}
+      ${late.length ? `<div class="cal-late">${panel("Прошли и не отмечены", late.length, `<ul class="rows">${late.slice(0, 8).map(e => evRow(e, true)).join("")}</ul>`)}</div>` : ""}
+    </aside>`;
+  return headHTML("Календарь", "", "", "Нажмите на свободное время, чтобы назначить встречу, или протяните по часам. Встречу можно перетащить на другое время, а за нижний край — изменить длительность.") + `<div class="calx">${side}
+    <section class="cal-main"><div class="cal-bar"><button class="btn small ghost" data-act="cal-go" data-n="0">Сегодня</button><button class="btn small ghost" id="cal-prev" data-act="cal-go" data-n="-1" aria-label="Назад">‹</button><button class="btn small ghost" id="cal-next" data-act="cal-go" data-n="1" aria-label="Вперёд">›</button>
+      <h2 id="cal-title">${esc(title[0].toUpperCase() + title.slice(1))}</h2><span class="right"></span>${S.readOnly ? "" : `<button class="btn small primary cal-create-m" data-act="meet-new" data-date="${esc(sel)}">+ Встреча</button>`}
+      <div class="seg" id="cal-modes" role="group" aria-label="Вид календаря">${CAL_MODES.map(([k, l]) => `<button data-act="cal-mode" data-v="${k}" class="${k === mode ? "on" : ""}">${l}</button>`).join("")}</div></div>
+      ${body}</section></div>`;
+}
+// Карточка события: всё о встрече и действия; у собеседования, шага и платежа — переход в карточку студента
+function evPop(key, anchor) {
+  const e = CALMAP.get(key); if (!e || !anchor) return;
+  const t = today(), m = e.m, when = `${dayLong(e.date)}${e.time ? `, ${e.time}${e.type === "m" && e.start !== null ? "–" + fromMin(Math.min(e.start + e.dur, 1440)) : ""}` : ", весь день"}`;
+  const kindL = Object.fromEntries(CAL_KINDS)[e.ck] || "";
+  const who = e.s ? `<p><button class="link" data-act="open" data-id="${esc(e.s.id)}">${esc(e.s.name)}</button>${e.s.mentorId && teamName(e.s.mentorId) ? ` <span class="sub">· ментор ${esc(teamName(e.s.mentorId))}</span>` : ""}</p>` : "";
+  const body = e.type === "m" ? `${who}${!e.s && m.cohortId ? `<p class="sub">${esc(cohortName(m.cohortId) || "Поток")} · вся группа</p>` : ""}${teamName(m.mentorId) ? `<p class="sub">Проводит ${esc(teamName(m.mentorId))}</p>` : ""}
+      ${meetLink(m) ? `<p><a href="${esc(meetLink(m))}" target="_blank" rel="noopener">Ссылка на встречу</a></p>` : ""}${peopleHTML(m)}${m.notes ? `<p class="pre sub">${esc(m.notes)}</p>` : ""}
+      ${(m.status || "planned") !== "planned" ? `<p><span class="tag${m.status === "done" ? " ok" : ""}">${esc((MEETL[m.status] || m.status).toLowerCase())}</span></p>` : ""}`
+    : e.type === "i" ? `${who}<p class="sub">${esc(e.a.position || "")}</p>` : e.type === "step" ? `${who}<p class="sub">Следующий шаг студента</p>` : `${who}<p class="sub">Срок платежа${e.p.comment ? ` · ${esc(e.p.comment)}` : ""}</p>`;
+  const acts = e.type === "m" ? `${canMove(m) ? `<button class="btn small ghost danger-text" data-act="ev-del" data-id="${esc(m.id)}">Удалить</button>` : ""}<span class="sp"></span>
+      ${(m.status || "planned") === "planned" && e.date <= t && canMark(m) ? `<button class="btn small" data-act="meet-mark" data-id="${esc(m.id)}" data-st="done">Состоялась</button>` : ""}<button class="btn small primary" data-act="meet-edit" data-id="${esc(m.id)}">Изменить</button>`
+    : `<span class="sp"></span><button class="btn small primary" data-act="open" data-id="${esc(e.s.id)}">Карточка студента</button>`;
+  popShow(`<header><span class="pop-dot k-${esc(e.ck)}"></span><div><h3>${esc(e.type === "pay" ? "Платёж " + e.title : e.title)}</h3><p class="sub">${esc(when)}${kindL ? " · " + esc(kindL.toLowerCase()) : ""}</p></div><button class="x" data-act="pop-close" aria-label="Закрыть">×</button></header>
+    <div class="pop-body">${body}</div><footer>${acts}</footer>`, anchor.getBoundingClientRect());
+}
+// Быстрое создание: название и время уже подставлены; «Подробнее» открывает полную форму
+function quickMeet(date, start, end, rect) {
+  QDRAFT = { date, start, end };
+  popShow(`<form id="qform"><header><span class="pop-dot k-call"></span><div><h3>Новая встреча</h3><p class="sub">${esc(dayLong(date))}, ${fromMin(start)}–${fromMin(end)}</p></div><button type="button" class="x" data-act="pop-close" aria-label="Закрыть">×</button></header>
+    <div class="pop-body"><input id="q-title" list="q-hints" placeholder="Название, например «Созвон-знакомство»" aria-label="Название встречи" autocomplete="off" maxlength="200"><datalist id="q-hints">${meetHints().map(h => `<option value="${esc(h)}">`).join("")}</datalist></div>
+    <footer><button type="button" class="btn small ghost" data-act="q-more">Подробнее</button><span class="sp"></span><button type="submit" class="btn small primary">Сохранить</button></footer></form>`, rect);
+  $("#q-title")?.focus();
+}
+function popShow(html, rect) {
+  let box = $("#calpop");
+  if (!box) { box = document.createElement("div"); box.id = "calpop"; box.className = "calpop"; box.setAttribute("role", "dialog"); document.body.appendChild(box); }
+  box.innerHTML = html; box.hidden = false;
+  const w = box.offsetWidth, h = box.offsetHeight, vw = innerWidth, vh = innerHeight;
+  let left = rect.right + 8; if (left + w > vw - 8) left = rect.left - w - 8; if (left < 8) left = Math.max(8, Math.min(vw - w - 8, rect.left));
+  let top = Math.min(Math.max(8, rect.top), vh - h - 8); if (left === rect.left || left < rect.right && left + w > rect.left) top = Math.min(rect.bottom + 6, vh - h - 8);
+  box.style.left = left + "px"; box.style.top = Math.max(8, top) + "px";
+}
+function closePop() { const b = $("#calpop"); if (b && !b.hidden) { b.hidden = true; b.innerHTML = ""; } QDRAFT = null; }
+function qSave() {
+  const q = QDRAFT, title = String($("#q-title")?.value || "").trim().slice(0, 200); if (!q) return;
+  if (!title) { $("#q-title")?.focus(); return toast("Напишите название встречи"); }
+  closePop();
+  return save(() => setDoc("meetings", newId("meetings"), { title, date: q.date, time: fromMin(q.start), kind: "call", duration: q.end - q.start, studentId: null, cohortId: null,
+    mentorId: myTeam()?.id || null, link: "", notes: "", ...(S.server ? { remind: true } : {}), status: "planned", createdAt: new Date().toISOString(), by: S.myId }), `Встреча «${title}»: ${dayLong(q.date)}, ${fromMin(q.start)}`);
+}
+// Перенос и новая длительность — одной записью; «Отменить» возвращает прежнее
+async function moveMeet(id, date, start, dur) {
+  const m = meetById(id); if (!m) return render();
+  const patch = {}, time = fromMin(start);
+  if (m.date !== date) patch.date = date;
+  if ((m.time || "") !== time) patch.time = time;
+  if (dur !== undefined && Math.round(nnum(m.duration)) !== dur) patch.duration = dur;
+  if (!Object.keys(patch).length) return render();
+  const was = Object.fromEntries(Object.keys(patch).map(k => [k, m[k] ?? (k === "duration" ? null : "")]));
+  const ok = await save(() => updDoc("meetings", id, patch));
+  if (ok) { S.cal = { ...S.cal, day: date, ym: date.slice(0, 7) }; toast(`${m.title || "Встреча"}: ${dayLong(date)}, ${time}–${fromMin(Math.min(start + (dur ?? (nnum(m.duration) || 60)), 1440))}`, () => save(() => updDoc("meetings", id, was), "Возвращено")); }
+  render();
 }
 
 // ----- Воронка -----
@@ -3368,7 +3611,7 @@ function meetingForm(m, prefill = {}) {
       const toStatus = m && v.status !== vals.status ? v.status : null, any = !m || Object.keys(changed).length > 0;
       if (m && !meetById(m.id)) return "Эту встречу уже удалили";
       const ok = !any ? true : await save(() => m ? updDoc("meetings", m.id, changed) : setDoc("meetings", newId("meetings"), { ...doc, status: "planned", createdAt: new Date().toISOString(), by: S.myId }), m ? "Сохранено" : `Встреча назначена на ${dueLabel(v.date)}${v.time ? ", " + v.time : ""}`);
-      if (ok && S.view === "calendar") { S.cal = { ym: v.date.slice(0, 7), day: v.date }; render(); }
+      if (ok && S.view === "calendar") { S.cal = { ...S.cal, ym: v.date.slice(0, 7), day: v.date }; render(); }
       if (ok && toStatus) meetMark(m.id, toStatus); // статус меняется тем же путём, что и кнопкой: с заметкой и отменой
       return ok;
     },
@@ -3904,10 +4147,22 @@ const ACT = {
   sort: d => { const s = S.sort; S.sort = !s || s.k !== d.k ? { k: d.k, dir: 1 } : s.dir > 0 ? { k: d.k, dir: -1 } : null; if (S.sort) S.sorts[S.view] = S.sort; else delete S.sorts[S.view]; render(); },
   "cal-day": d => { S.cal.day = d.d; S.cal.ym = d.d.slice(0, 7); S.openDay = d.d; render(); $("#d-x")?.focus({ preventScroll: true }); },
   "cal-go": d => {
-    const n = +d.n, t = today();
-    if (!n) S.cal = { ym: t.slice(0, 7), day: t };
-    else { const [y, m] = S.cal.ym.split("-").map(Number), x = new Date(y, m - 1 + n, 1), ym = `${x.getFullYear()}-${pad(x.getMonth() + 1)}`; S.cal = { ym, day: ym === t.slice(0, 7) ? t : ym + "-01" }; }
-    render();
+    const n = +d.n, t = today(), mode = calMode();
+    let day = t;
+    if (n && mode === "month") { const [y, m] = S.cal.ym.split("-").map(Number), x = new Date(y, m - 1 + n, 1), ym = `${x.getFullYear()}-${pad(x.getMonth() + 1)}`; day = ym === t.slice(0, 7) ? t : ym + "-01"; }
+    else if (n) day = addDays(S.cal.day, n * (mode === "day" ? 1 : mode === "week" ? 7 : 14));
+    S.cal = { ...S.cal, day, ym: day.slice(0, 7), mini: null }; closePop(); render();
+  },
+  "cal-mode": d => { if (CAL_MODES.some(x => x[0] === d.v)) { S.cal = { ...S.cal, mode: d.v, ym: S.cal.day.slice(0, 7) }; closePop(); render(); } },
+  "cal-pick": d => { if (isDay(d.d)) { S.cal = { ...S.cal, day: d.d, ym: d.d.slice(0, 7), mini: d.d.slice(0, 7) }; closePop(); render(); } },
+  "cal-mini": d => { const [y, m] = (S.cal.mini || S.cal.day.slice(0, 7)).split("-").map(Number), x = new Date(y, m - 1 + +d.n, 1); S.cal = { ...S.cal, mini: `${x.getFullYear()}-${pad(x.getMonth() + 1)}` }; render(); },
+  "ev-open": (d, el) => evPop(el.dataset.ev, el),
+  "pop-close": () => closePop(),
+  "q-more": () => { const q = QDRAFT, title = String($("#q-title")?.value || "").trim(); closePop(); if (q) meetingForm(null, { date: q.date, time: fromMin(q.start), duration: q.end - q.start, ...(title ? { title } : {}) }); },
+  "ev-del": (d, el) => {
+    if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Точно удалить?"; return; }
+    closePop(); const m = meetById(d.id); if (!m) return;
+    return save(() => delDoc("meetings", d.id)).then(ok => ok && toast(`Встреча «${m.title || ""}» удалена`, () => save(() => setDoc("meetings", d.id, { ...m, id: undefined }), "Встреча возвращена")));
   },
   "meet-new": d => meetingForm(null, { ...(d.date ? { date: d.date } : {}), ...(d.sid ? { studentId: d.sid, title: "Созвон", mentorId: stu(d.sid)?.mentorId || myTeam()?.id || "" } : {}) }),
   "meet-edit": d => { const m = meetById(d.id); if (m) meetingForm(m); },
@@ -4040,8 +4295,11 @@ document.addEventListener("drop", e => {
 document.addEventListener("click", e => {
   if (S.navMore && !e.target.closest("#nav")) { S.navMore = false; render(); }
   if (!e.target.closest("#gsearch")) $("#gq-res").hidden = true;
+  // Карточка события в календаре закрывается щелчком мимо неё (встречи и сетку обрабатывает перетаскивание)
+  if (!e.target.closest("#calpop, .wk-col, [data-act=ev-open]") && Date.now() - CALKEEP > 300) closePop();
   const stop = e.target.closest("[data-stop]"); if (stop) return;
   const el = e.target.closest("[data-act]"); if (!el) return;
+  if (el.closest("#calpop") && !["ev-del", "pop-close", "q-more"].includes(el.dataset.act)) closePop();   // действие из карточки события
   if (el.dataset.act === "toggle-lost") return;
   const fn = ACT[el.dataset.act]; if (!fn) return;
   if (el.tagName === "BUTTON") e.preventDefault();
@@ -4050,6 +4308,7 @@ document.addEventListener("click", e => {
 document.addEventListener("change", e => {
   const el = e.target;
   if (el.dataset.dirF === "key") return dirInput(el);   // участник направления выбран
+  if (el.dataset.calk) { const h = new Set(S.calHide || []); el.checked ? h.delete(el.dataset.calk) : h.add(el.dataset.calk); S.calHide = [...h]; closePop(); return render(); }
   if (el.dataset.filter) { S.f[el.dataset.filter] = el.value; S.rows = 0; render(); }
   if (el.dataset.fcheck) { S.f[el.dataset.fcheck] = el.checked ? "1" : ""; S.rows = 0; render(); }
   if (el.id === "pay-month") { S.payMonth = el.value; render(); }
@@ -4081,9 +4340,12 @@ document.addEventListener("mousemove", e => {
 });
 window.addEventListener("crm-sync", e => { S.offline = !e.detail.online; renderSync(); });
 document.addEventListener("focusin", e => { if (e.target.id === "gq") renderSearch(); });
-document.addEventListener("submit", e => { if (e.target.id === "mform") { e.preventDefault(); submitModal(); } });
+document.addEventListener("submit", e => { if (e.target.id === "mform") { e.preventDefault(); submitModal(); } if (e.target.id === "qform") { e.preventDefault(); qSave(); } });
 document.addEventListener("keydown", e => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  if (e.key === "Escape" && CALDRAG) { calDrop(e, true); return; }
+  if (e.key === "Escape" && $("#calpop") && !$("#calpop").hidden) { closePop(); return; }
+  if (e.key === "Enter" && e.target.classList?.contains("wev")) { e.preventDefault(); return evPop(e.target.dataset.ev, e.target); }
   if (e.key === "Escape") {
     if (S.navMore) { S.navMore = false; render(); $("#nav .more")?.focus(); return; }
     if (MODAL) closeModal();
@@ -4130,6 +4392,75 @@ document.addEventListener("drop", e => {
 });
 document.addEventListener("dragend", () => { if (S.laneDrag) S.laneDrag = null; document.querySelectorAll(".lane.drop-before, .lane.drop-after, .lane.dragging").forEach(x => x.classList.remove("drop-before", "drop-after", "dragging")); });
 document.addEventListener("keydown", e => { const g = e.target.closest?.("[data-lane-drag]"); if (!g || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return; e.preventDefault(); moveLane(g.dataset.laneDrag, e.key === "ArrowUp" ? -1 : 1); });
+// Календарь: протяжка по свободному времени создаёт встречу, встреча перетаскивается и растягивается за нижний край.
+// Пальцем — после удержания, иначе это прокрутка. Нажатие без движения: на встрече — её карточка, на пустом месте — новая встреча на час
+const colAt = x => [...document.querySelectorAll(".wk-col")].find(c => { const r = c.getBoundingClientRect(); return x >= r.left && x < r.right; });
+const minAt = (col, y) => (y - col.getBoundingClientRect().top) / HOUR_PX * 60;
+document.addEventListener("pointerdown", e => {
+  if (e.button !== 0 || S.view !== "calendar") return;
+  const col = e.target.closest?.(".wk-col"); if (!col) return;
+  const ev = e.target.closest(".wev"), item = ev && CALMAP.get(ev.dataset.ev);
+  if (ev && !ev.classList.contains("can")) { CALDRAG = { kind: "click", el: ev, key: ev.dataset.ev, x0: e.clientX, y0: e.clientY, armed: true }; return; }
+  if (!ev && S.readOnly) return closePop();
+  if (e.pointerType !== "touch") e.preventDefault();   // мышью по сетке не выделяем текст
+  const at = minAt(col, e.clientY);
+  CALDRAG = { kind: ev ? (e.target.closest("[data-resize]") ? "resize" : "move") : "new", el: ev, key: ev?.dataset.ev, item, col, x0: e.clientX, y0: e.clientY,
+    at: snapMin(at), raw: at, grab: item ? at - item.start : 0, moved: false, touch: e.pointerType === "touch", armed: e.pointerType !== "touch" };
+  if (CALDRAG.touch) CALDRAG.timer = setTimeout(() => { if (CALDRAG && !CALDRAG.moved) { CALDRAG.armed = true; CALDRAG.el?.classList.add("lifted"); } }, 350);
+});
+document.addEventListener("pointermove", e => {
+  const d = CALDRAG; if (!d) return;
+  const dist = Math.abs(e.clientX - d.x0) + Math.abs(e.clientY - d.y0);
+  if (!d.armed) { if (dist > 8) { clearTimeout(d.timer); CALDRAG = null; } return; }   // палец двинулся до удержания: это прокрутка
+  if (d.kind === "click" || (!d.moved && dist < 5)) return;
+  if (!d.moved) { d.moved = true; closePop(); document.documentElement.classList.add("cal-dragging"); }
+  e.preventDefault();
+  if (d.kind === "new") {
+    const cur = snapMin(minAt(d.col, e.clientY)), s0 = Math.min(d.at, cur), f0 = Math.max(d.at, cur) + SNAP_MIN;
+    let box = d.col.querySelector(".wk-sel"); if (!box) { box = document.createElement("div"); box.className = "wk-sel"; d.col.appendChild(box); }
+    box.style.top = s0 * HOUR_PX / 60 + "px"; box.style.height = (f0 - s0) * HOUR_PX / 60 + "px"; box.textContent = `${fromMin(s0)}–${fromMin(Math.min(f0, 1440))}`;
+    d.s = s0; d.f = Math.min(f0, 1440);
+  } else if (d.kind === "move") {
+    const col = colAt(e.clientX) || d.col, dur = d.item.dur, start = Math.min(snapMin(minAt(col, e.clientY) - d.grab), Math.max(0, 1440 - dur));
+    if (d.el.parentElement !== col) col.appendChild(d.el);
+    Object.assign(d.el.style, { top: start * HOUR_PX / 60 + "px", left: "1px", width: "calc(100% - 3px)" });
+    d.el.classList.add("dragging"); const tEl = d.el.querySelector(".wev-t"); if (tEl) tEl.textContent = `${fromMin(start)}–${fromMin(Math.min(start + dur, 1440))}`;
+    d.date = col.dataset.date; d.start = start;
+  } else {
+    const end = Math.max(d.item.start + SNAP_MIN, snapMin(minAt(d.col, e.clientY))), dur = Math.min(end, 1440) - d.item.start;
+    d.el.style.height = Math.max(dur * HOUR_PX / 60, 18) + "px"; d.el.classList.add("dragging");
+    const tEl = d.el.querySelector(".wev-t"); if (tEl) tEl.textContent = `${fromMin(d.item.start)}–${fromMin(d.item.start + dur)}`;
+    d.dur = dur;
+  }
+});
+let CALKEEP = 0;   // щелчок сразу после протяжки не закрывает только что открытую карточку
+function calDrop(e, cancel) {
+  const d = CALDRAG; if (!d) return; CALDRAG = null; clearTimeout(d.timer);
+  document.documentElement.classList.remove("cal-dragging"); d.el?.classList.remove("lifted"); d.col?.querySelector(".wk-sel")?.remove();
+  if (cancel) { if (d.moved || CALRENDER) render(); return; }
+  CALKEEP = Date.now();
+  if (CALRENDER) setTimeout(() => { if (!CALDRAG) render(); });
+  if (!d.moved) {
+    if (d.key) return evPop(d.key, d.el);
+    if (d.kind === "new" && !S.readOnly) { const s0 = Math.min(Math.floor(d.raw / 30) * 30, 1410), f0 = Math.min(s0 + 60, 1440); return quickMeet(d.col.dataset.date, s0, f0, { left: e.clientX, right: e.clientX, top: e.clientY - 10, bottom: e.clientY + 10 }); }
+    return;
+  }
+  if (d.kind === "new") { const r = d.col.querySelector(".wk-sel")?.getBoundingClientRect(); return quickMeet(d.col.dataset.date, d.s, d.f, r || { left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY }); }
+  const id = d.item.m.id;
+  if (d.kind === "move") return moveMeet(id, d.date || d.item.date, d.start ?? d.item.start);
+  return moveMeet(id, d.item.date, d.item.start, d.dur ?? d.item.dur);
+}
+document.addEventListener("pointerup", e => calDrop(e, false));
+document.addEventListener("pointercancel", e => calDrop(e, true));
+// Отпустили кнопку за окном, открыли меню или ушли в другое окно — перетаскивание отменяется, страница снова обновляется
+for (const ev of ["blur", "contextmenu"]) window.addEventListener(ev, e => calDrop(e, true));
+document.addEventListener("visibilitychange", e => { if (document.hidden) calDrop(e, true); });
+document.addEventListener("pointermove", e => { if (CALDRAG && !CALDRAG.touch && e.buttons === 0) calDrop(e, true); }, true);
+window.addEventListener("popstate", () => closePop());
+window.addEventListener("resize", () => closePop());
+document.addEventListener("scroll", e => { if (e.target.id === "wk-scroll" && Date.now() - CALKEEP > 300) closePop(); }, true);
+// После удержания палец двигает встречу, а не прокручивает страницу
+document.addEventListener("touchmove", e => { if (CALDRAG && CALDRAG.armed && CALDRAG.touch && CALDRAG.kind !== "click") e.preventDefault(); }, { passive: false });
 // Порядок этапов в настройках: перетаскивание строки за ручку, стрелки на клавиатуре
 document.addEventListener("dragstart", e => { const g = e.target.closest?.("[data-stage-drag]"); if (!g) return; S.stageDrag = g.dataset.stageDrag; g.closest(".stage-row")?.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", S.stageDrag); });
 const stageTarget = e => { const r = e.target.closest?.(".stage-row[data-path]"); return r && r.dataset.stageId !== S.stageDrag ? r : null; };
