@@ -358,7 +358,7 @@ def _on_start(record, payload):
         _keep(record)
         return send(record.chat_id, ALREADY if record.student_id else RECEIVED)
     record.state = "consent"
-    record.data = {"promo": payload if PROMO_RE.match(payload) else ""}
+    record.data = {"link": payload if PROMO_RE.match(payload) else ""}
     _keep(record)
     return send(record.chat_id, HELLO, reply_markup={"inline_keyboard": [[{"text": "Продолжить", "callback_data": "consent"}]]})
 
@@ -532,7 +532,7 @@ def _finish(record, goal):
         return send(record.chat_id, BUSY)
     student_id, created, matched = leads.register(
         name=data.get("name") or record.first_name, telegram=f"@{record.username}" if record.username else "",
-        phone=data.get("phone") or "", consent=bool(data.get("consent")), promo=data.get("promo") or "",
+        phone=data.get("phone") or "", consent=bool(data.get("consent")), promo=data.get("promo") or "", link=data.get("link") or "",
         comment=goal, source="telegram", tg_id=record.chat_id,
     )
     # К чужой карточке чат не привязываем: совпадение по телефону или имени пользователя ничего не доказывает,

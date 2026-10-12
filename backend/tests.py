@@ -1068,7 +1068,7 @@ class TelegramTests(BaseCase):
             self.say("/start")
         self.assertEqual(len(self.texts()), telegram.MESSAGES_PER_MINUTE)
         self.say("/start <b>x</b> ../../etc", chat=556)           # неподходящий промокод отбрасывается
-        self.assertEqual(TgChat.objects.get(chat_id=556).data, {"promo": ""})
+        self.assertEqual(TgChat.objects.get(chat_id=556).data, {"link": ""})
 
     def test_student_is_connected_to_the_bot_by_a_personal_link(self):
         from backend.models import TgChat
@@ -1269,8 +1269,8 @@ class TelegramTests(BaseCase):
         self.assertEqual(TgChat.objects.get(chat_id=603).state, "goal")       # человек сможет повторить позже
         self.say("/startBLOG", chat=610)                                         # не команда /start: промокод из неё не берётся
         self.say("/start@menti_bot BLOG", chat=611)
-        self.assertEqual(TgChat.objects.get(chat_id=611).data, {"promo": "BLOG"})
-        self.assertEqual(TgChat.objects.get(chat_id=610).data, {"promo": ""})
+        self.assertEqual(TgChat.objects.get(chat_id=611).data, {"link": "BLOG"})
+        self.assertEqual(TgChat.objects.get(chat_id=610).data, {"link": ""})
 
     def test_deactivated_or_partner_account_loses_telegram_link(self):
         from backend.models import TgChat
@@ -2110,3 +2110,31 @@ class StageSettingsTests(BaseCase):
         store.system_write("config", "main", {"stages": [*self.STAGES[:2], {"id": "practice", "label": "Практика", "group": "study"}, *self.STAGES[2:]]})
         people = {"a": {"stage": "practice", "cohortId": "c1"}, "b": {"stage": "trial", "cohortId": "c1"}, "c": {"stage": "lost", "cohortId": "c1"}}
         self.assertEqual(meetings.participants({"cohortId": "c1"}, people, reports.current_stages()), ["a"])
+
+
+class BotLinkTests(BaseCase):
+    """Ссылки бота с метками: у каждой свой владелец (партнёр или своя ссылка школы), удаляются отдельно от партнёра."""
+
+    def lead(self, link):
+        from backend import leads
+        doc_id, _, _ = leads.register(name="Тест Ссылка", phone=f"+7 900 {abs(hash(link)) % 10**7:07d}", link=link, source="telegram")
+        return Doc.objects.get(collection="students", doc_id=doc_id).data
+
+    def test_without_link_settings_the_mark_is_the_partner_promo(self):
+        self.assertEqual(self.lead("BLOG")["partnerId"], "p1")
+
+    def test_links_decide_the_owner_and_a_deleted_link_brings_no_partner(self):
+        store.system_write("config", "main", {"tgLinks": [{"code": "yt_video", "partnerId": "p1", "label": ""},
+                                                          {"code": "insta", "partnerId": None, "label": "Instagram школы"}]})
+        self.assertEqual(self.lead("YT_VIDEO")["partnerId"], "p1")
+        own = self.lead("insta")
+        self.assertEqual((own["partnerId"], own["utmSource"]), (None, "Instagram школы"))
+        self.assertIsNone(self.lead("BLOG")["partnerId"])   # промокод партнёра без ссылки в списке больше не работает
+
+    def test_only_admin_edits_links_and_junk_is_refused(self):
+        self.login("mentor")
+        self.assertEqual(self.send("put", "config", "main", {"tgLinks": []}).status_code, 403)
+        self.login("admin")
+        for bad in ([{"code": "stu_x"}], [{"code": "a b"}], [{"code": "A"}, {"code": "a"}], [{"code": "x", "label": 5}], "нет"):
+            self.assertEqual(self.send("put", "config", "main", {"tgLinks": bad}).status_code, 400, bad)
+        self.assertEqual(self.send("put", "config", "main", {"tgLinks": [{"code": "ok", "partnerId": "p1", "label": ""}]}).status_code, 200)

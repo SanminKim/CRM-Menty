@@ -387,6 +387,10 @@ def write(access, collection, doc_id, data, partial):
         raise Invalid(reports.terms_problem(new))
     if collection == "config" and new is not None and reports.stages_problem(new):
         raise Invalid(reports.stages_problem(new))
+    if collection == "config" and new is not None:
+        from . import leads   # позднее подключение: leads пользуется этим модулем
+        if leads.links_problem(new):
+            raise Invalid(leads.links_problem(new))
     if collection == "students":
         _check_payment_ids(new)
         _pin_payments(old, new)

@@ -484,7 +484,7 @@ try:
       mn.goto(URL); check("logout ends the session", "/login/" in mn.url, mn.url)
       # --- Telegram: ссылки партнёров, подключение уведомлений, заявка через бота ---
       setgo(pg, "meet")
-      tgp = pg.locator(".panel", has_text="Заявки из Telegram")
+      tgp = pg.locator("#tg-links")
       check("telegram panel lists partner links", tgp.locator("li", has_text="https://t.me/menti_e2e_bot?start=BLOG1C").count() == 1 and tgp.locator("li", has_text="Общая ссылка").count() == 1, tgp.inner_text()[:300])
       tgp.locator("li", has_text="BLOG1C").locator("[data-act=copy]").click(); pg.wait_for_timeout(200)
       check("partner bot link copied", pg.evaluate("navigator.clipboard.readText()") == "https://t.me/menti_e2e_bot?start=BLOG1C")
@@ -737,6 +737,26 @@ try:
       pg.click("#funnel-rules [data-act=set-stuck]"); pg.fill("#m-n", "10"); pg.click("#m-submit"); pg.wait_for_timeout(300)
       check("stuck days are set", cfg()["stuckDays"] == 10 and pg.evaluate("stuckDays()") == 10)
       shot(pg, "s31_stage_settings.png", full_page=True)
+      # ссылки на бота: свои метки с владельцами, удаляются отдельно от партнёра
+      setgo(pg, "meet"); pg.click("[data-act=tglink-new]"); pg.wait_for_selector("#m-code")
+      pg.fill("#m-code", "insta"); pg.fill("#m-label", "Instagram школы"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(300)
+      links = cfg()["tgLinks"]
+      check("own bot link is added next to the partner links", [x["code"] for x in links][-1] == "insta" and any(x["code"] == "BLOG1C" and x["partnerId"] for x in links) and pg.locator("#tg-links li", has_text="Instagram школы").count() == 1, links)
+      row = pg.locator("#tg-links li[data-code=BLOG1C]"); row.hover(); row.locator("[data-act=tglink-del]").click(); pg.wait_for_timeout(400)
+      check("a partner link is deleted without touching the partner", "BLOG1C" not in [x["code"] for x in cfg()["tgLinks"]] and pg.evaluate("D().partners.some(p => p.promo === 'BLOG1C')"))
+      pg.click("#toast button"); pg.wait_for_timeout(400); check("deleting a link can be undone", "BLOG1C" in [x["code"] for x in cfg()["tgLinks"]])
+      # удаление ментора со студентами: они переходят другому ментору
+      linked = pg.evaluate("S.accounts.map(a => a.linkId)")
+      gone = pg.evaluate(f"D().team.filter(m => !{json.dumps(linked)}.includes(m.id)).map(m => [m.id, D().students.filter(s => s.mentorId === m.id).length]).sort((a, b) => b[1] - a[1])[0]")
+      heir = pg.evaluate(f"D().team.find(m => m.id !== {json.dumps(gone[0])}).id")
+      had_share = pg.evaluate(f"D().directions.some(d => termsFor(d, today().slice(0, 7)).some(x => x.id === {json.dumps(gone[0])}))")
+      setgo(pg, "team"); pg.locator(".panel", has_text="Команда").first.locator(f"li", has_text=pg.evaluate(f"teamName({json.dumps(gone[0])})")).locator("[data-act=team-edit]").click(); pg.wait_for_selector("#mform")
+      pg.click("[data-act=m-delete]"); pg.click("[data-act=m-delete]"); pg.wait_for_selector("#m-to")
+      check("deleting a mentor asks who takes the students", gone[1] > 0 and "Кому передать" in pg.inner_text("#mform"), gone)
+      pg.select_option("#m-to", heir); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(800)
+      st = pg.evaluate("window.__store")
+      check("mentor is deleted and the students move to the chosen one", f"team/{gone[0]}" not in st and not any(v.get("mentorId") == gone[0] for k, v in st.items() if k.startswith("students/")))
+      check("the mentor's share moves with the students from this month", not had_share or pg.evaluate(f"D().directions.every(d => !termsFor(d, today().slice(0, 7)).some(x => x.id === {json.dumps(gone[0])}))"))
       # тема и раскладка настроек
       setgo(pg, "me")
       check("settings: groups on the left, one group open", pg.locator("#set-nav button").count() == 6 and pg.locator("#set-nav button.on").count() == 1 and pg.locator(".set-body").count() == 1)

@@ -2,6 +2,7 @@
 import datetime
 import hmac
 import json
+import re
 import secrets
 
 from django.conf import settings
@@ -87,6 +88,49 @@ def find_partner(promo, utm):
     return None
 
 
+LINK_RE = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
+RESERVED_LINK = ("stu_", "link_")   # такие начала заняты личными ссылками студентов и сотрудников
+
+
+def links_problem(config):
+    """Что не так со ссылками бота в настройках (config/main → tgLinks), или None."""
+    raw = config.get("tgLinks") if isinstance(config, dict) else None
+    if raw is None:
+        return None
+    if not isinstance(raw, list) or len(raw) > 100:
+        return "Ссылок должно быть не больше 100"
+    seen = set()
+    for item in raw:
+        code = item.get("code") if isinstance(item, dict) else None
+        if not isinstance(code, str) or not LINK_RE.match(code) or code.lower().startswith(RESERVED_LINK):
+            return "Метка ссылки — латинские буквы, цифры, «-» и «_», не начиная с stu_ или link_"
+        if code.lower() in seen:
+            return f"Метка {code} уже есть"
+        seen.add(code.lower())
+        if item.get("partnerId") is not None and not isinstance(item.get("partnerId"), str):
+            return "Владелец ссылки указан неверно"
+        if not isinstance(item.get("label", ""), str) or len(item.get("label", "")) > 80:
+            return "Подпись ссылки — до 80 знаков"
+    return None
+
+
+def link_target(code):
+    """Кому принадлежит метка из ссылки бота: (партнёр или None, подпись источника).
+    None — ссылки в настройках ещё не заводили: метка считается промокодом партнёра, как раньше."""
+    main = Doc.objects.filter(collection="config", doc_id="main").first()
+    links = main.data.get("tgLinks") if main else None
+    if not isinstance(links, list):
+        return None
+    entry = next((x for x in links if isinstance(x, dict) and isinstance(x.get("code"), str) and _low(x["code"]) == _low(code)), None)
+    if entry is None:
+        return None, ""   # метку удалили: заявка приходит без партнёра
+    partner = Doc.objects.filter(collection="partners", doc_id=entry.get("partnerId")).first() if isinstance(entry.get("partnerId"), str) else None
+    if partner is not None and partner.data.get("active") is False:
+        partner = None
+    label = entry.get("label") if isinstance(entry.get("label"), str) else ""
+    return partner, plain(label, 80)
+
+
 def _log(ok, result, student_id=""):
     LeadLog.objects.create(ok=ok, result=result, student_id=student_id)
 
@@ -97,7 +141,7 @@ def _notify(text, student_id=None):
 
 
 def register(*, name="", phone="", email="", telegram="", city="", consent=False, promo="", utm="", campaign="",
-             comment="", source="site", tg_id=None):
+             comment="", source="site", tg_id=None, link=""):
     """Создаёт заявку или, если человек уже есть в базе, добавляет заметку в его карточку.
 
     Возвращает (id студента, новая ли это заявка, чем совпал дубль). Поиск дубля и запись идут под одной
@@ -117,7 +161,12 @@ def register(*, name="", phone="", email="", telegram="", city="", consent=False
                 store.system_write("students", existing.doc_id, {**existing.data, "notes": notes})
             _log(True, "duplicate", existing.doc_id)
             return existing.doc_id, False, matched
-        partner = find_partner(promo, utm)
+        target = link_target(link) if link else None
+        if target is None:
+            partner = find_partner(promo or link, utm)
+        else:   # метка из списка ссылок бота: владелец задан там, промокоды партнёров не перебираются
+            partner, label = target
+            utm, campaign = utm or label, campaign or link
         doc_id = new_id()
         stages = reports.current_stages()   # заявка попадает на первый этап пути и получает его шаг
         step = stages.next.get(stages.first)

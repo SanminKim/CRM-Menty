@@ -2539,13 +2539,42 @@ function tgPanel() {
   if (!tg.enabled || !tg.bot) return panel("Заявки из Telegram", "", `<div class="pad"><p class="muted" style="margin-bottom:8px">Бот принимает заявки вместо личных сообщений: человек переходит по ссылке от блогера, отвечает на два вопроса, и заявка появляется здесь с привязкой к партнёру.</p>
     <ol class="steps"><li>В Telegram напишите @BotFather команду /newbot и получите токен бота.</li><li>На сервере впишите его в файл .env в строку TELEGRAM_BOT_TOKEN.</li><li>Перезапустите CRM командой docker compose up -d.</li></ol>
     <p class="hint" style="margin-top:8px">${tg.enabled ? "Токен задан, но Telegram его не принял или сервер ещё не перезапущен." : "Сейчас бот не подключён."}</p></div>`);
-  const row = (title, sub, url) => `<li><span class="who"><strong>${esc(title)}</strong><span>${esc(sub)}</span></span><span class="acts"><button class="btn small" data-act="copy" data-text="${esc(url)}">Скопировать ссылку</button></span></li>`;
-  const partners = D().partners.filter(p => p.active !== false);
-  return panel("Заявки из Telegram", "", `<ul class="rows">
-    ${row("Общая ссылка", tgLink(""), tgLink(""))}
-    ${partners.map(p => TG_PROMO.test(p.promo || "") ? row(p.name, tgLink(p.promo), tgLink(p.promo))
-      : `<li><span class="who"><strong>${esc(p.name)}</strong><span class="warn-text">${p.promo ? "Промокод для ссылки должен состоять из латинских букв, цифр, «-» и «_»" : "Задайте партнёру промокод, чтобы получить его ссылку"}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}
-    </ul><p class="hint pad">Блогер ставит свою ссылку под видео вместо вашего личного аккаунта. Бот @${esc(tg.bot)} спрашивает согласие, имя и цель, и заявка попадает в блок «Без ментора» на экране «Сегодня».</p>`);
+  const links = tgLinks(), owner = x => x.partnerId ? (partnerById(x.partnerId)?.name || "Партнёр удалён") : (x.label || "Своя ссылка");
+  return panel("Ссылки на бота для заявок", links.length + 1, `<ul class="rows" id="tg-links">
+    <li><span class="who"><strong>Общая ссылка</strong><span>${esc(tgLink(""))} · без метки</span></span><span class="acts"><button class="btn small" data-act="copy" data-text="${esc(tgLink(""))}">Скопировать</button></span></li>
+    ${links.map((x, i) => `<li class="stage-row link-row" data-code="${esc(x.code)}"><span class="who wrap"><strong>${esc(owner(x))}</strong><span>${esc(tgLink(x.code))} · метка ${esc(x.code)}${x.partnerId ? " · заявки записываются за партнёром" : ""}</span></span>
+      <span class="acts"><button class="btn small" data-act="copy" data-text="${esc(tgLink(x.code))}">Скопировать</button></span>
+      <button class="stage-x" data-act="tglink-del" data-i="${i}" aria-label="Удалить ссылку ${esc(x.code)}" title="Удалить ссылку">×</button></li>`).join("")}
+    </ul><p class="hint pad">По ссылке человек попадает в бота @${esc(tg.bot)}: бот спрашивает согласие, имя и цель, и заявка появляется в CRM на экране «Сегодня». Метка в конце ссылки говорит, откуда человек пришёл: у ссылки партнёра заявка записывается за ним, у своей ссылки — с её подписью в «Источнике». Удалённая ссылка перестаёт записывать заявки за владельцем, сам партнёр остаётся.</p>`,
+    `<button class="btn small" data-act="tglink-new">+ Ссылка</button>`);
+}
+// Ссылки бота с метками (config/main → tgLinks). Пока их не заводили, ссылками служат промокоды активных партнёров —
+// так же считает сервер (leads.link_target). Первая правка сохраняет список целиком
+const tgLinks = () => Array.isArray(S.config.tgLinks)
+  ? S.config.tgLinks.filter(x => isObj(x) && TG_PROMO.test(x.code || ""))
+  : D().partners.filter(p => p.active !== false && TG_PROMO.test(p.promo || "")).map(p => ({ code: p.promo, partnerId: p.id, label: "" }));
+const saveLinks = (list, msg) => saveConfig({ tgLinks: list.map(x => ({ code: x.code, partnerId: x.partnerId || null, label: x.label || "" })) }, msg);
+function tgLinkForm() {
+  const used = new Set(tgLinks().map(x => x.code.toLowerCase()));
+  openModal({
+    title: "Новая ссылка на бота", submit: "Добавить", values: { partnerId: "", code: "", label: "" },
+    fields: [{ k: "partnerId", label: "Чья ссылка", type: "select", wide: true, options: [["", "Своя: без партнёра"], ...D().partners.filter(p => p.active !== false).map(p => [p.id, p.name])], help: "Заявки по ссылке партнёра записываются за ним, и он получает свою долю" },
+      { k: "code", label: "Метка", req: true, ph: "blog_oct", help: "Латинские буквы, цифры, «-» и «_». Видна в конце ссылки" },
+      { k: "label", label: "Подпись источника", ph: "Instagram школы", help: "Для своей ссылки: попадёт в «Источник» заявки" }],
+    onInput: () => { const c = $("#m-code"), p = partnerById($("#m-partnerId")?.value); if (c && !c.value && p && TG_PROMO.test(p.promo || "") && !used.has(p.promo.toLowerCase())) c.value = p.promo; },
+    onSubmit: v => {
+      const code = String(v.code || "").trim();
+      if (!TG_PROMO.test(code) || /^(stu_|link_)/i.test(code)) return "Метка — латинские буквы, цифры, «-» и «_», не начиная с stu_ или link_";
+      if (used.has(code.toLowerCase())) return "Такая метка уже есть";
+      return saveLinks([...tgLinks(), { code, partnerId: v.partnerId || null, label: String(v.label || "").trim().slice(0, 80) }], "Ссылка добавлена: скопируйте её в списке");
+    },
+  });
+}
+function tgLinkDel(i) {
+  const list = tgLinks(), x = list[i]; if (!x) return;
+  return saveLinks(list.filter((_, j) => j !== i)).then(ok => ok && toast(`Ссылка с меткой ${x.code} удалена`, () => {
+    const cur = tgLinks(); if (cur.some(y => y.code.toLowerCase() === x.code.toLowerCase())) return; cur.splice(Math.min(i, cur.length), 0, x); return saveLinks(cur, "Ссылка возвращена");
+  }));
 }
 // Напоминания студентам о встречах: утром в день встречи и незадолго до начала, с кнопками «Буду» / «Не буду».
 // Рассылает сервер (backend/meetings.py, scheduler._student_meetings); здесь только настройки в config/main → meetRemind.
@@ -3425,8 +3454,51 @@ function teamForm(m) {
   openModal({
     title: m ? "Участник команды" : "Новый ментор", values: m ? { ...m } : {},
     fields: [{ k: "name", label: "Имя", req: true, ph: "Ирина Котова", wide: true }],
-    onDelete: m ? () => inTerms("mentor", m.id) ? (showErr("Ментор участвует в условиях направления. Сначала уберите его долю в настройках направления."), false) : S.accounts.some(a => a.role !== "partner" && a.linkId === m.id) ? (showErr("С этим человеком связана учётная запись. Сначала измените её в разделе «Доступ»."), false) : save(() => delDoc("team", m.id), "Удалено") : null,
+    onDelete: m ? () => (mentorDeleteForm(m), false) : null,
     onSubmit: v => { const id = m?.id || newId("team"); return save(() => setDoc("team", id, { ...(m || {}), name: v.name, id: undefined }), "Сохранено"); },
+  });
+}
+// Удаление ментора: его студенты и встречи переходят другому, доля в направлениях с этого месяца — ему же или владельцу.
+// Прошлые начисления и выплаты остаются в расчёте с подписью «Ментор удалён»
+function mentorDeleteForm(m) {
+  const people = [...D().students, ...S.trash].filter(s => s.mentorId === m.id), meets = D().meetings.filter(x => x.mentorId === m.id);
+  const cur = today().slice(0, 7), dirs = D().directions.filter(d => termsFor(d, cur).some(x => x.kind === "mentor" && x.id === m.id));
+  const acc = (S.accounts || []).find(a => a.role === "mentor" && a.linkId === m.id), others = D().team.filter(x => x.id !== m.id);
+  const what = [people.length ? `${people.length} ${plural(people.length, "студента", "студентов", "студентов")}` : "", meets.length ? `${meets.length} ${plural(meets.length, "встречу", "встречи", "встреч")}` : ""].filter(Boolean).join(" и ");
+  openModal({
+    title: `Удалить: ${m.name}`, submit: "Удалить", wide: true, values: { to: others[0]?.id || "", share: "to" },
+    fields: [...(what ? [{ k: "to", label: `Кому передать ${what}`, type: "select", wide: true, options: [...others.map(x => [x.id, x.name]), ["", "Никому: оставить без ментора"]] }] : []),
+      ...(dirs.length ? [{ k: "share", label: `Его доля в направлениях с ${monthName(cur).toLowerCase()}: ${dirs.map(d => d.name).join(", ")}`, type: "select", wide: true, options: [["to", "Перейдёт тому, кому передаются студенты"], ["owner", "Останется владельцу"]] }] : [])],
+    extra: `<p class="hint">Прошлые начисления и выплаты сохранятся в расчётах с подписью «Ментор удалён».${acc ? ` Его учётная запись «${esc(acc.username)}» будет отключена.` : ""}</p>`,
+    onSubmit: v => {
+      const to = others.some(x => x.id === v.to) ? v.to : null;
+      return save(async () => {
+        for (const st of people) {
+          if (S.trash.some(x => x.id === st.id)) await updDoc("students", st.id, { mentorId: to });
+          else await patchStudent(st.id, c => c.mentorId === m.id ? { mentorId: to } : null);
+        }
+        for (const x of meets) await updDoc("meetings", x.id, { mentorId: to });
+        // Доля ментора убирается из условий с этого месяца и из запланированных на будущее; прошлые условия не трогаем.
+        // Сумма долей не растёт: доля переходит другому или остаётся владельцу
+        const transfer = parties => {
+          const mine = parties.find(x => x.kind === "mentor" && x.id === m.id); if (!mine) return parties;
+          const rest = parties.filter(x => x !== mine).map(x => ({ ...x }));
+          if (v.share !== "owner" && to) { const t = rest.find(x => x.kind === "mentor" && x.id === to); if (t) t.share = +(t.share + mine.share).toFixed(2); else rest.push({ kind: "mentor", id: to, share: mine.share }); }
+          return rest;
+        };
+        for (const d of dirs) {
+          const terms = validTerms(d), past = terms.filter(t => t.from < cur), first = sortBy(terms, t => t.from)[0];
+          // До первых условий действуют первые: если все условия начинаются не раньше этого месяца, прошлое закрепляем их копией
+          const keep = past.length ? past : first ? [{ ...first, from: "2000-01" }] : [];
+          const ahead = terms.filter(t => t.from > cur).map(t => ({ ...t, parties: transfer(termsFor({ terms: [t] }, t.from)) }));
+          await setDoc("directions", d.id, { ...d, terms: [...keep, { from: cur, parties: transfer(termsFor(d, cur)) }, ...ahead], id: undefined });
+        }
+        // Учётная запись отключается до удаления: сервер сверяет её связь с записью в команде. Не удалилось — включаем обратно
+        if (acc && SRV) await SRV.accounts.update(acc.id, { active: false });
+        try { await delDoc("team", m.id); }
+        catch (e) { if (acc && SRV) await SRV.accounts.update(acc.id, { active: true }).catch(() => { }); throw e; }
+      }, `${m.name} удалён${to ? `, студенты переданы: ${teamName(to)}` : ""}`);
+    },
   });
 }
 // Владелец добавляет себя в команду одной кнопкой: появляется «Мои студенты», а заявки по умолчанию назначаются ему
@@ -3515,7 +3587,7 @@ function partnerForm(p) {
   openModal({
     title: p ? "Партнёр" : "Новый партнёр", values: p ? { ...p } : { active: true },
     fields: [{ k: "name", label: "Название", req: true, ph: "Блог «…»", wide: true },
-      { k: "promo", label: "Промокод" }, { k: "utm", label: "utm_source" }, { k: "contacts", label: "Контакты и реквизиты", type: "textarea", wide: true },
+      { k: "promo", label: "Промокод", help: "Для заявок с сайта. Ссылки на бота заводятся отдельно: «Встречи и Telegram» → «+ Ссылка»" }, { k: "utm", label: "utm_source" }, { k: "contacts", label: "Контакты и реквизиты", type: "textarea", wide: true },
       { k: "active", label: "Активен", type: "checkbox" }],
     onDelete: p ? () => inTerms("partner", p.id) ? (showErr("Партнёр участвует в условиях направления. Сначала уберите его долю в настройках направления."), false) : [...D().students, ...S.trash].some(s => s.partnerId === p.id) ? (showErr("У партнёра есть студенты. Отметьте его неактивным вместо удаления."), false) : save(() => delDoc("partners", p.id), "Партнёр удалён") : null,
     onSubmit: v => {
@@ -3797,6 +3869,8 @@ const ACT = {
       onSubmit: () => { location.reload(); return false; },
     });
   },
+  "tglink-new": () => tgLinkForm(),
+  "tglink-del": d => tgLinkDel(+d.i),
   "pay-salary": d => { const x = stu(d.id); if (x) salaryPlanForm(x); },
   "proof-del": (d, el) => {
     if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Точно убрать?"; return; }
