@@ -385,6 +385,8 @@ def write(access, collection, doc_id, data, partial):
     access.check_write(collection, old, new)
     if collection == "directions" and new is not None and reports.terms_problem(new):
         raise Invalid(reports.terms_problem(new))
+    if collection == "config" and new is not None and reports.stages_problem(new):
+        raise Invalid(reports.stages_problem(new))
     if collection == "students":
         _check_payment_ids(new)
         _pin_payments(old, new)
@@ -444,6 +446,11 @@ def _refresh_reports(collection, rev, old, new):
 
     Выручка направления общая для всех его сторон, поэтому пересчитываются все отчёты; неизменившиеся не перезаписываются.
     """
+    if collection == "config":
+        # Состав этапов меняет воронку в отчётах партнёров; остальные настройки на цифры не влияют
+        if (old or {}).get("stages") != (new or {}).get("stages"):
+            reports.refresh(rev)
+        return
     if collection not in reports.SOURCES:
         return
     if collection == "students" and old is not None and new is not None \

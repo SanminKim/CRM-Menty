@@ -33,7 +33,17 @@ def calc_case(seed):
     party = lambda: mostly(lambda: pick([("partner", "p0"), ("partner", "p1"), ("mentor", "t0"), ("mentor", "t1"), ("mentor", "t2")]),
                            [("partner", "t0"), ("mentor", "nope"), ("owner", "p0"), (None, "p1"), ("partner", None), ("mentor", 3)])
     share = lambda: mostly(lambda: pick([10, 20, 33, 40, 12.5, 7.3]), ["30", 150, -5, None, "x", 0, 100])
-    stage = lambda: mostly(lambda: pick(stages), ["unknown", None, 4])
+    # у части наборов свой состав этапов: переименованные, переставленные, свои, кривые записи
+    custom = rnd.random() < .5
+    extra_ids = ["trial", "intern", "pause", "st_x1"]
+    stage = lambda: mostly(lambda: pick(stages + (extra_ids if custom else [])), ["unknown", None, 4])
+
+    def stage_config():
+        base = [{"id": i, "label": mostly(lambda: pick(["Этап " + i, "  С пробелами  ", "🚀 Ракета " * 9, "ё"]), ["", None, 5, "   "]),
+                 "group": mostly(lambda: pick(["sales", "study", "job", "closed"]), ["нет", None, 3]),
+                 "employed": mostly(lambda: rnd.random() < .3, [1, "true", None])} for i in rnd.sample(stages + extra_ids, rnd.randint(1, 12))]
+        junk = [None, "этап", {"id": "плохой id"}, {"id": "a" * 41}, {"label": "без id"}, {"id": base[0]["id"], "label": "дубль"}]
+        return base + [pick(junk) for _ in range(rnd.randint(0, 3))] if rnd.random() < .8 else [{"id": "only", "group": "closed"}]
     name = lambda: mostly(lambda: pick(["Иванов Пётр", "Сидорова Анна Петровна", "Олег", "ё Ё"]),
                           ["", None, "+7 999 000-00-00", "a@b.ru", "  Два   Пробела ", 123])
 
@@ -66,6 +76,8 @@ def calc_case(seed):
                      for i in range(rnd.randint(0, 8))},
         "payouts": {f"o{i}": payout(*party()) for i in range(rnd.randint(0, 8))},
     }
+    if custom:
+        data["config"] = {"main": {"stages": mostly(stage_config, [None, "нет", {"a": 1}], 0.9)}}
     return {"data": data, "parties": [["partner", f"p{i}"] for i in range(3)] + [["mentor", f"t{i}"] for i in range(3)]}
 
 
@@ -633,8 +645,8 @@ class ReportTests(BaseCase):
         self.assertEqual(self.send("put", "reports", "p1", {"revenue": 777777, "rows": [{"name": "Подделка"}]}).status_code, 200)
         r = self.report()
         self.assertEqual((r["name"], r["promo"], r["leads"], r["paidStudents"], r["conv"], r["employed"], r["revenue"]), ("Блог", "BLOG", 2, 1, 50, 1, 83333))
-        self.assertEqual(r["rows"], [{"name": "Одноимённый", "stage": "lost", "date": "2026-09-01", "paid": 0},
-                                     {"name": "Пётр И.", "stage": "offer", "date": "2026-08-01", "paid": 83333}])
+        self.assertEqual(r["rows"], [{"name": "Одноимённый", "stage": "lost", "stageLabel": "Отказ / выбыл", "date": "2026-09-01", "paid": 0},
+                                     {"name": "Пётр И.", "stage": "offer", "stageLabel": "Оффер", "date": "2026-08-01", "paid": 83333}])
         self.assertEqual([f["count"] for f in r["funnel"]], [2, 2, 1, 1, 1, 1, 1, 1, 0])
         self.assertEqual([(m["month"], m["received"], m["accrued"]) for m in r["months"]], [("2026-09", 33333, 13333.2), ("2026-08", 51000, 20400)])   # студент в корзине: его оплата остаётся в своём месяце
         self.assertEqual(r["payouts"], [{"date": "", "amount": 5000, "comment": ""}])
@@ -837,9 +849,10 @@ class ReportTests(BaseCase):
         from django.conf import settings
         from backend import reports
         page = (Path(settings.BASE_DIR) / "web" / "index.html").read_text(encoding="utf-8")
-        block = page.split("const STAGES = [", 1)[1].split("];", 1)[0]
-        on_page = tuple(re.findall(r'\["([a-z_]+)", "([^"]+)", "[a-z]+"\]', block))
-        self.assertEqual(on_page, reports.STAGES)
+        block = page.split("const DEFAULT_STAGES = [", 1)[1].split("];", 1)[0]
+        rows = re.findall(r'\{ id: "([a-z_]+)", label: "([^"]+)", group: "([a-z]+)", ask: "[a-z]*", employed: (true|false), next: (null|\{ text: "([^"]+)", days: (\d+) \}) \}', block)
+        self.assertEqual(tuple((i, l, g, e == "true") for i, l, g, e, *_ in rows), reports.STAGES)
+        self.assertEqual({i: (t, int(d)) for i, _, _, _, n, t, d in rows if n != "null"}, reports.DEFAULT_NEXT)
 
     def test_report_for_unknown_party_is_rejected(self):
         self.assertEqual(self.send("put", "reports", "nope", {}).status_code, 400)
@@ -2055,3 +2068,45 @@ class StudentFileTests(BaseCase):
 def base64_of(raw):
     import base64
     return base64.b64encode(raw).decode()
+
+
+class StageSettingsTests(BaseCase):
+    """Состав этапов настраивается: пишет его только администратор, сервер считает воронку по нему же."""
+
+    STAGES = [{"id": "new", "label": "Заявка", "group": "sales", "ask": "", "employed": False, "next": {"text": "Позвонить", "days": 1}},
+              {"id": "trial", "label": "Пробное занятие", "group": "sales", "ask": "", "employed": False, "next": None},
+              {"id": "studying", "label": "Учится", "group": "study", "ask": "study", "employed": False, "next": None},
+              {"id": "hired", "label": "Нашёл работу", "group": "job", "ask": "offer", "employed": True, "next": None},
+              {"id": "lost", "label": "Отказ", "group": "closed", "ask": "", "employed": False, "next": None}]
+
+    def test_only_admin_changes_stages_and_junk_is_refused(self):
+        self.login("mentor")
+        self.assertEqual(self.send("put", "config", "main", {"stages": self.STAGES}).status_code, 403)
+        self.login("admin")
+        for bad in ([{"id": "x", "label": "Только отказ", "group": "closed"}], [{"id": "плохой", "label": "Х", "group": "sales"}],
+                    [{"id": "a", "label": "А", "group": "sales"}, {"id": "a", "label": "Б", "group": "job"}], "нет", [{"id": "a", "label": " ", "group": "sales"}]):
+            self.assertEqual(self.send("put", "config", "main", {"stages": bad}).status_code, 400, bad)
+        self.assertEqual(self.send("put", "config", "main", {"stages": self.STAGES}).status_code, 200)
+
+    def test_partner_funnel_follows_the_stage_list(self):
+        store.system_write("students", "s1", student("t1", partnerId="p1", partnerShare=40, stage="trial", createdAt="2026-08-01T09:00:00.000Z",
+                                                     history=[{"to": "new"}, {"to": "trial"}]))
+        self.login("admin")
+        self.send("put", "reports", "p1", {})
+        self.send("put", "config", "main", {"stages": self.STAGES})
+        report = Doc.objects.get(collection="reports", doc_id="p1").data   # отчёт пересчитан после смены этапов
+        self.assertEqual([(f["label"], f["count"]) for f in report["funnel"]], [("Заявка", 1), ("Пробное занятие", 1), ("Учится", 0), ("Нашёл работу", 0)])
+        self.assertEqual((report["rows"][0]["stage"], report["rows"][0]["stageLabel"]), ("trial", "Пробное занятие"))
+
+    def test_lead_from_the_site_lands_on_the_first_stage_with_its_step(self):
+        from backend import leads
+        store.system_write("config", "main", {"stages": [{"id": "inbox", "label": "Входящие", "group": "sales", "next": {"text": "Позвонить", "days": 2}}, *self.STAGES[2:]]})
+        doc_id, created, _ = leads.register(name="Тест Заявка", phone="+7 900 111-22-33")
+        data = Doc.objects.get(collection="students", doc_id=doc_id).data
+        self.assertEqual((data["stage"], data["history"][0]["to"], data["next"]["text"]), ("inbox", "inbox", "Позвонить"))
+
+    def test_group_lessons_remind_everyone_on_study_stages(self):
+        from backend import meetings, reports
+        store.system_write("config", "main", {"stages": [*self.STAGES[:2], {"id": "practice", "label": "Практика", "group": "study"}, *self.STAGES[2:]]})
+        people = {"a": {"stage": "practice", "cohortId": "c1"}, "b": {"stage": "trial", "cohortId": "c1"}, "c": {"stage": "lost", "cohortId": "c1"}}
+        self.assertEqual(meetings.participants({"cohortId": "c1"}, people, reports.current_stages()), ["a"])

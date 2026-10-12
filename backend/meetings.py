@@ -14,7 +14,6 @@ from django.utils import timezone
 from . import leads, reports, store
 from .models import Doc
 
-STUDY = ("studying", "final_project")   # о занятиях потока напоминаем тем, кто учится
 DEFAULTS = {
     "on": False,
     "morning": "09:00",
@@ -63,15 +62,17 @@ def start_of(meeting, now):
     return now.replace(hour=int(match[1]), minute=int(match[2]), second=0, microsecond=0)
 
 
-def participants(meeting, students):
-    """Студенты встречи: тот, с кем она назначена, и учащиеся потока, если это занятие группы. students — {id: данные}."""
+def participants(meeting, students, stages=None):
+    """Студенты встречи: тот, с кем она назначена, и учащиеся потока, если это занятие группы. students — {id: данные}.
+    Учащиеся — люди на этапах группы «Обучение» (состав этапов настраивается), закрытые этапы пропускаются."""
+    stages = stages or reports.current_stages()
     out = []
     sid, cohort = meeting.get("studentId"), meeting.get("cohortId")
     for student_id, s in students.items():
-        if not isinstance(s, dict) or s.get("deletedAt") or s.get("stage") == "lost":
+        if not isinstance(s, dict) or s.get("deletedAt") or (isinstance(s.get("stage"), str) and s["stage"] in stages.closed):
             continue
         personal = isinstance(sid, str) and sid == student_id
-        group = isinstance(cohort, str) and cohort and s.get("cohortId") == cohort and s.get("stage") in STUDY
+        group = isinstance(cohort, str) and cohort and s.get("cohortId") == cohort and isinstance(s.get("stage"), str) and s["stage"] in stages.study
         if personal or group:
             out.append(student_id)
     return sorted(out)

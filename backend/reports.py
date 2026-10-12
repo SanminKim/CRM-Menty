@@ -15,14 +15,22 @@ from django.utils import timezone
 
 from .models import Account, Doc, Tombstone
 
-# Этапы в том же порядке, что STAGES на странице: по нему считается, до какого этапа человек дошёл
+# Этапы по умолчанию — те же, что DEFAULT_STAGES на странице: (id, название, группа, считается трудоустроенным).
+# Состав этапов настраивается (config/main → stages); разбирает его stage_list так же, как stageList на странице
 STAGES = (
-    ("new", "Новая заявка"), ("contacted", "Связались"), ("call", "Созвон"), ("waiting_payment", "Ждём оплату"),
-    ("studying", "Обучается"), ("final_project", "Итоговый проект"), ("job_search", "Поиск работы"),
-    ("offer", "Оффер"), ("probation_passed", "Прошёл испытательный"), ("lost", "Отказ / выбыл"),
+    ("new", "Новая заявка", "sales", False), ("contacted", "Связались", "sales", False), ("call", "Созвон", "sales", False),
+    ("waiting_payment", "Ждём оплату", "sales", False), ("studying", "Обучается", "study", False),
+    ("final_project", "Итоговый проект", "study", False), ("job_search", "Поиск работы", "job", False),
+    ("offer", "Оффер", "job", True), ("probation_passed", "Прошёл испытательный", "job", True), ("lost", "Отказ / выбыл", "closed", False),
 )
-STAGE_INDEX = {key: i for i, (key, _) in enumerate(STAGES)}
-EMPLOYED = ("offer", "probation_passed")
+# Шаг по умолчанию для этапов по умолчанию (на странице — поле next в DEFAULT_STAGES)
+DEFAULT_NEXT = {"new": ("Связаться", 0), "contacted": ("Договориться о созвоне", 1), "waiting_payment": ("Проверить оплату", 2),
+                "studying": ("Узнать, как прошло первое занятие", 7), "final_project": ("Проверить итоговый проект", 7),
+                "job_search": ("Ревью резюме", 2), "offer": ("Узнать, как проходит испытательный срок", 30)}
+STAGE_GROUPS = ("sales", "study", "job", "closed")
+STAGE_ASKS = ("", "note", "call", "payment", "study", "offer")
+STAGE_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,40}\Z", re.ASCII)
+STAGE_MAX = 40
 SOURCES = ("students", "payouts", "partners", "team", "cohorts", "directions", "expenses")  # от них зависят цифры отчётов
 KINDS = ("partner", "mentor")
 # Поля студента, от которых зависят отчёты: остальные правки пересчёта не требуют
@@ -84,12 +92,82 @@ def paid_sum(student):
     return _total(_number(p.get("amount")) for p in _list(student.get("payments")) if _day(p.get("paid")))
 
 
-def reached(student):
+class Stages:
+    """Разобранный список этапов: порядок пути, подписи, группы, трудоустройство."""
+
+    def __init__(self, rows, steps=None):
+        self.rows = rows
+        self.next = DEFAULT_NEXT if steps is None else steps   # id → (что сделать, через сколько дней)
+        self.label = {r[0]: r[1] for r in rows}
+        self.group = {r[0]: r[2] for r in rows}
+        self.path = [r[0] for r in rows if r[2] != "closed"]
+        self.path_index = {key: i for i, key in enumerate(self.path)}
+        self.employed = {r[0] for r in rows if r[3]}
+        self.study = {r[0] for r in rows if r[2] == "study"}
+        self.closed = {r[0] for r in rows if r[2] == "closed"}
+        self.first = self.path[0]
+        self.done = self.path[-1] if len(self.path) > 1 else None   # как DONE() на странице
+
+
+def stage_list(config):
+    """Этапы из config/main. Кривые записи пропускаются; если не осталось ни одного этапа пути — этапы по умолчанию."""
+    raw = config.get("stages") if isinstance(config, dict) else None
+    if not isinstance(raw, list):
+        return Stages(STAGES)
+    seen, rows, steps = set(), [], {}
+    for item in raw[:STAGE_MAX]:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not STAGE_ID_RE.match(item["id"]) or item["id"] in seen:
+            continue
+        seen.add(item["id"])
+        label = item.get("label").strip(" \t\n\r") if isinstance(item.get("label"), str) else ""
+        group = item.get("group") if item.get("group") in STAGE_GROUPS and isinstance(item.get("group"), str) else "sales"
+        rows.append((item["id"], label[:60] if label else item["id"], group, group != "closed" and item.get("employed") is True))
+        step = item.get("next")
+        text = step.get("text").strip(" \t\n\r") if isinstance(step, dict) and isinstance(step.get("text"), str) else ""
+        if group != "closed" and text:
+            steps[item["id"]] = (text[:120], max(0, min(365, math.floor(_number(step.get("days")) + 0.5))))
+    return Stages(rows, steps) if any(r[2] != "closed" for r in rows) else Stages(STAGES)
+
+
+def current_stages():
+    """Этапы из настроек в базе: для заявок с сайта, напоминаний и сводок."""
+    main = Doc.objects.filter(collection="config", doc_id="main").first()
+    return stage_list(main.data if main else None)
+
+
+def stages_problem(config):
+    """Что не так со списком этапов в настройках, или None. Страница пишет только чистый список: мусор отклоняется."""
+    raw = config.get("stages") if isinstance(config, dict) else None
+    if raw is None:
+        return None
+    if not isinstance(raw, list) or len(raw) > STAGE_MAX:
+        return f"Этапов должно быть не больше {STAGE_MAX}"
+    ids = set()
+    for item in raw:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not STAGE_ID_RE.match(item["id"]) or item["id"] in ids:
+            return "В списке этапов есть запись без идентификатора или повтор"
+        ids.add(item["id"])
+        label = item.get("label")
+        if not isinstance(label, str) or not label.strip() or len(label) > 60:
+            return "У каждого этапа должно быть название до 60 знаков"
+        if item.get("group") not in STAGE_GROUPS or item.get("ask", "") not in STAGE_ASKS:
+            return "У этапа неизвестная группа или действие"
+    if not any(item.get("group") != "closed" for item in raw):
+        return "В пути должен остаться хотя бы один открытый этап"
+    return None
+
+
+def stages_of(data):
+    return stage_list((data.get("config") or {}).get("main"))
+
+
+def reached(student, stages):
+    """До какого этапа пути человек дошёл: номер в пути. Закрытые этапы и неизвестные записи пропускаются."""
     top = 0
     for step in [*_list(student.get("history")), {"to": student.get("stage")}]:
         to = step.get("to")
-        index = STAGE_INDEX.get(to) if isinstance(to, str) else None
-        if to != "lost" and index is not None and index > top:
+        index = stages.path_index.get(to) if isinstance(to, str) else None
+        if index is not None and index > top:
             top = index
     return top
 
@@ -279,22 +357,23 @@ def _partner_report(partner_id, partner, data, cells):
     own = sorted(own, key=lambda s: str(s.get("createdAt") or ""))[::-1]
     rows = [{"s": s, "paid": paid_sum(s)} for s in own]
     paid_students = sum(1 for r in rows if r["paid"] > 0)
-    tops = [reached(s) for s in own]
+    stages = stages_of(data)
+    tops = [reached(s, stages) for s in own]
     funnel = []
-    for index, (key, label) in enumerate(STAGES):
-        if key == "lost":
-            continue
+    for index, key in enumerate(stages.path):
         count = sum(1 for top in tops if top >= index)
-        funnel.append({"key": key, "label": label, "count": count, "pct": _pct(count, len(own))})
+        funnel.append({"key": key, "label": stages.label[key], "count": count, "pct": _pct(count, len(own))})
     doc = {
         "kind": "partner", "partnerId": partner_id, "name": _text(partner.get("name"), 200), "promo": _text(partner.get("promo"), 100),
         "leads": len(own), "paidStudents": paid_students, "conv": _pct(paid_students, len(own)),
-        "employed": sum(1 for s in own if s.get("stage") in EMPLOYED),
+        "employed": sum(1 for s in own if isinstance(s.get("stage"), str) and s["stage"] in stages.employed),
         "revenue": _tidy(_total(r["paid"] for r in rows)), "funnel": funnel,
         **_money(data, "partner", partner_id, cells),
         # Этап и дата попадают в отчёт только в ожидаемом виде: произвольный текст из записи студента туда не проходит
+        # подпись этапа идёт вместе с ключом: партнёр не читает настроек, названия этапов школы он узнаёт из отчёта
         "rows": [{"name": mask(r["s"].get("name")),
-                  "stage": r["s"].get("stage") if isinstance(r["s"].get("stage"), str) and r["s"]["stage"] in STAGE_INDEX else "",
+                  "stage": r["s"]["stage"] if isinstance(r["s"].get("stage"), str) and r["s"]["stage"] in stages.label else "",
+                  "stageLabel": stages.label.get(r["s"]["stage"], "") if isinstance(r["s"].get("stage"), str) else "",
                   "date": _day(r["s"].get("createdAt")), "paid": _tidy(r["paid"])}
                  for r in rows],
     }
@@ -308,6 +387,8 @@ def load():
     data = {name: {} for name in SOURCES}
     for doc in Doc.objects.filter(collection__in=SOURCES):
         data[doc.collection][doc.doc_id] = doc.data
+    main = Doc.objects.filter(collection="config", doc_id="main").first()
+    data["config"] = {"main": main.data} if main else {}   # из настроек нужен состав этапов
     return data
 
 

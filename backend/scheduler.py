@@ -23,7 +23,6 @@ PAY_HOURS = range(10, 21)     # студентам пишем днём
 REMIND_MINUTES = 60
 RETRY_MINUTES = 60
 KEEP_SECONDS = 3 * 86400      # сколько помнить, что дело за этот день сделано
-CLOSED = ("lost", "probation_passed")
 PHONE_RE = re.compile(r"\+?\d[\d\s()\-]{5,}\d")
 
 
@@ -92,12 +91,14 @@ def _digests(now):
 def _digest(today, is_admin, link_id, students, meetings, team):
     mine = [(i, s) for i, s in students if is_admin or (link_id and s.get("mentorId") == link_id)]
     own_ids = {i for i, _ in mine}
-    active = [s for _, s in mine if s.get("stage") not in CLOSED]
+    stages = reports.current_stages()
+    # Активные — не на закрытом этапе и не на последнем этапе пути (путь пройден)
+    active = [s for _, s in mine if not (isinstance(s.get("stage"), str) and (s["stage"] in stages.closed or s["stage"] == stages.done))]
     steps = [s["next"]["date"] for s in active
              if isinstance(s.get("next"), dict) and s["next"].get("text") and reports._day(s["next"].get("date"))]
     due = [d for d in steps if d[:10] <= today]
     late = [d for d in due if d[:10] < today]
-    unpaid = [p for _, s in mine if s.get("stage") != "lost" for p in reports._list(s.get("payments"))
+    unpaid = [p for _, s in mine if not (isinstance(s.get("stage"), str) and s["stage"] in stages.closed) for p in reports._list(s.get("payments"))
               if not p.get("paid") and reports._day(p.get("due"))]
     late_pays = [p for p in unpaid if p["due"][:10] < today]
     overdue = [p for p in late_pays if reports._number(p.get("amount")) > 0]
@@ -168,7 +169,7 @@ def _student_meetings(now):
     bound = {c.chat_id: c.student_id for c in TgChat.objects.filter(user__isnull=True).exclude(student_id="")}
     if not bound:
         return
-    students, cohorts = dict(_docs("students")), dict(_docs("cohorts"))
+    students, cohorts, stages = dict(_docs("students")), dict(_docs("cohorts")), reports.current_stages()
     today, morning = now.date().isoformat(), tuple(int(x) for x in conf["morning"].split(":"))
     for meeting_id, m in _docs("meetings"):
         if m.get("remind") is False or (m.get("status") or "planned") != "planned":
@@ -182,7 +183,7 @@ def _student_meetings(now):
             continue
         title = PHONE_RE.sub("…", leads.plain(m.get("title") if isinstance(m.get("title"), str) else "", 120)) or "встреча"
         link = meetings.link_of(m, cohorts)
-        for student_id in meetings.participants(m, students):
+        for student_id in meetings.participants(m, students, stages):
             s = students[student_id]
             chat_id = s.get("tgId")
             if isinstance(chat_id, bool) or not isinstance(chat_id, int) or bound.get(chat_id) != student_id:
@@ -227,9 +228,10 @@ def _pay_reminders(now):
     today = now.date().isoformat()
     # Пишем только в чат, который сам привязан к этой карточке: одного tgId в записи студента недостаточно
     bound = {c.chat_id: c.student_id for c in TgChat.objects.filter(user__isnull=True).exclude(student_id="")}
+    closed = reports.current_stages().closed
     for student_id, s in _docs("students"):
         chat_id = s.get("tgId")
-        if s.get("deletedAt") or s.get("stage") == "lost" or isinstance(chat_id, bool) or not isinstance(chat_id, int) \
+        if s.get("deletedAt") or (isinstance(s.get("stage"), str) and s["stage"] in closed) or isinstance(chat_id, bool) or not isinstance(chat_id, int) \
                 or bound.get(chat_id) != student_id:
             continue
         due = [p for p in reports._list(s.get("payments")) if not p.get("paid") and reports._day(p.get("due")) == today]

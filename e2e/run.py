@@ -51,6 +51,9 @@ HTMLAnchorElement.prototype.click = function () { if (!this.download) click.call
 """
 def login(page, username, password=PASSWORD):
     page.goto(URL + "login/"); page.fill("input[name=username]", username); page.fill("input[name=password]", password); page.click("button:not([type=button])")
+def setgo(page, g):
+    """Группа в настройках: funnel, team, money, meet, data, me."""
+    page.click(".nav >> text=Настройки"); page.click(f"#set-nav [data-act=settab][data-v={g}]"); page.wait_for_selector(f"#set-{g}")
 def tab(page, v):
     """Вкладка карточки студента: main, money, study, job, hist."""
     page.click(f".drawer [data-act=card-tab][data-v={v}]"); page.wait_for_selector(f".drawer #d-tab-{v}")
@@ -301,7 +304,7 @@ try:
       pg.fill("#m-username", "blogger"); pg.fill("#m-password", PASSWORD); pg.click("#m-submit"); pg.wait_for_function("() => D().reports.length === 1 && S.accounts.some(a => a.username === 'blogger')", timeout=10000)
       pg.wait_for_timeout(300); shot(pg, "s8_partner.png", full_page=True)
       check("partner gets report with access, no publish step", any(k.startswith("reports/") for k in store()) and pg.locator("text=Выдать партнёру доступ").count() == 0 and "blogger" in pg.inner_text(".page-head"))
-      pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(200); shot(pg, "s9_settings.png", full_page=True)
+      setgo(pg, "data"); shot(pg, "s9_settings.png", full_page=True)
       pg.click("[data-act=backup]"); pg.wait_for_timeout(300)
       bk = json.loads(pg.evaluate("window.__saved.data")); open(Path(tmp) / "backup.json", "w", encoding="utf-8").write(json.dumps(bk, ensure_ascii=False))
       check("backup v6 with next, modules, progress, meetings, directions", bk["version"] == 6 and len(bk["data"]["directions"]) == 1 and len(bk["data"]["expenses"]) >= 2 and len(bk["data"]["meetings"]) >= 8 and any(c.get("modules") for c in bk["data"]["cohorts"]) and any(s.get("progress") for s in bk["data"]["students"]) and any(s.get("next") for s in bk["data"]["students"]))
@@ -348,7 +351,7 @@ try:
       shot(pg, "s28_day.png")
       pg.click(".drawer [data-act=cal-day] >> nth=0"); pg.wait_for_timeout(150); check("day card steps to the previous day", "сегодня" in pg.inner_text("#day-title") and pg.locator(".cal-cell.now.sel").count() == 1)
       pg.keyboard.press("Escape"); pg.wait_for_timeout(150); check("escape closes the day card", pg.locator(".drawer").count() == 0)
-      pg.click("#nav-help"); pg.wait_for_selector(".guide"); check("help page explains the path and the sections", pg.locator(".guide ol li").count() == 6 and pg.locator(".guide dt").count() == 9 and pg.locator(".nav-h").count() == 4)
+      pg.click("#nav-help"); pg.wait_for_selector(".guide"); check("help page explains the path and the sections", pg.locator(".guide ol li").count() == 7 and pg.locator(".guide dt").count() == 9 and pg.locator(".nav-h").count() == 4)
       check("menu is shorter: help is an icon, partners live inside payouts", pg.locator(".nav button[data-act=nav]").count() == 9 and pg.locator(".nav >> text=Справка").count() == 0 and pg.locator('.nav >> text="Партнёры"').count() == 0 and pg.locator("#nav-help.on").count() == 1)
       shot(pg, "s29_help.png", full_page=True)
       pg.click(".guide dt >> text=Воронка"); pg.wait_for_selector("#board"); check("section has a one-line explanation", "Перетащите карточку" in pg.inner_text(".page-head"))
@@ -397,7 +400,7 @@ try:
       pg.click("#toast >> text=Отменить"); pg.wait_for_timeout(300)
       check("undo restores from trash", not store()["students/" + lid].get("deletedAt") and pg.evaluate("D().students.length") == n_s)
       pg.evaluate(f"trashStudent({json.dumps(lid)})"); pg.wait_for_timeout(300); pg.evaluate(f"trashStudent({json.dumps(msid)})"); pg.wait_for_timeout(300)
-      pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(200); shot(pg, "s20_trash.png", full_page=True)
+      setgo(pg, "data"); shot(pg, "s20_trash.png", full_page=True)
       check("trashed student's meetings hidden", pg.evaluate(f"events('0000-00-00','9999-99-99').every(e => !e.m || e.m.studentId !== {json.dumps(msid)}) && D().meetings.some(m => m.studentId === {json.dumps(msid)})"))
       check("trash panel", pg.locator(".panel", has_text="Корзина").locator("li").count() == 2)
       pg.click("[data-act=backup]"); pg.wait_for_timeout(300); bk2 = json.loads(pg.evaluate("window.__saved.data"))
@@ -416,8 +419,9 @@ try:
       pg.click("#th-paid"); pg.click("#th-paid"); pg.wait_for_timeout(150); check("sort off on third click", pg.evaluate("S.sort === null"))
       # партнёр
       # --- учётные записи и роли ---
-      pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(300)
-      check("access panel lists admin", pg.locator(".panel", has_text="Доступ").locator("li", has_text="admin").count() == 1 and pg.locator(".panel", has_text="Учётная запись").count() == 1)
+      setgo(pg, "me"); has_account = pg.locator(".panel", has_text="Учётная запись").count() == 1
+      setgo(pg, "team")
+      check("access panel lists admin", pg.locator(".panel", has_text="Доступ").locator("li", has_text="admin").count() == 1 and has_account)
       mentor_team = pg.evaluate("(() => { const by = {}; for (const s of D().students) if (s.mentorId) by[s.mentorId] = (by[s.mentorId] || 0) + 1; const id = Object.keys(by).sort((a, b) => by[b] - by[a])[0]; return { id, n: by[id], name: teamName(id) }; })()")
       pg.click("[data-act=account-new]"); pg.wait_for_selector("#mform"); shot(pg, "s21_account_form.png")
       team0 = pg.evaluate("D().team.length")
@@ -479,13 +483,13 @@ try:
       mn.click(".nav >> text=Настройки"); mn.click(".panel >> text=Выйти"); mn.wait_for_selector("input[name=password]")
       mn.goto(URL); check("logout ends the session", "/login/" in mn.url, mn.url)
       # --- Telegram: ссылки партнёров, подключение уведомлений, заявка через бота ---
-      pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(300)
+      setgo(pg, "meet")
       tgp = pg.locator(".panel", has_text="Заявки из Telegram")
       check("telegram panel lists partner links", tgp.locator("li", has_text="https://t.me/menti_e2e_bot?start=BLOG1C").count() == 1 and tgp.locator("li", has_text="Общая ссылка").count() == 1, tgp.inner_text()[:300])
       tgp.locator("li", has_text="BLOG1C").locator("[data-act=copy]").click(); pg.wait_for_timeout(200)
       check("partner bot link copied", pg.evaluate("navigator.clipboard.readText()") == "https://t.me/menti_e2e_bot?start=BLOG1C")
       shot(pg, "s25_telegram_settings.png", full_page=True)
-      pg.click("[data-act=tg-link]"); pg.wait_for_selector("#mform a.btn")
+      setgo(pg, "me"); pg.click("[data-act=tg-link]"); pg.wait_for_selector("#mform a.btn")
       href = pg.get_attribute("#mform a.btn", "href")
       check("staff telegram link offered", href.startswith("https://t.me/menti_e2e_bot?start=link_") and pg.get_attribute("#mform a.btn", "rel") == "noopener", href)
       pg.keyboard.press("Escape")
@@ -502,12 +506,12 @@ try:
       pg.click(".nav >> text=Сегодня"); pg.wait_for_timeout(300)
       check("telegram lead shown in no-mentor panel", "заявка из Telegram" in pg.locator(".panel", has_text="Без ментора").locator("li", has_text="Ботов Глеб").inner_text())
       # владелец добавляет себя в команду одной кнопкой
-      pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(300)
+      setgo(pg, "me")
       check("owner is prompted to join the team", pg.locator("text=Вас нет в команде").count() == 1 and pg.evaluate("!myTeam()"))
       pg.click("[data-act=self-team]"); pg.wait_for_function("() => typeof S !== 'undefined' && S.status === 'ready' && S.loaded.team && !!myTeam()", timeout=15000)
       # направления: чистая выручка, доли сторон, расходы, выплаты
       mon = pg.evaluate("today().slice(0, 7)")
-      pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(200)
+      setgo(pg, "money")
       check("settings list the demo direction with its terms", "Аналитик 1С с нуля" in pg.locator(".panel", has_text="Направления").first.inner_text() and "вам 40%" in pg.locator(".panel", has_text="Направления").first.inner_text())
       dm = pg.evaluate("(() => { const d = D().directions[0]; return { id: d.id, parties: termsFor(d, today().slice(0, 7)) }; })()")
       cell = lambda m=None: pg.evaluate(f"(() => {{ SETTLED = null; const c = settle().find(c => c.directionId === {json.dumps(dm['id'])} && c.month === {json.dumps(m or mon)}); return c ? {{ received: c.received, expenses: c.expenses, net: c.net, owner: c.owner, parties: c.parties }} : null; }})()")
@@ -539,7 +543,7 @@ try:
       shot(pg, "s27_payouts.png", full_page=True)
       # новые условия действуют с выбранного месяца и не трогают прошлое
       old = pg.evaluate(f"(() => {{ SETTLED = null; const c = settle().find(c => c.directionId === {json.dumps(dm['id'])} && c.month < {json.dumps(mon)} && c.received > 0); return c ? {{ month: c.month, parties: c.parties }} : null; }})()")
-      pg.click(".nav >> text=Настройки"); pg.wait_for_timeout(200); pg.locator(".panel", has_text="Направления").first.locator("[data-act=direction-edit]").first.click(); pg.wait_for_selector("#mform")
+      setgo(pg, "money"); pg.locator(".panel", has_text="Направления").first.locator("[data-act=direction-edit]").first.click(); pg.wait_for_selector("#mform")
       bl = next(x for x in dm["parties"] if x["kind"] == "partner")
       pg.fill("#m-p_" + bl["id"], "95"); check("form warns when shares exceed 100%", "больше 100%" in pg.inner_text("#m-own"), pg.inner_text("#m-own"))
       pg.click("#m-submit"); pg.wait_for_timeout(200); check("shares above 100% are rejected", pg.locator("#mform").count() == 1 and "больше 100%" in pg.inner_text("#m-err"))
@@ -663,13 +667,43 @@ try:
       pg.click(".tabs >> text=Оплаченные"); pg.wait_for_timeout(200)
       check("paid tab shows whether each payment was on time", pg.locator("tr", has_text="Историк Платежей").locator(".tag.warn").count() == 2 and pg.locator("tr", has_text="Историк Платежей").locator(".tag.ok").count() == 1)
       pg.click(".tabs >> text=Просроченные"); pg.wait_for_timeout(150)
+      # этапы воронки в настройках: переименовать, добавить свой, переставить, удалить с переводом людей, вернуть по умолчанию
+      cfg = lambda: pg.evaluate("window.__store")["config/main"]
+      setgo(pg, "funnel")
+      check("funnel settings list the default stages", pg.locator("#stage-list .stage-row").count() == 10 and pg.locator("#funnel-rules").count() == 1)
+      pg.locator("#stage-list .stage-row[data-stage-id=contacted] [data-act=stage-edit]").click(); pg.wait_for_selector("#m-label")
+      pg.fill("#m-label", "Первый контакт"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(300)
+      check("stage renamed and saved in settings", [x["label"] for x in cfg()["stages"]][1] == "Первый контакт" and "Первый контакт" in pg.inner_text("#stage-list"))
+      pg.click("[data-act=stage-new]"); pg.wait_for_selector("#m-label"); pg.fill("#m-label", "Пробное <b>занятие</b>"); pg.select_option("#m-group", "sales")
+      pg.fill("#m-ntext", "Спросить впечатления"); pg.fill("#m-ndays", "1"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(300)
+      trial = next(x for x in cfg()["stages"] if x["label"].startswith("Пробное"))
+      check("own stage is added with its default step", trial["group"] == "sales" and trial["next"] == {"text": "Спросить впечатления", "days": 1} and pg.locator("#stage-list b").count() == 0)
+      for _ in range(6):
+          pg.locator(f"#stage-list [data-act=stage-move][data-id={trial['id']}][data-n='-1']").click(); pg.wait_for_timeout(250)
+      order = [x["id"] for x in cfg()["stages"]]
+      check("stage moved up the path", order[2:5] == ["call", trial["id"], "waiting_payment"], order)
+      mover = pg.evaluate("D().students.find(s => ['new', 'contacted', 'call'].includes(s.stage)).id")
+      pg.evaluate(f"moveStage({json.dumps(mover)}, {json.dumps(trial['id'])})"); pg.wait_for_timeout(400)
+      pg.click(".nav >> text=Воронка"); pg.click(".seg >> text=Продажи"); pg.wait_for_timeout(200)
+      check("board shows the renamed and the new stage", pg.locator(f".col[data-stage={trial['id']}]").count() >= 1 and pg.locator(".col[data-stage=contacted] header", has_text="Первый контакт").count() >= 1)
+      pg.evaluate(f"openStudent({json.dumps(mover)})"); pg.wait_for_selector("#d-next")
+      check("next goes from the new stage to the one after it", "Ждём оплату" in pg.inner_text("#d-next")); pg.keyboard.press("Escape")
+      setgo(pg, "funnel")
+      pg.locator(f"#stage-list .stage-row[data-stage-id={trial['id']}] [data-act=stage-edit]").click(); pg.wait_for_selector("#mform")
+      pg.click("[data-act=m-delete]"); pg.click("[data-act=m-delete]"); pg.wait_for_selector("#m-to"); pg.select_option("#m-to", "call"); pg.click("#m-submit")
+      pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(600)
+      check("deleting a stage moves its people first", store()["students/" + mover]["stage"] == "call" and trial["id"] not in [x["id"] for x in cfg()["stages"]] and store()["students/" + mover]["history"][-1]["from"] == trial["id"])
+      pg.click("[data-act=stage-reset]"); pg.click("[data-act=stage-reset]"); pg.wait_for_timeout(400)
+      check("stages go back to defaults", cfg().get("stages") is None and "Связались" in pg.inner_text("#stage-list"))
+      pg.click("#funnel-rules [data-act=set-stuck]"); pg.fill("#m-n", "10"); pg.click("#m-submit"); pg.wait_for_timeout(300)
+      check("stuck days are set", cfg()["stuckDays"] == 10 and pg.evaluate("stuckDays()") == 10)
+      shot(pg, "s31_stage_settings.png", full_page=True)
       # тема и раскладка настроек
-      pg.click(".nav >> text=Настройки"); pg.wait_for_selector(".cols2")
-      tops = pg.evaluate("[...document.querySelectorAll('.cols2 > .stack')].map(e => Math.round(e.getBoundingClientRect().top))")
-      check("settings: two columns start at the same height", len(tops) == 2 and tops[0] == tops[1], tops)
+      setgo(pg, "me")
+      check("settings: groups on the left, one group open", pg.locator("#set-nav button").count() == 6 and pg.locator("#set-nav button.on").count() == 1 and pg.locator(".set-body").count() == 1)
       pg.locator(".seg >> text=Тёмная").click(); pg.wait_for_timeout(150)
       check("theme: dark is applied and marked", pg.evaluate("document.documentElement.dataset.theme") == "dark" and pg.locator(".seg button.on", has_text="Тёмная").count() == 1)
-      pg.reload(); pg.wait_for_selector(".cols2"); check("theme survives reload", pg.evaluate("document.documentElement.dataset.theme") == "dark")
+      pg.reload(); pg.wait_for_selector("#set-me"); check("theme survives reload", pg.evaluate("document.documentElement.dataset.theme") == "dark")
       pg.click("#sync [data-act=theme]"); pg.wait_for_timeout(150); check("theme button in the menu switches to light", pg.evaluate("document.documentElement.dataset.theme") == "light")
       pg.locator(".seg >> text=Как в системе").click(); pg.wait_for_timeout(150); check("theme: back to system", pg.evaluate("document.documentElement.dataset.theme") is None)
       shot(pg, "s26_settings.png", full_page=True)
@@ -857,7 +891,7 @@ try:
       check("meeting form asks whether to remind students", nx.is_checked("#m-remind"))
       nx.uncheck("#m-remind"); nx.click("#m-submit"); nx.wait_for_timeout(500)
       check("reminder can be switched off for one meeting and answers stay", nx.evaluate("meetById('e2emeet').remind === false && Object.keys(meetById('e2emeet').rsvp).length === 2"))
-      nx.click(".nav >> text=Настройки"); nx.wait_for_selector("#meet-remind"); nx.click("[data-act=meet-remind]"); nx.wait_for_selector("#mform")
+      setgo(nx, "meet"); nx.wait_for_selector("#meet-remind"); nx.click("[data-act=meet-remind]"); nx.wait_for_selector("#mform")
       nx.check("#m-on"); nx.fill("#m-morning", "08:30"); nx.fill("#m-before", "20"); nx.click("#m-submit"); nx.wait_for_timeout(500)
       check("student meeting reminders are set up in settings", nx.evaluate("JSON.stringify([S.config.meetRemind.on, S.config.meetRemind.morning, S.config.meetRemind.before])") == '[true,"08:30",20]' and "08:30" in nx.inner_text("#meet-remind"))
       nx.evaluate("save(() => delDoc('meetings', 'e2emeet'))"); nx.wait_for_timeout(300)
@@ -865,7 +899,7 @@ try:
       vis = b.new_context().new_page()
       for name, pw in (("Irina", "zabyla-parol"), ("irina", "eshe-raz"), ("irinka", "net-takogo-logina")):
           vis.goto(URL + "login/"); vis.fill("input[name=username]", name); vis.fill("input[name=password]", pw); vis.click("button:not([type=button])"); vis.wait_for_selector(".error")
-      nx.click(".nav >> text=Настройки"); nx.wait_for_selector("#access-list [data-failed]")
+      setgo(nx, "team"); nx.wait_for_selector("#access-list [data-failed]")
       row = nx.locator("#access-list li", has_text="irina")
       check("admin sees who could not log in, without the typed text", "2 раза" in row.locator("[data-failed]").inner_text() and nx.locator("#access-unknown").count() == 1 and "irinka" not in nx.inner_text("#main") and "последний вход" in row.inner_text(), row.inner_text())
       shot(nx, "s32_access.png", full_page=True)
@@ -881,7 +915,7 @@ try:
       check("after the reset only the new password works", vis.evaluate("S.me.username") == "irina" and vis.evaluate("S.limited"))
       check("mentor has no access panel and no money line", vis.locator("#today-money").count() == 0 and vis.locator("#nav-help").count() == 1 and vis.locator(".nav >> text=Выплаты").count() == 1)
       mn.reload(); mn.wait_for_selector("input[name=password]", timeout=15000); check("reset signs the person out on other devices", "/login/" in mn.url)
-      nx.click(".nav >> text=Сегодня"); nx.click(".nav >> text=Настройки"); nx.wait_for_timeout(600)
+      nx.click(".nav >> text=Сегодня"); setgo(nx, "team"); nx.wait_for_timeout(600)
       check("a successful login clears the failed-login note", nx.locator("#access-list li", has_text="irina").locator("[data-failed]").count() == 0)
       # телефон: значок справки помещается в верхнюю строку
       mh = b.new_context(viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True).new_page(); login(mh, "admin"); mh.wait_for_selector(".today"); mh.wait_for_timeout(300)

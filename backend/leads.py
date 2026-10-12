@@ -1,4 +1,5 @@
 """Приём заявок: с сайта (POST /api/leads/ с токеном) и из Telegram-бота (backend/telegram.py)."""
+import datetime
 import hmac
 import json
 import secrets
@@ -11,7 +12,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import store
+from . import reports, store
 from .models import Doc, LeadLog
 
 LEADS_PER_MINUTE = 30
@@ -118,17 +119,19 @@ def register(*, name="", phone="", email="", telegram="", city="", consent=False
             return existing.doc_id, False, matched
         partner = find_partner(promo, utm)
         doc_id = new_id()
+        stages = reports.current_stages()   # заявка попадает на первый этап пути и получает его шаг
+        step = stages.next.get(stages.first)
         data = {
             "name": name or phone or email or telegram or "Без имени", "phone": phone, "telegram": telegram,
             "email": email, "city": city, "consent": bool(consent),
-            "stage": "new", "stageAt": now, "createdAt": now,
-            "history": [{"from": None, "to": "new", "at": now, "by": None}],
+            "stage": stages.first, "stageAt": now, "createdAt": now,
+            "history": [{"from": None, "to": stages.first, "at": now, "by": None}],
             "cohortId": next_cohort_id(), "mentorId": None, "price": None, "lostReason": "",
             "partnerId": partner.doc_id if partner else None,
             "partnerShare": (partner.data.get("share") or 0) if partner else 0,
             "promo": promo, "utmSource": utm, "utmCampaign": campaign,
             "jobCompany": "", "jobPosition": "", "jobSalary": None, "offerDate": None, "comment": comment,
-            "next": {"text": "Связаться", "date": timezone.localdate().isoformat()},
+            "next": {"text": step[0], "date": (timezone.localdate() + datetime.timedelta(days=step[1])).isoformat()} if step else None,
             "payments": [], "apps": [], "notes": [], "source": source,
         }
         if tg_id:

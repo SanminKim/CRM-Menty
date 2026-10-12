@@ -245,6 +245,20 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .chk:hover::after { content: ""; width: 9px; height: 5px; border-left: 2px solid var(--ok); border-bottom: 2px solid var(--ok); transform: rotate(-45deg) translateY(-1px); }
 .today { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+/* Настройки: группы слева, выбранная группа справа */
+.settings { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+.set-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; }
+.set-nav button { all: unset; cursor: pointer; padding: 9px 12px; border-radius: 8px; color: var(--muted); }
+.set-nav button:hover { background: var(--surface-2); color: var(--text); }
+.set-nav button.on { background: var(--brand-soft); color: var(--text); font-weight: 600; }
+.set-nav button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.set-body { max-width: 860px; min-width: 0; }
+.set-about { color: var(--muted); margin: 0 0 14px; }
+.stage-row { border-left: 3px solid transparent; }
+.stage-row.g-sales { border-left-color: var(--g-sales); } .stage-row.g-study { border-left-color: var(--g-study); } .stage-row.g-job { border-left-color: var(--g-job); } .stage-row.g-closed { border-left-color: var(--border); }
+.stage-move { display: inline-flex; gap: 2px; }
+.stage-move .btn { min-width: 32px; padding-inline: 0; justify-content: center; }
+.stage-row .sub { margin-left: auto; white-space: nowrap; }
 .cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 .rows .who.wrap span { white-space: normal; }
 .tbtn { all: unset; box-sizing: border-box; cursor: pointer; width: 28px; height: 28px; border-radius: var(--r-ctl); display: grid; place-items: center; color: var(--side-text); flex: none; margin-left: auto; }
@@ -592,6 +606,9 @@ details + details { margin-top: 6px; }
   #toast { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
   .bulk { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
   .today, .cols2 { grid-template-columns: minmax(0, 1fr); }
+  .settings { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .set-nav { flex-direction: row; overflow-x: auto; position: static; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .set-nav button { white-space: nowrap; }
   .tbtn { width: 36px; height: 36px; }
   .board { grid-auto-columns: minmax(78vw, 1fr); }
   .col { max-height: none; }
@@ -629,18 +646,74 @@ details + details { margin-top: 6px; }
 <script>
 "use strict";
 // ---------- Справочники ----------
-const STUCK_DAYS = 14;
-const STAGES = [
-  ["new", "Новая заявка", "sales"], ["contacted", "Связались", "sales"], ["call", "Созвон", "sales"],
-  ["waiting_payment", "Ждём оплату", "sales"], ["studying", "Обучается", "study"],
-  ["final_project", "Итоговый проект", "study"], ["job_search", "Поиск работы", "job"],
-  ["offer", "Оффер", "job"], ["probation_passed", "Прошёл испытательный", "job"], ["lost", "Отказ / выбыл", "closed"],
+// ----- Этапы воронки. Состав настраивается (config/main → stages, раздел «Настройки → Воронка и этапы»).
+// Логика опирается на свойства этапа: группу, что спросить при переходе, отметку «трудоустроен», а не на его название.
+// Тот же разбор списка — на сервере (backend/reports.py, stage_list): по нему считаются воронка и отчёты партнёров
+const STAGE_GROUPS = [["sales", "Продажи"], ["study", "Обучение"], ["job", "Трудоустройство"], ["closed", "Закрыт: отказ или выбыл"]];
+const STAGE_ASKS = [["", "Ничего, просто перевести"], ["note", "О чём договорились (в заметки)"], ["call", "Дату созвона: появится встреча"],
+  ["payment", "Стоимость и срок оплаты: появится платёж"], ["study", "Поток, ментора и получена ли оплата"], ["offer", "Компанию, зарплату и оплату с зарплаты"]];
+const DEFAULT_STAGES = [
+  { id: "new", label: "Новая заявка", group: "sales", ask: "", employed: false, next: { text: "Связаться", days: 0 } },
+  { id: "contacted", label: "Связались", group: "sales", ask: "note", employed: false, next: { text: "Договориться о созвоне", days: 1 } },
+  { id: "call", label: "Созвон", group: "sales", ask: "call", employed: false, next: null },
+  { id: "waiting_payment", label: "Ждём оплату", group: "sales", ask: "payment", employed: false, next: { text: "Проверить оплату", days: 2 } },
+  { id: "studying", label: "Обучается", group: "study", ask: "study", employed: false, next: { text: "Узнать, как прошло первое занятие", days: 7 } },
+  { id: "final_project", label: "Итоговый проект", group: "study", ask: "", employed: false, next: { text: "Проверить итоговый проект", days: 7 } },
+  { id: "job_search", label: "Поиск работы", group: "job", ask: "", employed: false, next: { text: "Ревью резюме", days: 2 } },
+  { id: "offer", label: "Оффер", group: "job", ask: "offer", employed: true, next: { text: "Узнать, как проходит испытательный срок", days: 30 } },
+  { id: "probation_passed", label: "Прошёл испытательный", group: "job", ask: "", employed: true, next: null },
+  { id: "lost", label: "Отказ / выбыл", group: "closed", ask: "", employed: false, next: null },
 ];
-const SIDX = Object.fromEntries(STAGES.map((s, i) => [s[0], i]));
-const SLABEL = Object.fromEntries(STAGES.map(s => [s[0], s[1]]));
-const SGROUP = Object.fromEntries(STAGES.map(s => [s[0], s[2]]));
+const STAGE_ID_RE = /^[A-Za-z0-9_-]{1,40}$/, STAGE_MAX = 40;
+const trimWs = v => String(v).replace(/^[ \t\n\r]+|[ \t\n\r]+$/g, "");
+const cut = (v, n) => Array.from(v).slice(0, n).join("");   // по символам, как срез строки в Python
+// Список этапов из настроек. Кривые записи пропускаются; если не осталось ни одного этапа пути — этапы по умолчанию
+// Объявлена функцией, а не стрелкой: разбор этапов нужен до остальных утилит
+function plainObj(v) { return !!v && typeof v === "object" && !Array.isArray(v); }
+function stageList(cfg) {
+  const raw = plainObj(cfg) && Array.isArray(cfg.stages) ? cfg.stages : null;
+  if (!raw) return DEFAULT_STAGES;
+  const seen = new Set(), out = [];
+  for (const x of raw.slice(0, STAGE_MAX)) {
+    if (!plainObj(x) || typeof x.id !== "string" || !STAGE_ID_RE.test(x.id) || seen.has(x.id)) continue;
+    seen.add(x.id);
+    const label = typeof x.label === "string" && trimWs(x.label) ? cut(trimWs(x.label), 60) : x.id;
+    const group = STAGE_GROUPS.some(g => g[0] === x.group) ? x.group : "sales", open = group !== "closed";
+    const ask = open && STAGE_ASKS.some(a => a[0] === x.ask) ? x.ask : "";
+    const next = open && plainObj(x.next) && typeof x.next.text === "string" && trimWs(x.next.text) ? { text: cut(trimWs(x.next.text), 120), days: Math.max(0, Math.min(365, Math.round(+x.next.days) || 0)) } : null;
+    out.push({ id: x.id, label, group, ask, employed: open && x.employed === true, next });
+  }
+  return out.some(x => x.group !== "closed") ? out : DEFAULT_STAGES;
+}
+let STAGE_LIST, STAGES, SIDX, SLABEL, SGROUP, PATH, PIDX, EMPLOYED, MEET_STUDY, STAGES_KEY = null;
+// Пересобирает справочники этапов, когда меняются настройки
+function applyStages(cfg) {
+  const list = stageList(cfg), key = JSON.stringify(list);
+  if (key === STAGES_KEY) return false;
+  STAGES_KEY = key; STAGE_LIST = list;
+  STAGES = list.map(x => [x.id, x.label, x.group]);
+  // Словари без прототипа: этап с именем вроде «constructor» в записи студента не найдёт унаследованного значения
+  const dict = pairs => Object.assign(Object.create(null), Object.fromEntries(pairs));
+  SIDX = dict(STAGES.map((x, i) => [x[0], i]));
+  SLABEL = dict(STAGES.map(x => [x[0], x[1]]));
+  SGROUP = dict(STAGES.map(x => [x[0], x[2]]));
+  PATH = list.filter(x => x.group !== "closed").map(x => x.id);          // путь человека по порядку, без закрытых этапов
+  PIDX = dict(PATH.map((k, i) => [k, i]));
+  EMPLOYED = list.filter(x => x.employed).map(x => x.id);
+  MEET_STUDY = list.filter(x => x.group === "study").map(x => x.id);    // о занятиях потока напоминаем тем, кто учится
+  return true;
+}
+const stageById = id => STAGE_LIST.find(x => x.id === id) || null;
+const isClosed = st => SGROUP[st] === "closed";
+const CLOSED = () => STAGE_LIST.filter(x => x.group === "closed").map(x => x.id);
+const FIRST = () => PATH[0];                 // сюда попадают новые заявки
+const DONE = () => PATH.length > 1 ? PATH[PATH.length - 1] : null;    // последний этап пути: путь пройден (если этап в пути один — никто не «прошёл»)
+// Список строк из настроек (причины отказа, подсказки шагов, статьи расходов). Пустой список в настройках — значит без подсказок
+const textList = (v, def) => Array.isArray(v) ? v.filter(x => typeof x === "string" && x.trim()).map(x => x.trim().slice(0, 120)).slice(0, 60) : def;
+const stageLabel = st => Object.hasOwn(SLABEL, st) ? SLABEL[st] : "Этап удалён";
+// Куда переводит принятый оффер: этап, который спрашивает про оффер, иначе первый «трудоустроен»
+const offerStage = () => (STAGE_LIST.find(x => x.ask === "offer" && x.group !== "closed") || STAGE_LIST.find(x => x.employed) || {}).id || null;
 const PIPES = [["sales", "Продажи"], ["study", "Обучение"], ["job", "Трудоустройство"], ["all", "Все"]];
-const EMPLOYED = ["offer", "probation_passed"];
 const APP_ST = [["applied", "Отклик"], ["hr", "Скрининг HR"], ["test", "Тестовое"], ["interview", "Собеседование"], ["offer", "Оффер"], ["accepted", "Оффер принят"], ["rejected", "Отказ"]];
 const APPL = Object.fromEntries(APP_ST);
 const COLS = ["students", "cohorts", "partners", "payouts", "team", "reports", "meetings", "directions", "expenses"];
@@ -693,7 +766,7 @@ const initials = name => String(name || "").split(/\s+/).filter(Boolean).slice(0
 // «Иванов Пётр» → «Пётр И.». Если вместо имени записан контакт (заявка без имени), в отчёт партнёра он не попадает
 const mask = name => { const t = String(name || ""); if (/[@\d]/.test(t)) return "Без имени"; const p = t.split(/\s+/).filter(Boolean); return p.length >= 2 ? `${p[1]} ${p[0][0]}.` : (p[0] || ""); };
 const num = v => (v === null || v === undefined || v === "" || isNaN(v)) ? null : Number(v);
-const badge = st => `<span class="badge b-${SGROUP[st] || "sales"}">${esc(SLABEL[st] || st)}</span>`;
+const badge = st => `<span class="badge b-${esc(SGROUP[st] || "sales")}">${esc(SLABEL[st] || st)}</span>`;
 const sortBy = (arr, f) => [...arr].sort((a, b) => { const x = f(a), y = f(b); return x < y ? -1 : x > y ? 1 : 0; });
 const sum = (arr, f) => arr.reduce((a, x) => a + (+f(x) || 0), 0);
 const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -714,9 +787,10 @@ const S = {
   data: { students: [], cohorts: [], partners: [], payouts: [], team: [], reports: [], meetings: [], directions: [], expenses: [] }, loaded: {}, trash: [],
   view: "today", openId: null, partnerId: null, cohortId: null, reportId: null, pipe: "sales", anTab: "funnel", sel: new Set(), visible: [],
   f: { q: "", cohort: "", mentor: "", partner: "", stage: "" }, showLost: false, payTab: "upcoming",
-  config: {}, moreNoStep: false, cardTab: "main", sort: null, sorts: {}, rows: 0, colMax: {}, cal: { ym: today().slice(0, 7), day: today() }, pending: 0, names: {}, drag: null, busy: false,
+  config: {}, moreNoStep: false, cardTab: "main", sort: null, sorts: {}, rows: 0, colMax: {}, cal: { ym: today().slice(0, 7), day: today() }, setTab: "", pending: 0, names: {}, drag: null, busy: false,
   unknownFailed: null,
 };
+applyStages({});
 {
   const v = lsGet("crm-menti-view"); if (VIEWS.includes(v)) S.view = v;
   const p = lsGet("crm-menti-pipe"); if (PIPES.some(x => x[0] === p)) S.pipe = p;
@@ -767,11 +841,12 @@ function loadUi() {
   S.showLost = v.showLost === true;
   if (["upcoming", "overdue", "paid"].includes(v.payTab)) S.payTab = v.payTab;
   if (["funnel", "money"].includes(v.anTab)) S.anTab = v.anTab;
+  if (SET_GROUPS.some(g => g[0] === v.setTab)) S.setTab = v.setTab;
   const ids = x => Array.isArray(x) ? x.filter(y => typeof y === "string" && y.length <= 64).slice(0, 200) : [];
   S.hiddenLanes = ids(v.hiddenLanes); S.foldedLanes = ids(v.foldedLanes); S.laneOrder = ids(v.laneOrder);   // скрытые и свёрнутые потоки на доске
   uiSaved = uiState();
 }
-function uiState() { const f = {}; for (const k of UI_FILTERS) if (S.f[k]) f[k] = S.f[k]; return JSON.stringify({ f, sorts: S.sorts, showLost: S.showLost, payTab: S.payTab, anTab: S.anTab, hiddenLanes: S.hiddenLanes || [], foldedLanes: S.foldedLanes || [], laneOrder: S.laneOrder || [] }); }
+function uiState() { const f = {}; for (const k of UI_FILTERS) if (S.f[k]) f[k] = S.f[k]; return JSON.stringify({ f, sorts: S.sorts, showLost: S.showLost, payTab: S.payTab, anTab: S.anTab, setTab: S.setTab || "", hiddenLanes: S.hiddenLanes || [], foldedLanes: S.foldedLanes || [], laneOrder: S.laneOrder || [] }); }
 function saveUi() { if (S.status !== "ready" || S.mode !== "staff") return; const now = uiState(); if (now !== uiSaved) { uiSaved = now; lsSet(UI_KEY(), now); } }
 // Запомненный отбор по записи, которой больше нет (или которая этой роли не видна), молча прятал бы людей: такие значения сбрасываются
 function dropStaleFilters() {
@@ -805,10 +880,11 @@ function personName(uid) {
 const paidSum = s => (Array.isArray(s.payments) ? s.payments : []).reduce((a, x) => a + (x && typeof x === "object" && dayOf(x.paid) ? nnum(x.amount) : 0), 0);
 const debt = s => s.price ? Math.max(s.price - paidSum(s), 0) : null;
 const overdue = s => (s.payments || []).filter(p => !p.paid && p.due < today());
-const isActive = s => s.stage !== "lost" && s.stage !== "probation_passed";
+const isActive = s => !isClosed(s.stage) && s.stage !== DONE();
 const hasStep = s => !!(s.next && s.next.text && s.next.date);
 const stepLate = s => hasStep(s) && s.next.date < today();
-const isStuck = s => !["new", "lost", "probation_passed"].includes(s.stage) && daysSince(s.stageAt) >= STUCK_DAYS;
+const stuckDays = () => { const n = Math.round(+S.config.stuckDays); return n >= 1 && n <= 365 ? n : 14; };
+const isStuck = s => isActive(s) && s.stage !== FIRST() && daysSince(s.stageAt) >= stuckDays();
 // Прогресс по программе потока: сколько модулей отмечено у студента
 const modulesOf = s => cohortById(s.cohortId)?.modules || [];
 function progressOf(s) {
@@ -818,26 +894,27 @@ function progressOf(s) {
 }
 const progHTML = (p, wide = false) => p ? `<span class="prog${wide ? " wide" : ""}" title="Пройдено модулей: ${esc(p.done)} из ${esc(p.total)}"><span class="prog-bar"><span style="width:${+p.pct || 0}%"></span></span><span>${esc(p.done)}/${esc(p.total)}</span></span>` : "";
 // До какого этапа человек дошёл. Кривые записи истории пропускаются, как и на сервере (backend/reports.py, reached)
-function reached(s) { let m = 0; for (const h of [...(Array.isArray(s.history) ? s.history : []).filter(isObj), { to: s.stage }]) { const i = typeof h.to === "string" && Object.hasOwn(SIDX, h.to) ? SIDX[h.to] : -1; if (h.to !== "lost" && i > m) m = i; } return m; }
+function reached(s) { let m = 0; for (const h of [...(Array.isArray(s.history) ? s.history : []).filter(isObj), { to: s.stage }]) { const i = typeof h.to === "string" && Object.hasOwn(PIDX, h.to) ? PIDX[h.to] : -1; if (i > m) m = i; } return m; }
 function funnel(list) {
   const r = list.map(reached);
-  return STAGES.filter(s => s[0] !== "lost").map((s, i) => { const c = r.filter(v => v >= i).length; return { label: s[1], count: c, pct: pct(c, list.length) }; });
+  return PATH.map((k, i) => { const c = r.filter(v => v >= i).length; return { label: SLABEL[k], count: c, pct: pct(c, list.length) }; });
 }
 function metrics(list) {
   const month = today().slice(0, 8) + "01";
   const by = st => list.filter(s => s.stage === st).length;
   const paidStudents = list.filter(s => paidSum(s) > 0).length;
-  const graduates = list.filter(s => reached(s) >= SIDX.job_search).length;
+  // Выпускники — дошедшие до первого этапа трудоустройства
+  const firstJob = PATH.findIndex(k => SGROUP[k] === "job"), graduates = firstJob < 0 ? 0 : list.filter(s => reached(s) >= firstJob).length;
   const employed = list.filter(s => EMPLOYED.includes(s.stage));
   const sal = employed.map(s => s.jobSalary).filter(Boolean);
   const dto = employed.filter(s => s.offerDate && s.createdAt).map(s => daysBetween(isoDay(s.createdAt), s.offerDate));
   const paid = list.flatMap(s => (s.payments || []).filter(p => p.paid));
-  const lost = list.filter(s => s.stage === "lost");
+  const lost = list.filter(s => isClosed(s.stage));
   const reasons = {};
   for (const s of lost) { const k = (s.lostReason || "").trim() || "Причина не указана"; reasons[k] = (reasons[k] || 0) + 1; }
   return {
     total: list.length, paidStudents, conv: pct(paidStudents, list.length),
-    studying: by("studying") + by("final_project"), jobSearch: by("job_search"),
+    studying: list.filter(s => SGROUP[s.stage] === "study").length, jobSearch: list.filter(s => SGROUP[s.stage] === "job" && !EMPLOYED.includes(s.stage)).length,
     graduates, employed: employed.length, rate: pct(employed.length, graduates),
     avgSalary: sal.length ? sum(sal, x => x) / sal.length : null,
     avgDays: dto.length ? Math.round(sum(dto, x => x) / dto.length) : null,
@@ -851,7 +928,7 @@ function metrics(list) {
 function firstContact(list) {
   const hours = [];
   for (const s of list) {
-    const h = (Array.isArray(s.history) ? s.history : []).find(x => x && x.from === "new" && x.to !== "new" && x.to !== "lost");
+    const h = (Array.isArray(s.history) ? s.history : []).find(x => x && x.from === FIRST() && x.to !== FIRST() && !isClosed(x.to));
     const d = h && s.createdAt ? (new Date(h.at) - new Date(s.createdAt)) / 36e5 : NaN;
     if (isFinite(d) && d >= 0) hours.push(d);
   }
@@ -865,7 +942,7 @@ function agenda(list) {
   const t = today(), in3 = daysAhead(3), in7 = daysAhead(7);
   const act = list.filter(isActive);
   const stepped = sortBy(act.filter(hasStep), s => s.next.date);
-  const pays = list.filter(s => s.stage !== "lost").flatMap(s => (s.payments || []).filter(p => !p.paid).map(p => ({ ...p, s })));
+  const pays = list.filter(s => !isClosed(s.stage)).flatMap(s => (s.payments || []).filter(p => !p.paid).map(p => ({ ...p, s })));
   return {
     due: stepped.filter(s => s.next.date <= t),
     week: stepped.filter(s => s.next.date > t && s.next.date <= in7),
@@ -901,14 +978,14 @@ function finance(list) {
   for (let i = -5; i <= 6; i++) { const d = new Date(now.getFullYear(), now.getMonth() + i, 1); months.push({ key: `${d.getFullYear()}-${pad(d.getMonth() + 1)}`, label: MON[d.getMonth()].slice(0, 3), year: d.getFullYear(), got: 0, exp: 0, cur: i === 0 }); }
   const byKey = Object.fromEntries(months.map(m => [m.key, m]));
   const pays = list.flatMap(s => (s.payments || []).map(p => ({ ...p, s })));
-  const paid = pays.filter(p => dayOf(p.paid)), open = pays.filter(p => !p.paid && p.s.stage !== "lost");
+  const paid = pays.filter(p => dayOf(p.paid)), open = pays.filter(p => !p.paid && !isClosed(p.s.stage));
   for (const p of paid) { const m = byKey[dayOf(p.paid).slice(0, 7)]; if (m) m.got += nnum(p.amount); }
   for (const p of open) if (p.due >= t) { const m = byKey[p.due.slice(0, 7)]; if (m) m.exp += +p.amount || 0; }
   const payers = list.filter(s => paidSum(s) > 0).length, total = sum(paid, p => p.amount);
   const group = (rows, name) => {
     const pay = rows.filter(s => paidSum(s) > 0).length, rev = sum(rows, paidSum);
     return { name, leads: rows.length, payers: pay, conv: pct(pay, rows.length), revenue: rev,
-      expected: sum(rows.filter(s => s.stage !== "lost").flatMap(s => (s.payments || []).filter(p => !p.paid && p.due >= t)), p => p.amount),
+      expected: sum(rows.filter(s => !isClosed(s.stage)).flatMap(s => (s.payments || []).filter(p => !p.paid && p.due >= t)), p => p.amount),
       employed: rows.filter(s => EMPLOYED.includes(s.stage)).length };
   };
   const sources = [...D().partners.map(p => group(list.filter(s => s.partnerId === p.id), p.name)), group(list.filter(s => !partnerById(s.partnerId)), "Без партнёра")].filter(r => r.leads);
@@ -1005,7 +1082,7 @@ function partyReport(kind, id) {
   const p = partnerById(id), t = partnerStats(p);
   const doc = {
     kind, partnerId: id, name: textOf(p.name, 200), promo: textOf(p.promo, 100), leads: t.leads, paidStudents: t.paidStudents, conv: t.conv, employed: t.employed, revenue: t.revenue, funnel: t.funnel, ...money,
-    rows: t.rows.map(r => ({ name: mask(r.s.name), stage: typeof r.s.stage === "string" && r.s.stage in SIDX ? r.s.stage : "", date: dayOf(r.s.createdAt), paid: r.paid })), updatedAt: new Date().toISOString(),
+    rows: t.rows.map(r => ({ name: mask(r.s.name), stage: typeof r.s.stage === "string" && Object.hasOwn(SLABEL, r.s.stage) ? r.s.stage : "", stageLabel: typeof r.s.stage === "string" && Object.hasOwn(SLABEL, r.s.stage) ? SLABEL[r.s.stage] : "", date: dayOf(r.s.createdAt), paid: r.paid })), updatedAt: new Date().toISOString(),
   };
   if (p.demo) doc.demo = true;
   return doc;
@@ -1053,7 +1130,7 @@ function filtersHTML(keys, { lost = false, ph = "Имя, телефон, email",
     ${on("partner") && D().partners.length ? `<select id="f-partner" data-filter="partner" aria-label="Источник">${opt("", "Все источники", f.partner)}${D().partners.map(p => opt(p.id, p.name, f.partner)).join("")}${opt("none", "Без партнёра", f.partner)}</select>` : ""}
     ${on("stage") ? `<select id="f-stage" data-filter="stage" aria-label="Этап">${opt("", "Все этапы", f.stage)}${STAGES.map(s => opt(s[0], s[1], f.stage)).join("")}</select>` : ""}
     ${extra}
-    ${on("stuck") ? (n => n || f.stuck ? `<label class="check" title="Дольше ${STUCK_DAYS} дней на одном этапе"><input type="checkbox" id="f-stuck" data-fcheck="stuck"${f.stuck ? " checked" : ""}> Застряли${n ? ` · ${n}` : ""}</label>` : "")(filtered(keys.filter(k => k !== "stuck")).filter(isStuck).length) : ""}
+    ${on("stuck") ? (n => n || f.stuck ? `<label class="check" title="Дольше ${stuckDays()} дней на одном этапе"><input type="checkbox" id="f-stuck" data-fcheck="stuck"${f.stuck ? " checked" : ""}> Застряли${n ? ` · ${n}` : ""}</label>` : "")(filtered(keys.filter(k => k !== "stuck")).filter(isStuck).length) : ""}
     ${lost ? `<label class="check"><input type="checkbox" id="f-lost" data-act="toggle-lost"${S.showLost ? " checked" : ""}> Выбывшие</label>` : ""}
     ${any ? `<button class="btn ghost" data-act="freset">Сбросить</button>` : ""}
   </div>`;
@@ -1160,7 +1237,7 @@ const ABOUT = {
   payouts: "Сколько из полученных денег причитается блогеру, менторам и вам. Здесь же партнёры: кто сколько привёл.",
   analytics: "Сколько заявок доходит до оплаты и оффера и на каком этапе люди теряются.",
   partners: "Блогеры и каналы, откуда приходят заявки: сколько человек привели и сколько из них оплатили.",
-  settings: "Команда и доступы, направления и доли, бот в Telegram, резервная копия, оформление.",
+  settings: "Как устроена CRM: этапы воронки, команда и доступы, деньги, встречи и Telegram, данные. Выберите группу слева.",
   help: "Короткая памятка: как вести человека от заявки до оффера и что где находится. Открывается значком «?» рядом со сменой темы.",
 };
 // Ментор видит раздел иначе: в подсказке только то, что ему доступно
@@ -1196,7 +1273,7 @@ function monthMoneyLine() {
   for (const s of D().students) for (const p of Array.isArray(s.payments) ? s.payments : []) {
     if (!isObj(p)) continue;
     if (p.paid) { if (dayOf(p.paid).slice(0, 7) === m) got += nnum(p.amount); }
-    else if (s.stage !== "lost" && isDay(p.due)) { if (p.due < t) { late += nnum(p.amount); lateN++; } else if (p.due.slice(0, 7) === m) exp += nnum(p.amount); }
+    else if (!isClosed(s.stage) && isDay(p.due)) { if (p.due < t) { late += nnum(p.amount); lateN++; } else if (p.due.slice(0, 7) === m) exp += nnum(p.amount); }
   }
   return `<div class="mline" id="today-money" title="По всем студентам школы, без учёта отбора по ментору"><span class="mline-h">Деньги за ${esc(monthName(m).split(" ")[0].toLowerCase())}</span>
     <span>получено <strong>${money(got)}</strong></span><span>до конца месяца ожидается <strong>${money(exp)}</strong></span>
@@ -1272,6 +1349,7 @@ function helpView() {
       <li><strong>Заявка.</strong> Приходит из бота или с сайта, либо добавляется кнопкой «+ Заявка». ${adm ? "Новые заявки без ответственного лежат на экране «Сегодня» в блоке «Без ментора»: нажмите «Взять себе» или «Назначить»." : "Заявка, которую вы добавили сами, сразу закреплена за вами."}</li>
       <li><strong>Карточка.</strong> Нажмите на имя в любом списке. Вверху карточки — полоса пути и синяя кнопка «Дальше»: она переводит на следующий этап и спрашивает только то, что этому этапу нужно (дату созвона, стоимость, компанию). Под ней следующий шаг и «О студенте» — пара строк о человеке, которые важно помнить. Ниже вкладки: «Главное» (контакты, встречи, заметки), «Деньги и договор», «Обучение», «Работа», «История».</li>
       <li><strong>Следующий шаг.</strong> У каждого человека должно быть дело с датой: «написать», «проверить домашку». В нужный день оно появится на экране «Сегодня». Люди без шага собраны там же, в блоке «Без следующего шага».</li>
+      <li><strong>Свои этапы.</strong> Состав воронки меняется в Настройках → «Воронка и этапы»: этапы можно переименовать, добавить, переставить и удалить. У этапа задаётся группа (доска), что спросить при переходе и шаг по умолчанию.</li>
       <li><strong>Оплата.</strong> Платёж создаётся при переходе в «Ждём оплату» или кнопкой «+ Платёж» в карточке. Когда деньги пришли, нажмите «Оплачен». Для тех, кто уже работает, есть «+ С зарплаты»: процент от дохода по месяцам. На вкладке «Деньги и договор» прикрепляется договор, а к каждому платежу — данные (способ оплаты, номер чека) и файлы: чек, выписка, скан. Файлы до 10 МБ видят администратор и ментор студента.</li>
       <li><strong>Обучение и работа.</strong> В карточке отмечаются пройденные модули, встречи, отклики на вакансии и собеседования.</li>
       <li><strong>Отказ.</strong> Выберите этап «Отказ / выбыл» и укажите причину. Карточка остаётся в базе.</li>
@@ -1318,7 +1396,7 @@ function welcomeView() {
 // ----- Аналитика -----
 function funnelHTML(rows) {
   const step = i => i && rows[i - 1].count ? `${pct(rows[i].count, rows[i - 1].count)}%` : "";
-  return `<div class="funnel"><div class="funnel-row head" aria-hidden="true"><i></i><i></i><span>от всех</span><span>от пред.</span></div>${rows.map((r, i) => `<div class="funnel-row"><span class="funnel-label">${esc(SLABEL[r.key] || r.label)}</span><span class="funnel-bar"><span style="width:${Math.max(0, Math.min(100, +r.pct || 0))}%"></span></span><span class="funnel-num">${esc(r.count)} <small>${esc(r.pct)}%</small></span><span class="funnel-step"${i ? ` title="Дошли с предыдущего этапа"` : ""}>${step(i)}</span></div>`).join("")}</div>`;
+  return `<div class="funnel"><div class="funnel-row head" aria-hidden="true"><i></i><i></i><span>от всех</span><span>от пред.</span></div>${rows.map((r, i) => `<div class="funnel-row"><span class="funnel-label">${esc(r.label || SLABEL[r.key])}</span><span class="funnel-bar"><span style="width:${Math.max(0, Math.min(100, +r.pct || 0))}%"></span></span><span class="funnel-num">${esc(r.count)} <small>${esc(r.pct)}%</small></span><span class="funnel-step"${i ? ` title="Дошли с предыдущего этапа"` : ""}>${step(i)}</span></div>`).join("")}</div>`;
 }
 function barPath(x, y, w, h, r) {
   r = Math.min(r, h, w / 2);
@@ -1432,7 +1510,7 @@ function analyticsView() {
   <div class="grid-2">
     <div class="stack">${panel("Сколько дошли до этапа", "", `<div class="pad">${funnelHTML(m.funnel)}</div>`)}${S.limited ? "" : mentorsPanel(list)}</div>
     <div class="stack">
-      ${panel(`Давно на одном этапе`, m.stuck.length || "", m.stuck.length ? `<ul class="rows">${m.stuck.map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}"><span class="who"><strong>${esc(s.name)}</strong></span>${badge(s.stage)}<span class="when">${days(daysSince(s.stageAt))}</span></li>`).join("")}</ul>` : `<p class="empty">Никто не стоит дольше ${STUCK_DAYS} дней</p>`, m.stuck.length ? `<button class="btn small ghost" data-act="list-stuck">Открыть списком</button>` : "")}
+      ${panel(`Давно на одном этапе`, m.stuck.length || "", m.stuck.length ? `<ul class="rows">${m.stuck.map(s => `<li class="click" data-act="open" data-id="${esc(s.id)}"><span class="who"><strong>${esc(s.name)}</strong></span>${badge(s.stage)}<span class="when">${days(daysSince(s.stageAt))}</span></li>`).join("")}</ul>` : `<p class="empty">Никто не стоит дольше ${stuckDays()} дней</p>`, m.stuck.length ? `<button class="btn small ghost" data-act="list-stuck">Открыть списком</button>` : "")}
       ${m.lost ? panel("Почему уходят", m.lost, `<ul class="rows">${m.reasons.map(([k, n]) => `<li><span class="who"><strong>${esc(k)}</strong></span><span class="when">${n}</span></li>`).join("")}</ul>`) : ""}
     </div>
   </div>
@@ -1441,12 +1519,12 @@ function analyticsView() {
 }
 // Воронки потоков рядом: сколько людей каждого потока дошло до ключевых этапов. Нажатие на строку выбирает поток для всей аналитики
 function cohortFunnels() {
-  const base = filtered(["mentor", "partner"]), cols = [["contacted", "Связались"], ["call", "Созвон"], ["studying", "Оплатили и учатся"], ["job_search", "Вышли на поиск"], ["offer", "Оффер"]];
+  const base = filtered(["mentor", "partner"]), cols = PATH.slice(1).map(k => [k, esc(SLABEL[k])]);
   const rows = sortBy(D().cohorts, c => c.start || "").reverse().map(c => ({ id: c.id, name: c.name, list: base.filter(s => s.cohortId === c.id) }));
   const loose = base.filter(s => !cohortName(s.cohortId)); if (loose.length) rows.push({ id: "none", name: "Без потока", list: loose });
   const shown = rows.filter(r => r.list.length);
   if (shown.length < 2) return "";
-  const cell = (r, key) => { const f = funnel(r.list)[SIDX[key]]; return `<td class="num">${f.count}${r.list.length ? ` <span class="sub">${f.pct}%</span>` : ""}</td>`; };
+  const cell = (r, key) => { const f = funnel(r.list)[PIDX[key]]; return `<td class="num">${f.count}${r.list.length ? ` <span class="sub">${f.pct}%</span>` : ""}</td>`; };
   return panel("Воронка по потокам", shown.length, `<div class="table-wrap"><table id="cohort-funnels"><thead><tr><th>Поток</th><th class="num">Заявок</th>${cols.map(([, l]) => `<th class="num">${l}</th>`).join("")}</tr></thead>
     <tbody>${shown.map(r => `<tr class="click${S.f.cohort === r.id ? " sel" : ""}" data-act="fcohort" data-v="${esc(r.id)}"><td><strong>${esc(r.name)}</strong></td><td class="num">${r.list.length}</td>${cols.map(([k]) => cell(r, k)).join("")}</tr>`).join("")}</tbody></table></div>`,
     S.f.cohort ? `<button class="btn small ghost" data-act="fcohort" data-v="">Все потоки</button>` : "", "Сколько людей из каждого потока дошло до этапа и какая это доля от его заявок. Нажмите на поток, чтобы вся аналитика выше показала только его.");
@@ -1466,9 +1544,8 @@ function evRow(e, withDate = false) {
 }
 // Участники встречи и их ответы «буду / не буду». Правило то же, что на сервере (backend/meetings.py, participants):
 // тот, с кем встреча назначена, и учащиеся потока, если это занятие группы. Ментор видит только своих студентов.
-const MEET_STUDY = ["studying", "final_project"];
 function meetPeople(m) {
-  const out = D().students.filter(s => s.stage !== "lost" && ((typeof m.studentId === "string" && s.id === m.studentId)
+  const out = D().students.filter(s => !isClosed(s.stage) && ((typeof m.studentId === "string" && s.id === m.studentId)
     || (typeof m.cohortId === "string" && m.cohortId && s.cohortId === m.cohortId && MEET_STUDY.includes(s.stage))));
   const rsvp = isObj(m.rsvp) ? m.rsvp : {};
   const answer = s => isObj(rsvp[s.id]) && ["yes", "no"].includes(rsvp[s.id].a) ? rsvp[s.id].a : null;
@@ -1490,7 +1567,7 @@ function peopleHTML(m) {
 function dayHTML(d) {
   const list = filtered(["mentor"]), evs = events(d, d), t = today();
   const steps = list.filter(s => isActive(s) && hasStep(s) && s.next.date === d);
-  const pays = list.flatMap(s => (s.payments || []).filter(x => x.paid === d || (s.stage !== "lost" && !x.paid && x.due === d)).map(x => ({ ...x, s }))); // пришедшие в этот день деньги видны и у выбывших
+  const pays = list.flatMap(s => (s.payments || []).filter(x => x.paid === d || (!isClosed(s.stage) && !x.paid && x.due === d)).map(x => ({ ...x, s }))); // пришедшие в этот день деньги видны и у выбывших
   const title = new Date(d + "T12:00").toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const shift = n => { const x = new Date(d + "T12:00"); x.setDate(x.getDate() + n); return dstr(x); };
   const sec = (name, n, body, empty) => `<section class="day-sec"><h3>${name}${n ? ` · ${n}` : ""}</h3>${n ? `<ul class="rows">${body}</ul>` : `<p class="hint">${empty}</p>`}</section>`;
@@ -1542,9 +1619,9 @@ function calendarView() {
 // Доска — потоки один под другим: у каждого потока своя доска с колонками этапов.
 // Поток можно свернуть или скрыть; скрытые собраны внизу, их можно вернуть. Выбор запоминается в браузере
 function boardView() {
-  const keys = ["mentor", "partner"], list = filtered(keys).filter(s => S.showLost || s.stage !== "lost");
-  const inPipe = k => list.filter(s => k === "all" ? s.stage !== "lost" : SGROUP[s.stage] === k).length;
-  const stages = STAGES.filter(s => (S.pipe === "all" ? s[2] !== "closed" : s[2] === S.pipe) || (S.showLost && s[0] === "lost"));
+  const keys = ["mentor", "partner"], list = filtered(keys).filter(s => S.showLost || !isClosed(s.stage));
+  const inPipe = k => list.filter(s => k === "all" ? !isClosed(s.stage) : SGROUP[s.stage] === k).length;
+  const stages = STAGES.filter(s => (S.pipe === "all" ? s[2] !== "closed" : s[2] === S.pipe) || (S.showLost && s[2] === "closed"));
   const inStages = s => stages.some(x => x[0] === s.stage);
   const admin = !S.limited && !S.readOnly, hidden = new Set(S.hiddenLanes || []), folded = new Set(S.foldedLanes || []);
   const lanes = sortBy(D().cohorts, c => c.start || "").reverse().map(c => ({ id: c.id, name: c.name, c, people: list.filter(s => s.cohortId === c.id) }));
@@ -1560,7 +1637,7 @@ function boardView() {
     const cols = stages.map(([st, label, g]) => {
       const items = sortBy(here.filter(s => s.stage === st), s => (hasStep(s) ? s.next.date : "9999") + (s.stageAt || ""));
       const key = l.id + "|" + st, max = S.colMax[key] || COL_STEP;
-      return `<section class="col g-${g}" data-stage="${st}" data-lane="${esc(l.id)}"><header><span>${label}</span><span class="count">${items.length}</span>${st !== "lost" && !S.readOnly ? `<button class="col-add" data-act="quick" data-st="${st}" data-cohort="${esc(l.id === "none" ? "" : l.id)}" aria-label="Добавить в «${label}» потока «${esc(l.name)}»" title="Добавить">+</button>` : ""}</header>
+      return `<section class="col g-${esc(g)}" data-stage="${esc(st)}" data-lane="${esc(l.id)}"><header><span>${esc(label)}</span><span class="count">${items.length}</span>${!isClosed(st) && !S.readOnly ? `<button class="col-add" data-act="quick" data-st="${esc(st)}" data-cohort="${esc(l.id === "none" ? "" : l.id)}" aria-label="Добавить в «${esc(label)}» потока «${esc(l.name)}»" title="Добавить">+</button>` : ""}</header>
         <div class="col-body">${items.slice(0, max).map(tileHTML).join("") || `<p class="empty">Пусто</p>`}${items.length > max ? `<button class="col-more" data-act="col-more" data-st="${esc(key)}">Показать ещё: ${items.length - max}</button>` : ""}</div></section>`;
     }).join("");
     const counts = stages.map(([st, label]) => { const n = here.filter(s => s.stage === st).length; return n ? `<span class="lane-stat">${esc(label)} <b>${n}</b></span>` : ""; }).join("");
@@ -1626,7 +1703,7 @@ function studentsTable(list, mods, emptyText) {
   const stepCell = s => hasStep(s) ? `${esc(s.next.text)} <span class="sub nw${stepLate(s) ? " danger-text" : ""}">· ${dueLabel(s.next.date)}</span>` : isActive(s) ? `<span class="warn-text">не назначен</span>` : `<span class="muted">—</span>`;
   const paidCell = s => s.price ? `${money(paidSum(s))} <span class="sub">из ${money(s.price)}</span>` : money(paidSum(s) || null);
   const cols = mods ? 6 + mods.length : 9;
-  const daysCell = s => !isActive(s) ? `<span class="muted">—</span>` : isStuck(s) ? `<strong class="warn-text" title="Дольше ${STUCK_DAYS} дней на одном этапе">${daysSince(s.stageAt)}</strong>` : `<span title="Дней на этапе «${esc(SLABEL[s.stage] || "")}»">${daysSince(s.stageAt)}</span>`;
+  const daysCell = s => !isActive(s) ? `<span class="muted">—</span>` : isStuck(s) ? `<strong class="warn-text" title="Дольше ${stuckDays()} дней на одном этапе">${daysSince(s.stageAt)}</strong>` : `<span title="Дней на этапе «${esc(SLABEL[s.stage] || "")}»">${daysSince(s.stageAt)}</span>`;
   return `<div class="panel table-wrap" id="tbl"><table>
     <thead><tr><th class="selc"><input type="checkbox" data-sel-all data-ids="${esc(ids.join(","))}"${all ? " checked" : ""} aria-label="Выбрать всех"></th>${th("name", "Студент")}${th("stage", "Этап")}
       ${mods ? mods.map((m, i) => `<th class="mxh" title="${esc(m.title)}">${i + 1}</th>`).join("") : th("days", "Дней", "num", "Сколько дней человек на текущем этапе. Нажмите, чтобы отсортировать") + th("step", "Следующий шаг") + th("cohort", "Поток")}
@@ -1650,7 +1727,7 @@ function listView() {
 
 // ----- Потоки -----
 function cohortStats(c) {
-  const list = D().students.filter(s => s.cohortId === c.id), act = list.filter(s => s.stage !== "lost");
+  const list = D().students.filter(s => s.cohortId === c.id), act = list.filter(s => !isClosed(s.stage));
   const studying = act.filter(s => SGROUP[s.stage] !== "sales"), progs = studying.map(progressOf).filter(Boolean);
   const open = act.flatMap(s => (s.payments || []).filter(p => !p.paid));
   return {
@@ -1924,70 +2001,68 @@ function noteSection(s) {
   </div></section>`;
 }
 // ----- Путь студента: «Дальше» спрашивает только то, что нужно следующему этапу, и ставит следующий шаг -----
-const PATH = STAGES.filter(x => x[0] !== "lost").map(x => x[0]);
 const nextStage = s => { const i = PATH.indexOf(s.stage); return i >= 0 && i < PATH.length - 1 ? PATH[i + 1] : null; };
-const NEXT_STEP = {
-  contacted: ["Договориться о созвоне", 1], waiting_payment: ["Проверить оплату", 2], studying: ["Узнать, как прошло первое занятие", 7],
-  final_project: ["Проверить итоговый проект", 7], job_search: ["Ревью резюме", 2], offer: ["Узнать, как проходит испытательный срок", 30],
-};
+const askOf = st => stageById(st)?.ask || "";
 const tgUser = s => { const u = s.telegram ? String(s.telegram).replace(/^@/, "") : ""; return /^[A-Za-z0-9_]{3,}$/.test(u) ? u : ""; };
 const firstUnpaid = s => sortBy((Array.isArray(s.payments) ? s.payments : []).filter(x => isObj(x) && !x.paid), x => x.due || "")[0] || null;
 const firstPayable = s => sortBy((Array.isArray(s.payments) ? s.payments : []).filter(x => isObj(x) && !x.paid && !isPending(x)), x => x.due || "")[0] || null; // у платежа от дохода ещё нет суммы
 // Переход на следующий этап, которому нужны данные (дата созвона, стоимость, оффер), всегда идёт через форму:
 // на доске и в списке этапов так же, как по кнопке «Дальше»
-const ASK_ON = ["call", "waiting_payment", "studying", "offer"];
+const ASK_ON = ["call", "payment", "study", "offer"];
 function requestMove(s, to) {
   if (!s || to === s.stage) return;
-  if (to === "lost") return lostForm(s);
-  if (to === nextStage(s) && ASK_ON.includes(to) && !S.readOnly) return advanceForm(s);
+  if (isClosed(to)) return lostForm(s, to);
+  if (to === nextStage(s) && ASK_ON.includes(askOf(to)) && !S.readOnly) return advanceForm(s);
   return moveStage(s.id, to).then(ok => { if (!ok) scheduleRender(); });
 }
 // Сколько новая заявка ждёт первого ответа
-const waitHours = s => { if (s.stage !== "new" || !s.createdAt) return null; const h = Math.floor((Date.now() - new Date(s.createdAt)) / 36e5); return isFinite(h) ? Math.max(h, 0) : null; };
+const waitHours = s => { if (s.stage !== FIRST() || !s.createdAt) return null; const h = Math.floor((Date.now() - new Date(s.createdAt)) / 36e5); return isFinite(h) ? Math.max(h, 0) : null; };
 const waitLabel = h => h < 1 ? "только что" : h < 24 ? `ждёт ${h} ч` : `ждёт ${days(Math.floor(h / 24))}`;
 function pathHTML(s) {
   const i = PATH.indexOf(s.stage); if (i < 0) return "";
-  const g = SGROUP[s.stage], leg = (k, l) => `<span class="pl-${k}${g === k ? " on" : ""}">${l}</span>`;
+  // Подписи групп под полосой занимают столько места, сколько этапов в группе
+  const g = SGROUP[s.stage], n = k => PATH.filter(x => SGROUP[x] === k).length, leg = (k, l) => n(k) ? `<span class="pl-${k}${g === k ? " on" : ""}" style="flex:${n(k)}">${l}</span>` : "";
   return `<ol class="path" role="img" aria-label="Этап ${i + 1} из ${PATH.length}: ${esc(SLABEL[s.stage])}">${PATH.map((k, n) => `<li class="g-${SGROUP[k]}${n < i ? " done" : n === i ? " cur" : ""}" title="${esc(SLABEL[k])}"></li>`).join("")}</ol>
       <div class="path-legend" aria-hidden="true">${leg("sales", "Продажи")}${leg("study", "Обучение")}${leg("job", "Работа")}</div>`;
 }
 function advanceForm(s) {
   const to = nextStage(s); if (!to) return;
-  const def = NEXT_STEP[to], c = D().cohorts.find(x => x.id === s.cohortId), unpaid = firstUnpaid(s), payable = firstPayable(s);
+  const ask = askOf(to), nx = stageById(to)?.next, def = nx ? [nx.text, nx.days] : null, c = D().cohorts.find(x => x.id === s.cohortId), unpaid = firstUnpaid(s), payable = firstPayable(s);
   const own = {
-    contacted: [{ k: "note", label: "О чём договорились", type: "textarea", wide: true, rows: 2, ph: "Хочет перейти в аналитики, готов начать в ноябре", help: "Попадёт в заметки" }],
+    note: [{ k: "note", label: "О чём договорились", type: "textarea", wide: true, rows: 2, ph: "Хочет перейти в аналитики, готов начать в ноябре", help: "Попадёт в заметки" }],
     call: [{ k: "mdate", label: "Дата созвона", type: "date", req: true, quick: true }, { k: "mtime", label: "Время", type: "time", help: "Встреча появится в календаре" }],
-    waiting_payment: [{ k: "price", label: "Стоимость, ₽", type: "number", req: true, wide: !!unpaid },
+    payment: [{ k: "price", label: "Стоимость, ₽", type: "number", req: true, wide: !!unpaid },
       ...(unpaid ? [] : [{ k: "first", label: "Срок оплаты", type: "date", quick: true, help: "В этот день платёж появится на экране «Сегодня»" }])],
-    studying: [...(payable && canConfirm() ? [{ k: "paid", label: `Платёж получен: ${payText(payable)}`, type: "checkbox" }] : []),
+    study: [...(payable && canConfirm() ? [{ k: "paid", label: `Платёж получен: ${payText(payable)}`, type: "checkbox" }] : []),
       { k: "cohortId", label: "Поток", type: "select", options: cohortOpts() }, ...(S.limited ? [] : [{ k: "mentorId", label: "Ментор", type: "select", options: teamOpts() }])],
     offer: [{ k: "jobCompany", label: "Компания", req: true }, { k: "jobPosition", label: "Должность" }, { k: "jobSalary", label: "Зарплата, ₽", type: "number" }, { k: "offerDate", label: "Дата оффера", type: "date" },
       { section: "Оплата с зарплаты" }, { k: "splan", label: "Создать платежи с зарплаты", type: "checkbox" }, { k: "skind", label: "Как платят", type: "select", options: SALARY_KINDS },
       { k: "spct", label: "Процент, %", type: "number" },
       { k: "smonths", label: "Сколько месяцев", type: "number" }, { k: "sfirst", label: "Первый платёж", type: "date", help: "Можно пропустить и создать позже кнопкой «+ С зарплаты» в карточке" }],
-  }[to] || [];
-  const stepFields = def ? [{ section: "Следующий шаг" }, { k: "text", label: "Что сделать", req: true, wide: true, list: STEP_HINTS }, { k: "date", label: "Когда", type: "date", req: true, wide: true, quick: true }] : [];
+  }[ask] || [];
+  const stepFields = def ? [{ section: "Следующий шаг" }, { k: "text", label: "Что сделать", req: true, wide: true, list: stepHints() }, { k: "date", label: "Когда", type: "date", req: true, wide: true, quick: true }] : [];
   openModal({
     title: `${s.name}: ${SLABEL[to]}`, submit: `Перевести в «${SLABEL[to]}»`,
     values: { text: def?.[0], date: daysAhead(def?.[1] || 0), mdate: daysAhead(1), mtime: "12:00", price: s.price || c?.price || null, first: daysAhead(2), paid: true,
       cohortId: s.cohortId || "", mentorId: teamName(s.mentorId) ? s.mentorId : (myTeam()?.id || ""), jobCompany: s.jobCompany || "", jobPosition: s.jobPosition || "", jobSalary: s.jobSalary ?? null, offerDate: s.offerDate || today(),
       splan: false, skind: "salary", spct: salaryDefaults().percent, smonths: salaryDefaults().months, sfirst: addMonths(today(), 1) },
     fields: [...own, ...stepFields],
-    extra: to === "call" ? `<p class="hint">Следующим шагом станет «Созвон» в этот день.</p>` : to === "probation_passed" ? `<p class="done-note">Путь пройден. Студент уйдёт из списков активных, карточка останется в разделе «Студенты».</p>` : "",
+    extra: ask === "call" ? `<p class="hint">Следующим шагом станет «Созвон» в этот день.</p>` : to === DONE() ? `<p class="done-note">Путь пройден. Студент уйдёт из списков активных, карточка останется в разделе «Студенты».</p>` : "",
     onSubmit: v => {
-      if (to === "call" && !isDay(v.mdate)) return "Укажите дату созвона";
-      if (to === "call" && v.mtime && !/^\d{2}:\d{2}$/.test(v.mtime)) return "Время укажите в виде 15:30";
-      if (to === "waiting_payment") { v.price = Math.round(v.price); if (!(v.price > 0)) return "Укажите стоимость в рублях"; }
-      if (to === "waiting_payment" && !unpaid && !isDay(v.first)) return "Укажите срок оплаты";
+      if (ask === "call" && !isDay(v.mdate)) return "Укажите дату созвона";
+      if (ask === "call" && v.mtime && !/^\d{2}:\d{2}$/.test(v.mtime)) return "Время укажите в виде 15:30";
+      if (ask === "payment") { v.price = Math.round(v.price); if (!(v.price > 0)) return "Укажите стоимость в рублях"; }
+      if (ask === "payment" && !unpaid && !isDay(v.first)) return "Укажите срок оплаты";
       if (def && !isDay(v.date)) return "Укажите дату следующего шага";
-      if (to === "offer" && v.splan) { const err = salaryCheck(v.jobSalary, v.spct, v.smonths, v.sfirst, v.skind); if (err) return err; }
-      return advance(s.id, to, v).then(ok => { if (ok && to === "offer" && v.splan) rememberSalary(v.spct, Math.round(v.smonths)); return ok; });
+      if (ask === "offer" && v.splan) { const err = salaryCheck(v.jobSalary, v.spct, v.smonths, v.sfirst, v.skind); if (err) return err; }
+      return advance(s.id, to, v).then(ok => { if (ok && ask === "offer" && v.splan) rememberSalary(v.spct, Math.round(v.smonths)); return ok; });
     },
   });
 }
 // Переход с отменой: «Отменить» убирает только то, что создал этот переход
 async function advance(id, to, v) {
   const s = stu(id); if (!s || s.stage === to) return false;
+  const ask = askOf(to);
   let made = null, meetFailed = false;
   const ok = await save(async () => {
     made = null;
@@ -1996,9 +2071,9 @@ async function advance(id, to, v) {
       const p = stageChange(cur, to), m = { at: p.stageAt, pays: [], logs: [], note: null, paidId: null, meet: null, keys: [], prev: { stage: cur.stage, stageAt: cur.stageAt ?? null, next: cur.next ?? null } }, log = [];
       // Прежние значения берём из свежей записи: «Отменить» не должно затирать чужую правку
       const set = (k, val) => { if ((cur[k] ?? null) !== (val ?? null)) { m.prev[k] = cur[k] ?? null; p[k] = val; m.keys.push(k); } };
-      p.next = to === "call" ? { text: "Созвон", date: v.mdate } : v.text ? { text: v.text, date: v.date } : null;
-      if (to === "contacted" && v.note) { m.note = newId("x"); p.notes = [...(cur.notes || []), { id: m.note, text: v.note, at: p.stageAt, by: S.myId }]; }
-      if (to === "waiting_payment") {
+      p.next = ask === "call" ? { text: "Созвон", date: v.mdate } : v.text ? { text: v.text, date: v.date } : null;
+      if (ask === "note" && v.note) { m.note = newId("x"); p.notes = [...(cur.notes || []), { id: m.note, text: v.note, at: p.stageAt, by: S.myId }]; }
+      if (ask === "payment") {
         if ((cur.price ?? null) !== v.price) { set("price", v.price); log.push(logItem(`Стоимость: ${money(v.price)}`)); }
         if (!firstUnpaid(cur)) {
           const item = { id: newId("x"), amount: v.price, due: isDay(v.first) ? v.first : today(), paid: null, comment: "Оплата" };
@@ -2006,14 +2081,14 @@ async function advance(id, to, v) {
           log.push(logItem(`Создан платёж: ${payText(item)}`));
         }
       }
-      if (to === "studying") {
+      if (ask === "study") {
         const pay = v.paid && canConfirm() ? firstPayable(cur) : null;
         const after = { ...cur, cohortId: v.cohortId || null }; // направление — того потока, в который студент идёт учиться
         if (pay) { p.payments = (cur.payments || []).map(x => x.id === pay.id ? markPaid(after, x, payDay()) : x); m.paidId = pay.id; log.push(logItem(`Платёж отмечен оплаченным: ${payText(pay)}`)); }
         set("cohortId", v.cohortId || null);
         if (!S.limited) set("mentorId", v.mentorId || null);
       }
-      if (to === "offer") {
+      if (ask === "offer") {
         set("jobCompany", v.jobCompany); set("jobPosition", v.jobPosition || ""); set("jobSalary", v.jobSalary ?? null); set("offerDate", v.offerDate || today());
         if (v.splan) {
           const items = salaryItems(v.jobSalary, v.spct, Math.round(v.smonths), v.sfirst, v.skind);
@@ -2025,7 +2100,7 @@ async function advance(id, to, v) {
       if (log.length) { p.log = [...(cur.log || []), ...log].slice(-LOG_MAX); m.logs = log.map(l => l.id); }
       made = m; return p;
     });
-    if (made && to === "call") {
+    if (made && ask === "call") {
       const mid = newId("meetings");
       // Этап уже сменён: сбой встречи не должен лишать человека кнопки «Отменить»
       try { await setDoc("meetings", mid, { title: "Созвон-знакомство", date: v.mdate, time: v.mtime || "", kind: "call", duration: 30, studentId: id, cohortId: null,
@@ -2242,7 +2317,7 @@ function expenseForm(e) {
     title: e ? "Расход" : "Новый расход", values: e ? { ...e, directionId: dirById(e.directionId) ? e.directionId : "" } : { date: today(), directionId: dirs.length === 1 ? dirs[0].id : "" },
     fields: [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }, { k: "date", label: "Дата", type: "date", req: true },
       { k: "directionId", label: "Направление", type: "select", wide: true, options: [["", "—"], ...dirs.map(d => [d.id, d.name])], help: "Расход уменьшает чистую выручку этого направления в месяце даты расхода" },
-      { k: "comment", label: "На что", wide: true, req: true, list: EXPENSE_HINTS, ph: "Напишите своё или выберите из подсказок", help: "Любой текст: подсказки в списке только для скорости" }],
+      { k: "comment", label: "На что", wide: true, req: true, list: expenseHints(), ph: "Напишите своё или выберите из подсказок", help: "Любой текст: подсказки в списке только для скорости" }],
     extra: `<p class="hint">После сохранения доли всех сторон направления за этот месяц пересчитаются.</p>`,
     onDelete: e ? () => save(() => delDoc("expenses", e.id), "Расход удалён") : null,
     onSubmit: v => !(v.amount > 0) ? "Сумма должна быть больше нуля" : !isDay(v.date) ? "Укажите дату" : !dirById(v.directionId) ? "Выберите направление"
@@ -2305,7 +2380,7 @@ function paymentsView() {
   const bar = filtersHTML(fkeys, { ph: "Имя студента, телефон", extra: fsel("ptype", "Вид платежа", [["", "Все платежи"], ["salary", "С зарплаты"], ["plain", "За обучение"]])
     + (monthsHere.length ? fsel("pmonth", "Месяц", [["", "Все месяцы"], ...monthsHere.map(k => [k, monthName(k)])]) : "") });
   const tab = (k, l) => `<button data-act="paytab" data-v="${k}" class="${S.payTab === k ? "on" : ""}">${l}</button>`;
-  const open = all.filter(p => !p.paid && p.s.stage !== "lost"), od = open.filter(p => p.due < t), up = open.filter(p => p.due >= t), paidM = all.filter(p => p.paid && String(p.paid).slice(0, 7) === (f.pmonth || t.slice(0, 7)));
+  const open = all.filter(p => !p.paid && !isClosed(p.s.stage)), od = open.filter(p => p.due < t), up = open.filter(p => p.due >= t), paidM = all.filter(p => p.paid && String(p.paid).slice(0, 7) === (f.pmonth || t.slice(0, 7)));
   const amt = l => money(sum(l, p => nnum(p.amount)));
   const checked = all.filter(p => p.paid && p.expected != null), gapAll = sum(checked, payGap), short = checked.filter(p => payGap(p) < 0).length;
   const head = headHTML("Платежи студентов") + `<section class="kpis" id="pay-kpis">
@@ -2395,7 +2470,7 @@ function reportView() {
   <p class="hint" style="margin-bottom:16px">Ваша доля считается от чистой выручки направления: оплаты всех его студентов за месяц минус расходы.</p>
   <div class="panel table-wrap"><header><h2>Студенты из вашего трафика</h2></header><table>
     <thead><tr><th>Студент</th><th>Этап</th><th>Заявка</th><th class="num">Оплатил</th></tr></thead>
-    <tbody>${(r.rows || []).map(x => `<tr><td>${esc(x.name)}</td><td>${badge(x.stage)}</td><td class="muted">${fDate(x.date)}</td><td class="num">${money(x.paid)}</td></tr>`).join("") || `<tr><td colspan="4" class="empty">Заявок пока нет</td></tr>`}</tbody>
+    <tbody>${(r.rows || []).map(x => `<tr><td>${esc(x.name)}</td><td>${x.stageLabel ? `<span class="badge b-${esc(SGROUP[x.stage] || "sales")}">${esc(x.stageLabel)}</span>` : badge(x.stage)}</td><td class="muted">${fDate(x.date)}</td><td class="num">${money(x.paid)}</td></tr>`).join("") || `<tr><td colspan="4" class="empty">Заявок пока нет</td></tr>`}</tbody>
   </table></div>`;
 }
 
@@ -2477,34 +2552,173 @@ function trashPanel() {
       <span class="acts"><button class="btn small" data-act="trash-restore" data-id="${esc(x.id)}">Вернуть</button>${S.limited ? "" : `<button class="btn small ghost" data-act="trash-purge" data-id="${esc(x.id)}">Удалить навсегда</button>`}</span></li>`).join("")}</ul>
       <p class="hint pad">Удалённые студенты не участвуют в списках, расчётах и отчётах, но остаются в резервной копии, пока лежат в корзине.</p>`) : "";
 }
-function settingsView() {
-  const hasDemo = COLS.some(c => D()[c].some(x => x.demo)) || S.trash.some(x => x.demo);
-  // Ментор на сервере: только своя учётная запись и корзина своих студентов
-  if (S.limited) return headHTML("Настройки") + `<div class="cols2"><div class="stack">${accountPanel()}</div><div class="stack">${themePanel()}${trashPanel()}</div></div>`;
-  // Слева — люди и доступ, справа — источники заявок и обслуживание базы
-  return headHTML("Настройки") + `<div class="cols2"><div class="stack">
-  ${S.server ? accountPanel() : ""}
-  ${panel("Команда", "", (D().team.length ? `<ul class="rows">${D().team.map(m => `<li><span class="who"><strong>${esc(m.name)}</strong></span>${m.userId && m.userId === S.myId ? `<span class="tag ok">это вы</span>` : ""}${S.myId && m.userId !== S.myId && !S.server ? `<button class="btn small ghost" data-act="team-me" data-id="${esc(m.id)}">Это я</button>` : ""}<button class="btn small ghost" data-act="team-edit" data-id="${esc(m.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Добавьте себя и менторов</p>`) + `<p class="hint pad">${S.server ? "Чтобы ментор мог входить в CRM, добавьте его сюда, а затем выдайте доступ в разделе «Доступ»." : "Нажмите «Это я» у своего имени: в фильтрах появится «Мои студенты», а ваши заметки будут подписаны."}</p>`, `<button class="btn small" data-act="team-new">+ Ментор</button>`)}
-  ${S.server ? accessPanel() : panel("Доступ", "", `<ul class="rows">
+// ----- Настройки: группы слева, справа — выбранная группа. Под каждым блоком сказано, на что он влияет -----
+const SET_GROUPS = [
+  ["funnel", "Воронка и этапы", "Из каких этапов состоит путь студента, что спрашивать при переходе, когда человек «застрял», причины отказа и подсказки шагов."],
+  ["team", "Команда и партнёры", "Кто работает в CRM, что каждый видит и какие у школы партнёры."],
+  ["money", "Деньги", "Направления и доли сторон, оплата с зарплаты, текст напоминания о платеже и статьи расходов."],
+  ["meet", "Встречи и Telegram", "Уведомления в Telegram, напоминания студентам о встречах и готовые названия встреч."],
+  ["data", "Данные", "Резервная копия, корзина и пример данных."],
+  ["me", "Мой профиль", "Ваш пароль и оформление."],
+];
+// Ментору — только его профиль и корзина его студентов
+const setGroups = () => S.limited ? [SET_GROUPS.find(g => g[0] === "me"), ["data", "Корзина", "Студенты, которых вы удалили: их можно вернуть."]] : SET_GROUPS;
+const teamPanel = () => panel("Команда", "", (D().team.length ? `<ul class="rows">${D().team.map(m => `<li><span class="who"><strong>${esc(m.name)}</strong></span>${m.userId && m.userId === S.myId ? `<span class="tag ok">это вы</span>` : ""}${S.myId && m.userId !== S.myId && !S.server ? `<button class="btn small ghost" data-act="team-me" data-id="${esc(m.id)}">Это я</button>` : ""}<button class="btn small ghost" data-act="team-edit" data-id="${esc(m.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Добавьте себя и менторов</p>`) + `<p class="hint pad">${S.server ? "Чтобы ментор мог входить в CRM, добавьте его сюда, а затем выдайте доступ в разделе «Доступ»." : "Нажмите «Это я» у своего имени: в фильтрах появится «Мои студенты», а ваши заметки будут подписаны."}</p>`, `<button class="btn small" data-act="team-new">+ Ментор</button>`);
+const sharePanel = () => S.server ? accessPanel() : panel("Доступ", "", `<ul class="rows">
       <li><span><strong>Менторам:</strong> откройте «Поделиться» и пригласите их по email с правами редактора. Они смогут вносить изменения.</span></li>
       <li><span><strong>Блогеру:</strong> пригласите его по email с правами просмотра. Он увидит только опубликованный отчёт без контактов студентов.</span></li>
       <li><span class="warn-text">Не включайте доступ по публичной ссылке: пока он включён, приглашённые редакторы теряют право на изменения.</span></li>
-    </ul>`)}
-  </div><div class="stack">
-  ${directionsPanel()}
-  ${panel("Партнёры", "", D().partners.length ? `<ul class="rows">${D().partners.map(p => `<li><span class="who"><strong>${esc(p.name)}</strong><span>${p.promo ? "промокод " + esc(p.promo) : "без промокода"}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Партнёров нет</p>`, `<button class="btn small" data-act="partner-new">+ Партнёр</button>`)}
-  ${S.server ? tgPanel() + meetRemindPanel() : ""}
-  ${trashPanel()}
-  ${panel("Резервная копия", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, встречи, команда, партнёры и выплаты. ${S.server ? "Сервер каждую ночь сохраняет копию сам, но она лежит на том же сервере. Раз в неделю скачивайте файл к себе: из него база восстанавливается на любом сервере." : "Этот же файл загружается в версию для своего сервера при переезде."}</p>
+    </ul>`);
+const partnersPanel = () => panel("Партнёры", "", D().partners.length ? `<ul class="rows">${D().partners.map(p => `<li><span class="who"><strong>${esc(p.name)}</strong><span>${p.promo ? "промокод " + esc(p.promo) : "без промокода"}</span></span><button class="btn small ghost" data-act="partner-edit" data-id="${esc(p.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Партнёров нет</p>`, `<button class="btn small" data-act="partner-new">+ Партнёр</button>`);
+const backupPanel = () => panel("Резервная копия", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, встречи, команда, партнёры и выплаты. ${S.server ? "Сервер каждую ночь сохраняет копию сам, но она лежит на том же сервере. Раз в неделю скачивайте файл к себе: из него база восстанавливается на любом сервере." : "Этот же файл загружается в версию для своего сервера при переезде."}</p>
     <div class="actions"><button class="btn" data-act="backup">Скачать резервную копию</button>${S.server ? `<a class="btn" href="${esc(SRV.importUrl)}">Загрузить копию</a>` : ""}</div>
     <p class="hint" style="margin-top:8px">В файле есть контакты студентов. Храните его там, куда нет доступа посторонним.${S.server ? " Договоры и файлы платежей в скачанный файл не входят: они попадают в зашифрованную ночную копию, которую бот присылает администратору." : ""}</p>
-    ${S.server ? `<p class="hint" style="margin-top:8px">${S.me?.telegram?.backup ? (S.me.telegram.linked ? "Каждую ночь бот присылает вам в Telegram зашифрованную копию базы. Открыть её можно только паролем копии, он задан на сервере." : "Отправка зашифрованной копии в Telegram включена. Подключите уведомления в блоке «Учётная запись», чтобы получать её.") : "Копии вне сервера выключены. Чтобы бот каждую ночь присылал вам зашифрованную копию базы, задайте на сервере пароль копии BACKUP_PASSPHRASE."}</p>` : ""}</div>`)}
-  ${panel("Пример данных", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вымышленные студенты, потоки и партнёры с пометкой «пример», чтобы посмотреть, как всё работает. Ваши настоящие записи не затрагиваются.</p>
-    <div class="actions">${hasDemo ? `<button class="btn danger" data-act="demo-clear">Удалить примеры</button>` : `<button class="btn" data-act="demo-load">Загрузить пример</button>`}</div></div>`)}
-  ${themePanel()}
-  </div></div>`;
+    ${S.server ? `<p class="hint" style="margin-top:8px">${S.me?.telegram?.backup ? (S.me.telegram.linked ? "Каждую ночь бот присылает вам в Telegram зашифрованную копию базы. Открыть её можно только паролем копии, он задан на сервере." : "Отправка зашифрованной копии в Telegram включена. Подключите уведомления в блоке «Учётная запись», чтобы получать её.") : "Копии вне сервера выключены. Чтобы бот каждую ночь присылал вам зашифрованную копию базы, задайте на сервере пароль копии BACKUP_PASSPHRASE."}</p>` : ""}</div>`);
+const demoPanel = () => { const hasDemo = COLS.some(c => D()[c].some(x => x.demo)) || S.trash.some(x => x.demo); return panel("Пример данных", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вымышленные студенты, потоки и партнёры с пометкой «пример», чтобы посмотреть, как всё работает. Ваши настоящие записи не затрагиваются.</p>
+    <div class="actions">${hasDemo ? `<button class="btn danger" data-act="demo-clear">Удалить примеры</button>` : `<button class="btn" data-act="demo-load">Загрузить пример</button>`}</div></div>`); };
+// Запись общих настроек (config/main). Пишет только администратор: сервер проверяет права и состав этапов
+function saveConfig(patch, msg) {
+  return save(async () => {
+    await updDoc("config", "main", patch).catch(e => e && e.code === "not_found" ? setDoc("config", "main", { ...S.config, ...patch }) : Promise.reject(e));
+    S.config = { ...S.config, ...patch }; applyStages(S.config);
+  }, msg);
 }
-
+const linesOf = v => String(v || "").split("\n").map(x => x.trim()).filter(Boolean);
+// Список строк в настройках: показывается через запятую, меняется в окне по одной строке на пункт
+function listPanel(key, title, def, note) {
+  const list = textList(S.config[key], def), custom = Array.isArray(S.config[key]);
+  return panel(title, list.length || "", `<div class="pad" id="set-${esc(key)}">${list.length ? `<div class="chips">${list.map(x => `<span class="chip">${esc(x)}</span>`).join("")}</div>` : `<p class="empty">Список пуст: подсказок не будет</p>`}</div>`,
+    `<button class="btn small" data-act="set-list" data-k="${esc(key)}" data-t="${esc(title)}">Изменить</button>`, `${note}${custom ? "" : " Сейчас — список по умолчанию."}`);
+}
+function listForm(key, title, def) {
+  openModal({
+    title, values: { items: textList(S.config[key], def).join("\n") },
+    fields: [{ k: "items", label: "По одному на строке", type: "textarea", rows: 10, wide: true }],
+    link: { label: "Вернуть по умолчанию", go: () => saveConfig({ [key]: null }, "Возвращён список по умолчанию") },
+    onSubmit: v => saveConfig({ [key]: linesOf(v.items).map(x => x.slice(0, 120)).slice(0, 60) }, "Сохранено"),
+  });
+}
+// ----- Этапы воронки -----
+const ASKL = Object.fromEntries(STAGE_ASKS);
+const GROUPL = Object.fromEntries(STAGE_GROUPS);
+// Сколько людей на этапе, считая корзину: этап нельзя удалить, пока на нём кто-то есть
+const onStage = id => [...D().students, ...S.trash].filter(s => s.stage === id);
+function stagesPanel() {
+  const list = STAGE_LIST, path = list.filter(x => x.group !== "closed"), closed = list.filter(x => x.group === "closed");
+  const lost = [...D().students, ...S.trash].filter(s => !Object.hasOwn(SIDX, s.stage));
+  const row = (x, i, arr, movable) => {
+    const n = onStage(x.id).length, props = [x.ask ? ASKL[x.ask] : "", x.employed ? "считается трудоустроенным" : "", x.next ? `шаг «${x.next.text}»${x.next.days ? ` через ${days(x.next.days)}` : " в тот же день"}` : ""].filter(Boolean);
+    return `<li class="stage-row g-${esc(x.group)}" data-stage-id="${esc(x.id)}">
+      ${movable ? `<span class="stage-move"><button class="btn small ghost" data-act="stage-move" data-id="${esc(x.id)}" data-n="-1" aria-label="Выше: ${esc(x.label)}"${i ? "" : " disabled"}>↑</button><button class="btn small ghost" data-act="stage-move" data-id="${esc(x.id)}" data-n="1" aria-label="Ниже: ${esc(x.label)}"${i < arr.length - 1 ? "" : " disabled"}>↓</button></span>` : ""}
+      <span class="who wrap"><strong>${movable ? `${i + 1}. ` : ""}${esc(x.label)}</strong><span><span class="badge b-${esc(x.group)}">${esc(GROUPL[x.group])}</span>${props.length ? " " + esc(props.join(" · ")) : ""}${movable && i === arr.length - 1 ? " · путь пройден" : ""}${movable && i === 0 ? " · сюда попадают новые заявки" : ""}</span></span>
+      <span class="sub">${n ? `${n} ${plural(n, "человек", "человека", "человек")}` : "пусто"}</span>
+      <button class="btn small ghost" data-act="stage-edit" data-id="${esc(x.id)}">Изменить</button></li>`;
+  };
+  return panel("Этапы", list.length, `<ul class="rows" id="stage-list">
+      <li class="rows-h">Путь студента по порядку</li>${path.map((x, i, arr) => row(x, i, arr, true)).join("")}
+      <li class="rows-h">Закрытые этапы: отказ, выбыл</li>${closed.map(x => row(x, 0, closed, false)).join("") || `<li><span class="muted">Нет: перевести человека в отказ будет нельзя</span></li>`}
+      ${lost.length ? `<li class="warn-row"><span class="who wrap"><strong class="warn-text">На удалённых этапах: ${lost.length}</strong><span>Их этап удалили на другом устройстве. Переведите их на существующий этап.</span></span><button class="btn small" data-act="stage-orphans">Перевести</button></li>` : ""}
+    </ul>`, `<button class="btn small" data-act="stage-new">+ Этап</button>${Array.isArray(S.config.stages) ? `<button class="btn small ghost" data-act="stage-reset">По умолчанию</button>` : ""}`,
+    "Порядок этапов — путь студента: «Дальше» в карточке ведёт на следующий этап, по нему же считаются воронки. Первый этап получает новые заявки, последний означает, что путь пройден. Группа задаёт доску (Продажи, Обучение, Трудоустройство): ученики этапов «Обучение» получают напоминания о занятиях потока. Закрытые этапы — отказ: переход на них спрашивает причину.");
+}
+function stageForm(x) {
+  const n = x ? onStage(x.id).length : 0;
+  openModal({
+    title: x ? `Этап «${x.label}»` : "Новый этап", wide: true, submit: x ? "Сохранить" : "Добавить",
+    values: x ? { label: x.label, group: x.group, ask: x.ask, employed: x.employed, ntext: x.next?.text || "", ndays: x.next?.days ?? 1 } : { group: "sales", ask: "", employed: false, ntext: "", ndays: 1 },
+    fields: [{ k: "label", label: "Название", req: true, wide: true, ph: "Пробное занятие" },
+      { k: "group", label: "Группа", type: "select", options: STAGE_GROUPS, help: "Определяет доску и цвет. «Закрыт» — отказ: переход спрашивает причину" },
+      { k: "ask", label: "При переходе на этап спросить", type: "select", options: STAGE_ASKS, help: "Форма откроется по кнопке «Дальше» и при перетаскивании на доске" },
+      { k: "employed", label: "Считать трудоустроенным (для аналитики и отчётов партнёров)", type: "checkbox", wide: true },
+      { section: "Следующий шаг по умолчанию" }, { k: "ntext", label: "Что сделать", wide: true, list: stepHints(), ph: "Пусто — шаг не подставляется" }, { k: "ndays", label: "Через сколько дней", type: "number" }],
+    onDelete: x ? () => !STAGE_LIST.some(y => y.id !== x.id && y.group !== "closed") ? (toast("Это последний открытый этап пути: удалить его нельзя"), false) : n ? (stageDeleteForm(x), false) : saveStages(STAGE_LIST.filter(y => y.id !== x.id), `Этап «${x.label}» удалён`) : null,
+    del: n ? `Удалить (на этапе ${n})` : "Удалить",
+    onSubmit: v => {
+      const label = trimWs(v.label || ""); if (!label) return "Укажите название";
+      if (STAGE_LIST.some(y => y.label.toLowerCase() === label.toLowerCase() && y.id !== x?.id)) return "Этап с таким названием уже есть";
+      const days = Math.round(+v.ndays || 0); if (days < 0 || days > 365) return "Через сколько дней: от 0 до 365";
+      const item = { id: x?.id || newStageId(), label: cut(label, 60), group: v.group, ask: v.group === "closed" ? "" : v.ask || "", employed: v.group !== "closed" && !!v.employed,
+        next: v.group !== "closed" && trimWs(v.ntext || "") ? { text: cut(trimWs(v.ntext), 120), days } : null };
+      const list = x ? STAGE_LIST.map(y => y.id === x.id ? item : y) : [...STAGE_LIST, item];
+      if (!list.some(y => y.group !== "closed")) return "В пути должен остаться хотя бы один открытый этап";
+      if (x && x.group !== "closed" && item.group === "closed" && n) return `На этапе ${n} ${plural(n, "человек", "человека", "человек")}: сначала переведите их, потом делайте этап закрытым`;
+      return saveStages(list, x ? "Этап сохранён" : `Этап «${item.label}» добавлен`);
+    },
+  });
+}
+const newStageId = () => "st_" + newId("x").replace(/[^A-Za-z0-9]/g, "").slice(0, 12);
+const saveStages = (list, msg) => saveConfig({ stages: list.map(x => ({ id: x.id, label: x.label, group: x.group, ask: x.ask, employed: x.employed, next: x.next })) }, msg);
+function moveStageRow(id, n) {
+  const path = STAGE_LIST.filter(x => x.group !== "closed"), i = path.findIndex(x => x.id === id), j = i + n;
+  if (i < 0 || j < 0 || j >= path.length) return;
+  [path[i], path[j]] = [path[j], path[i]];
+  return saveStages([...path, ...STAGE_LIST.filter(x => x.group === "closed")], "Порядок этапов изменён");
+}
+// Перевод людей с этапа на другой: при удалении этапа и для тех, чей этап удалили
+async function moveAll(people, to) {
+  for (const s of people) {
+    const extra = isClosed(to) ? { next: null } : {};   // на закрытом этапе следующего шага нет
+    if (S.trash.some(x => x.id === s.id)) await updDoc("students", s.id, stageChange(s, to, extra));
+    else await patchStudent(s.id, cur => cur.stage === to ? null : stageChange(cur, to, extra));
+  }
+}
+function stageDeleteForm(x) {
+  const people = onStage(x.id), rest = STAGE_LIST.filter(y => y.id !== x.id);
+  if (!rest.some(y => y.group !== "closed")) return toast("Это последний открытый этап пути: удалить его нельзя");
+  openModal({
+    title: `Удалить этап «${x.label}»`, submit: "Перевести и удалить", values: { to: rest.find(y => y.group === x.group)?.id || rest[0]?.id },
+    fields: [{ k: "to", label: `Куда перевести ${people.length} ${plural(people.length, "человека", "человек", "человек")}`, type: "select", wide: true, options: rest.map(y => [y.id, y.label]) }],
+    extra: `<p class="hint">В истории этапов у каждого появится запись о переводе. Удалённый этап останется в старых записях истории под своим прежним идентификатором.</p>`,
+    onSubmit: v => rest.some(y => y.id === v.to) ? save(async () => { await moveAll(people, v.to); }).then(ok => ok && saveStages(rest, `Этап «${x.label}» удалён`)) : "Выберите этап",
+  });
+}
+function stageOrphansForm() {
+  const people = [...D().students, ...S.trash].filter(s => !Object.hasOwn(SIDX, s.stage));
+  openModal({
+    title: "Перевести с удалённых этапов", submit: "Перевести", values: { to: FIRST() },
+    fields: [{ k: "to", label: `Куда перевести ${people.length} ${plural(people.length, "человека", "человек", "человек")}`, type: "select", wide: true, options: STAGES.map(y => [y[0], y[1]]) }],
+    onSubmit: v => save(() => moveAll(people, v.to), "Переведены"),
+  });
+}
+function funnelRulesPanel() {
+  return panel("Правила воронки", "", `<ul class="rows" id="funnel-rules">
+      <li><span class="who wrap"><strong>«Застрял» через ${days(stuckDays())} на одном этапе</strong><span>Такие люди собраны на экране «Аналитика» и отмечаются в списке студентов</span></span><button class="btn small ghost" data-act="set-stuck">Изменить</button></li></ul>`)
+    + listPanel("lostReasons", "Причины отказа", DEFAULT_REASONS, "Варианты в окне перевода в отказ. Одинаковые причины складываются в аналитике.")
+    + listPanel("stepHints", "Подсказки для следующего шага", STEP_HINTS, "Варианты в поле «Что сделать» у следующего шага.");
+}
+function salaryPanel() {
+  const d = salaryDefaults();
+  return panel("Оплата с зарплаты", "", `<ul class="rows"><li><span class="who wrap"><strong>${d.percent ? `${esc(pctText(d.percent))} от зарплаты` : "Процент не задан"}${d.months ? `, ${d.months} ${plural(d.months, "месяц", "месяца", "месяцев")}` : ""}</strong><span>Подставляется в форму «+ С зарплаты» и при переходе на этап с оффером</span></span><button class="btn small ghost" data-act="set-salary">Изменить</button></li></ul>`);
+}
+function payRemindPanel() {
+  const t = payRemind(), custom = isObj(S.config.payRemind);
+  return panel("Напоминание о платеже", "", `<div class="pad" id="pay-remind-set"><p class="sub">До срока</p><p class="pre">${esc(t.soon)}</p><p class="sub" style="margin-top:8px">Срок прошёл</p><p class="pre">${esc(t.late)}</p></div>`,
+    `<button class="btn small" data-act="set-payremind">Изменить</button>`, `Текст кнопки «Напомнить» у платежа: он копируется или открывается в переписке Telegram.${custom ? "" : " Сейчас — текст по умолчанию."}`);
+}
+function payRemindForm() {
+  const t = payRemind();
+  openModal({
+    title: "Напоминание о платеже", wide: true, values: t,
+    fields: [{ k: "soon", label: "До срока", type: "textarea", rows: 3, wide: true }, { k: "late", label: "Срок прошёл", type: "textarea", rows: 3, wide: true }],
+    extra: `<p class="hint">Можно писать {приветствие} («Анна, добрый день»), {имя}, {сумма} и {срок} — подставятся данные платежа.</p>`,
+    link: { label: "Вернуть по умолчанию", go: () => saveConfig({ payRemind: null }, "Возвращён текст по умолчанию") },
+    onSubmit: v => saveConfig({ payRemind: { soon: String(v.soon || "").slice(0, 1000), late: String(v.late || "").slice(0, 1000) } }, "Сохранено"),
+  });
+}
+function settingsView() {
+  const groups = setGroups(), cur = groups.find(g => g[0] === S.setTab) || groups[0], k = cur[0];
+  const body = S.limited ? { me: () => accountPanel() + themePanel(), data: () => trashPanel() }[k]() : {
+    funnel: () => stagesPanel() + funnelRulesPanel(),
+    team: () => teamPanel() + sharePanel() + partnersPanel(),
+    money: () => directionsPanel() + salaryPanel() + payRemindPanel() + listPanel("expenseHints", "Статьи расходов", EXPENSE_HINTS, "Подсказки в поле «На что» при добавлении расхода в разделе «Выплаты»."),
+    meet: () => (S.server ? tgPanel() + meetRemindPanel() : "") + listPanel("meetHints", "Готовые названия встреч", MEET_HINTS, "Подсказки в поле «Название» новой встречи."),
+    data: () => backupPanel() + trashPanel() + demoPanel(),
+    me: () => (S.server ? accountPanel() : "") + themePanel(),
+  }[k]();
+  return headHTML("Настройки") + `<div class="settings">
+    <nav class="set-nav" id="set-nav" aria-label="Группы настроек">${groups.map(([g, l]) => `<button data-act="settab" data-v="${g}" class="${g === k ? "on" : ""}" aria-current="${g === k ? "page" : "false"}">${l}</button>`).join("")}</nav>
+    <div class="set-body" id="set-${k}"><p class="set-about">${cur[2]}</p><div class="stack">${body}</div></div></div>`;
+}
 // ---------- Имена людей ----------
 let namesBusy = false;
 async function resolveNames() {
@@ -2589,11 +2803,20 @@ async function stepDone(id) {
   if (isActive(s)) stepForm(s, true);
 }
 // Готовый текст напоминания об оплате: копируется в буфер, остаётся вставить в Telegram
+// Готовые подписи из настроек (раздел «Настройки»): если их не меняли, работают списки по умолчанию
+const stepHints = () => textList(S.config.stepHints, STEP_HINTS);
+const meetHints = () => textList(S.config.meetHints, MEET_HINTS);
+const expenseHints = () => textList(S.config.expenseHints, EXPENSE_HINTS);
+// Текст напоминания о платеже. {приветствие} — «Анна, добрый день» или «Добрый день», если имени нет
+const PAY_REMIND = { soon: "{приветствие}! Напоминаю про платёж за обучение: {сумма}, срок {срок}. Если уже оплатили, дайте знать, я отмечу.",
+  late: "{приветствие}! Напоминаю про платёж за обучение: {сумма}, срок был {срок}. Подскажите, пожалуйста, когда получится оплатить?" };
+const payRemind = () => { const c = isObj(S.config.payRemind) ? S.config.payRemind : {}; const t = k => typeof c[k] === "string" && c[k].trim() ? c[k].slice(0, 1000) : PAY_REMIND[k]; return { soon: t("soon"), late: t("late") }; };
+const fillText = (tpl, vals) => tpl.replace(/\{([а-яё]+)\}/gi, (m, k) => Object.hasOwn(vals, k.toLowerCase()) ? vals[k.toLowerCase()] : m);
 function remindText(s, p) {
   const parts = String(s.name || "").split(/\s+/).filter(Boolean), first = parts[1] || parts[0] || "";
   if (isPending(p)) return `${first ? first + ", д" : "Д"}обрый день! Подошёл день расчёта за обучение (${fDate(p.due)}): ${pctText(p.percent)} от дохода за месяц. Подскажите, пожалуйста, сколько вы заработали, — посчитаю сумму платежа.`;
-  const late = p.due < today();
-  return `${first ? first + ", д" : "Д"}обрый день! Напоминаю про платёж за обучение: ${money(p.amount).replace(/[\u00a0\u202f]/g, " ")}, срок ${late ? "был " : ""}${fDate(p.due)}. ${late ? "Подскажите, пожалуйста, когда получится оплатить?" : "Если уже оплатили, дайте знать, я отмечу."}`;
+  const late = p.due < today(), tpl = payRemind()[late ? "late" : "soon"];
+  return fillText(tpl, { "приветствие": first ? `${first}, добрый день` : "Добрый день", "имя": first, "сумма": money(p.amount).replace(/[\u00a0\u202f]/g, " "), "срок": fDate(p.due) });
 }
 // Кнопка «Напомнить». Если у студента указан ник в Telegram, она открывает переписку с ним, и текст уже стоит в поле сообщения;
 // иначе текст копируется. В обоих случаях он остаётся в буфере обмена.
@@ -2708,7 +2931,9 @@ function findDuplicate(c) {
   return [...D().students, ...S.trash].find(s => (c.phone && digits(c.phone).length >= 6 && digits(s.phone) === digits(c.phone)) || (c.email && low(s.email) === low(c.email)) || (c.telegram && low(s.telegram) === low(c.telegram)));
 }
 const shareFor = partnerId => partnerId ? (partnerById(partnerId)?.share ?? 0) : 0;
-function leadDoc(name, c, partnerId, stage = "new") {
+// Шаг, который получает человек, попавший на этап сразу (новая заявка, добавленный студент): шаг этапа из настроек
+const stageStep = st => { const n = stageById(st)?.next; return n ? { text: n.text, date: daysAhead(n.days) } : null; };
+function leadDoc(name, c, partnerId, stage = FIRST()) {
   const at = new Date().toISOString();
   return {
     name, phone: c.phone || "", telegram: c.telegram || "", email: c.email || "", city: "", consent: false,
@@ -2716,7 +2941,7 @@ function leadDoc(name, c, partnerId, stage = "new") {
     cohortId: nextCohortId() || null, mentorId: myTeam()?.id || null, price: null, lostReason: "",
     partnerId, partnerShare: shareFor(partnerId), promo: partnerId ? (partnerById(partnerId)?.promo || "") : "", utmSource: "", utmCampaign: "",
     jobCompany: "", jobPosition: "", jobSalary: null, offerDate: null, comment: "",
-    next: stage === "new" ? { text: "Связаться", date: today() } : null, payments: [], apps: [], notes: [],
+    next: stageStep(stage), payments: [], apps: [], notes: [],
   };
 }
 // Массовый ввод: строки из таблицы или CSV. В каждой строке ищем имя, контакты и источник.
@@ -2793,10 +3018,10 @@ function bulkForm(kind) {
   const run = (fn, msg) => save(async () => { for (const id of ids) await patchStudent(id, fn); }, `${msg}: ${n}`).then(ok => { if (ok) { S.sel.clear(); render(); } return ok; });
   const cfg = {
     step: { title: `Шаг для выбранных: ${n}`, values: { date: today() }, submit: "Назначить",
-      fields: [{ k: "text", label: "Что сделать", req: true, wide: true, list: STEP_HINTS }, { k: "date", label: "Когда", type: "date", req: true, wide: true, quick: true }],
+      fields: [{ k: "text", label: "Что сделать", req: true, wide: true, list: stepHints() }, { k: "date", label: "Когда", type: "date", req: true, wide: true, quick: true }],
       onSubmit: v => run(() => ({ next: { text: v.text, date: v.date } }), "Шаг назначен") },
-    stage: { title: `Этап для выбранных: ${n}`, values: { stage: "studying" }, submit: "Перевести",
-      fields: [{ k: "stage", label: "Новый этап", type: "select", wide: true, options: STAGES.filter(x => x[0] !== "lost").map(x => [x[0], x[1]]), help: "Отказ оформляется по одному, с причиной" }],
+    stage: { title: `Этап для выбранных: ${n}`, values: { stage: PATH.find(k => SGROUP[k] === "study") || PATH[0] }, submit: "Перевести",
+      fields: [{ k: "stage", label: "Новый этап", type: "select", wide: true, options: STAGES.filter(x => x[2] !== "closed").map(x => [x[0], x[1]]), help: "Отказ оформляется по одному, с причиной" }],
       onSubmit: v => run(cur => cur.stage === v.stage ? null : stageChange(cur, v.stage), `Этап «${SLABEL[v.stage]}»`) },
     mentor: { title: `Ментор для выбранных: ${n}`, fields: [{ k: "mentorId", label: "Ментор", type: "select", wide: true, options: teamOpts() }],
       onSubmit: v => run(() => ({ mentorId: v.mentorId || null }), "Ментор назначен") },
@@ -2805,9 +3030,11 @@ function bulkForm(kind) {
   }[kind];
   if (cfg) openModal(cfg);
 }
-function quickForm(stage = "new", cohortId = "") {
+function quickForm(stage = FIRST(), cohortId = "") {
+  if (!Object.hasOwn(SIDX, stage) || isClosed(stage)) stage = FIRST();
+  const step = stageStep(stage);
   openModal({
-    title: stage === "new" ? "Новая заявка" : `Новый студент: ${SLABEL[stage]}`, submit: "Добавить", values: { partnerId: "" },
+    title: stage === FIRST() ? "Новая заявка" : `Новый студент: ${SLABEL[stage]}`, submit: "Добавить", values: { partnerId: "" },
     fields: [{ k: "name", label: "Имя", req: true, ph: "Фамилия Имя", wide: true },
       { k: "contact", label: "Контакт", ph: "@telegram, телефон или email", wide: true },
       { k: "partnerId", label: "Источник", type: "select", options: partnerOpts("Без партнёра"), wide: true }],
@@ -2816,7 +3043,7 @@ function quickForm(stage = "new", cohortId = "") {
       const c = parseContact(v.contact), dup = findDuplicate(c);
       if (dup) return dup.deletedAt ? `Этот человек лежит в корзине: ${dup.name}. Верните его в настройках или добавьте заново через «Все поля».` : `Уже есть в базе: ${dup.name} (${SLABEL[dup.stage]}). Если это другой человек, добавьте его через «Все поля».`;
       const doc = leadDoc(v.name, c, v.partnerId || null, stage); if (cohortId && D().cohorts.some(x => x.id === cohortId)) doc.cohortId = cohortId; // «+» в колонке потока — человек сразу в этом потоке
-      return save(() => setDoc("students", newId("students"), doc), stage === "new" ? "Заявка добавлена, шаг «Связаться» на сегодня" : "Студент добавлен");
+      return save(() => setDoc("students", newId("students"), doc), step ? `${stage === FIRST() ? "Заявка добавлена" : "Студент добавлен"}, шаг «${step.text}» на ${step.date === today() ? "сегодня" : fDate(step.date)}` : stage === FIRST() ? "Заявка добавлена" : "Студент добавлен");
     },
   });
 }
@@ -2836,14 +3063,14 @@ function stepForm(s, after = false) {
     title: after ? `Что дальше: ${s.name}` : cur ? "Следующий шаг" : `Следующий шаг: ${s.name}`,
     submit: "Назначить", cancel: after ? "Без шага" : "Отмена", del: "Убрать шаг",
     values: cur ? { text: cur.text, date: cur.date } : { date: today() },
-    fields: [{ k: "text", label: "Что сделать", req: true, wide: true, ph: "Написать про оплату", list: STEP_HINTS },
+    fields: [{ k: "text", label: "Что сделать", req: true, wide: true, ph: "Написать про оплату", list: stepHints() },
       { k: "date", label: "Когда", type: "date", req: true, wide: true, quick: true }],
     onDelete: cur ? () => save(() => patchStudent(s.id, () => ({ next: null })), "Шаг убран") : null,
     onSubmit: v => save(() => patchStudent(s.id, () => ({ next: { text: v.text, date: v.date } })), `Шаг назначен на ${dueLabel(v.date)}`),
   });
 }
 function studentForm(s, prefill = {}) {
-  const vals = s ? { ...s } : { stage: "new", cohortId: nextCohortId(), mentorId: myTeam()?.id || "", consent: false, ...prefill };
+  const vals = s ? { ...s } : { stage: FIRST(), cohortId: nextCohortId(), mentorId: myTeam()?.id || "", consent: false, ...prefill };
   openModal({
     title: s ? "Редактирование" : "Новый студент", wide: true, values: vals,
     fields: [
@@ -2896,7 +3123,7 @@ async function saveStudent(s, v, orig = {}) {
   if (!s || s.partnerId !== partnerId) doc.partnerShare = shareFor(partnerId);
   if (!s) {
     const id = newId("students"), at = new Date().toISOString();
-    const ok = await save(() => setDoc("students", id, { ...doc, stage: v.stage, stageAt: at, createdAt: at, history: [{ from: null, to: v.stage, at, by: S.myId }], next: v.stage === "new" ? { text: "Связаться", date: today() } : null, payments: [], apps: [], notes: [] }), "Студент добавлен");
+    const ok = await save(() => setDoc("students", id, { ...doc, stage: v.stage, stageAt: at, createdAt: at, history: [{ from: null, to: v.stage, at, by: S.myId }], next: stageStep(v.stage), payments: [], apps: [], notes: [] }), "Студент добавлен");
     if (ok) { S.openId = id; render(); }
     return ok;
   }
@@ -2987,7 +3214,7 @@ function meetingForm(m, prefill = {}) {
   const students = sortBy(D().students.filter(s => isActive(s) || s.id === vals.studentId), s => String(s.name || "").toLowerCase());
   openModal({
     title: m ? "Встреча" : "Новая встреча", wide: true, values: vals, submit: m ? "Сохранить" : "Добавить",
-    fields: [{ k: "title", label: "Название", req: true, wide: true, ph: "Разбор домашки", list: MEET_HINTS },
+    fields: [{ k: "title", label: "Название", req: true, wide: true, ph: "Разбор домашки", list: meetHints() },
       { k: "date", label: "Дата", type: "date", req: true, quick: true }, { k: "time", label: "Время", type: "time", help: "Пусто — на весь день" },
       { k: "kind", label: "Тип", type: "select", options: MEET_KINDS }, { k: "duration", label: "Длительность, мин", type: "number" },
       { k: "studentId", label: "Студент", type: "select", options: [["", "—"], ...students.map(s => [s.id, s.name])] },
@@ -3059,18 +3286,24 @@ function appForm(s, a) {
         if (v.status === "accepted") {
           Object.assign(patch, { jobCompany: v.company, jobPosition: v.position || cur.jobPosition || "", offerDate: cur.offerDate || today() });
           if (v.salary) patch.jobSalary = v.salary;
-          if (SIDX[cur.stage] < SIDX.offer || cur.stage === "lost") Object.assign(patch, stageChange(cur, "offer"));
+          const target = offerStage();   // принятый оффер переводит на этап оффера, если человек ещё не дальше
+          if (target && (isClosed(cur.stage) || !Object.hasOwn(PIDX, cur.stage) || PIDX[cur.stage] < PIDX[target])) Object.assign(patch, stageChange(cur, target));
         }
         return patch;
       }), v.status === "accepted" ? "Поздравляем с оффером!" : "Сохранено");
     },
   });
 }
-function lostForm(s) {
+// Перевод на закрытый этап («Отказ / выбыл» и свои закрытые этапы) спрашивает причину. Варианты причин — в настройках воронки
+const DEFAULT_REASONS = ["Дорого", "Не тянет по времени", "Передумал", "Не выходит на связь", "Выбрал другую школу"];
+const lostReasons = () => textList(S.config.lostReasons, DEFAULT_REASONS);
+function lostForm(s, to = CLOSED()[0]) {
+  if (!to) return;
+  const label = SLABEL[to];
   openModal({
-    title: `Отказ: ${s.name}`, values: { reason: s.lostReason || "" }, submit: "Перевести в «Отказ»",
-    fields: [{ k: "reason", label: "Причина", ph: "Дорого", wide: true, list: ["Дорого", "Не тянет по времени", "Передумал", "Не выходит на связь", "Выбрал другую школу"], help: "Одинаковые причины складываются в аналитике" }],
-    onSubmit: v => stu(s.id)?.stage === "lost" ? save(() => patchStudent(s.id, () => ({ lostReason: v.reason })), "Сохранено") : moveStage(s.id, "lost", { lostReason: v.reason, next: null }),
+    title: `${label}: ${s.name}`, values: { reason: s.lostReason || "" }, submit: `Перевести в «${label}»`,
+    fields: [{ k: "reason", label: "Причина", ph: lostReasons()[0] || "", wide: true, list: lostReasons(), help: "Одинаковые причины складываются в аналитике" }],
+    onSubmit: v => stu(s.id)?.stage === to ? save(() => patchStudent(s.id, () => ({ lostReason: v.reason })), "Сохранено") : moveStage(s.id, to, { lostReason: v.reason, next: null }),
   });
 }
 function cohortForm(c, { board = false } = {}) {
@@ -3245,7 +3478,7 @@ async function exportCsv() {
   // Значения, которые Excel принял бы за формулу, экранируем апострофом
   const q = v => { let s = String(v ?? ""); if (/^[=@\t\r]/.test(s) || (/^[+\-]/.test(s) && !/^[+\-]?[\d\s()\-.,]+$/.test(s))) s = "'" + s; return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const head = ["ФИО", "Телефон", "Telegram", "Email", "Город", "Этап", "Следующий шаг", "Дата шага", "Поток", "Ментор", "Партнёр", "Стоимость", "Оплачено", "Остаток", "Компания", "Зарплата", "Дата оффера", "Заявка"];
-  const rows = sortBy(filtered(), s => s.createdAt || "").map(s => [s.name, s.phone, s.telegram, s.email, s.city, SLABEL[s.stage], hasStep(s) ? s.next.text : "", hasStep(s) ? fDate(s.next.date) : "", cohortName(s.cohortId), teamName(s.mentorId), partnerById(s.partnerId)?.name, s.price, paidSum(s), debt(s), s.jobCompany, s.jobSalary, s.offerDate ? fDate(s.offerDate) : "", fDate(isoDay(s.createdAt))]);
+  const rows = sortBy(filtered(), s => s.createdAt || "").map(s => [s.name, s.phone, s.telegram, s.email, s.city, stageLabel(s.stage), hasStep(s) ? s.next.text : "", hasStep(s) ? fDate(s.next.date) : "", cohortName(s.cohortId), teamName(s.mentorId), partnerById(s.partnerId)?.name, s.price, paidSum(s), debt(s), s.jobCompany, s.jobSalary, s.offerDate ? fDate(s.offerDate) : "", fDate(isoDay(s.createdAt))]);
   const csv = "﻿" + [head, ...rows].map(r => r.map(q).join(";")).join("\r\n");
   try { await dl.save({ filename: `студенты-${today()}.csv`, data: csv }); toast("Файл сохранён"); }
   catch (e) { if (e?.code !== "declined") toast("Не удалось выгрузить файл"); }
@@ -3293,17 +3526,19 @@ async function loadDemo() {
   const L = ["Смирнов", "Кузнецов", "Попов", "Васильев", "Петров", "Соколов", "Михайлов", "Новиков", "Фёдоров", "Морозов", "Волков", "Лебедев", "Семёнов", "Егоров", "Павлов"];
   const CO = ["Первый Бит", "Рарус", "ИнфоСофт", "Софт-Сервис", "Интерсофт", "Компания «Сфера»"];
   const STEP = { sales: ["Связаться", "Созвон", "Написать про оплату", "Отправить программу курса"], study: ["Проверить домашку", "Спросить, как дела", "Напомнить про итоговый проект"], job: ["Ревью резюме", "Узнать итог собеседования", "Подобрать вакансии"] };
+  const DEFS = DEFAULT_STAGES.map(x => [x.id, x.label, x.group]);
+  const demoStage = id => Object.hasOwn(SIDX, id) ? id : (() => { const g = DEFAULT_STAGES.find(x => x.id === id)?.group; return g === "closed" ? CLOSED()[0] || null : PATH.find(k => SGROUP[k] === g) || FIRST(); })();
   const weights = [6, 4, 3, 3, 7, 3, 5, 3, 3, 4], wsum = weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < 30; i++) {
     const first = pick(F), last = pick(L) + (fem.has(first) ? "а" : "");
     let x = r() * wsum, si = 0; while (x > weights[si]) { x -= weights[si]; si++; }
-    const stage = STAGES[si][0], lost = stage === "lost", top = lost ? int(0, 5) : si;
+    const stage = DEFS[si][0], lost = stage === "lost", top = lost ? int(0, 5) : si;
     const cohort = top >= 6 ? c1 : top >= 4 ? c2 : c3, price = top >= 3 ? (cohort === c1 ? 90000 : cohort === c2 ? 100000 : 110000) : null;
     const src = r() < .6 ? p1 : r() < .75 ? p2 : null;
     const ago = top >= 4 ? int(20, 170) : int(1, 25);
     let tday = ago; const hist = [{ from: null, to: "new", at: tAgo(tday), by: null }];
-    for (let k = 1; k <= top; k++) { tday = Math.max(0, tday - int(1, 12)); hist.push({ from: STAGES[k - 1][0], to: STAGES[k][0], at: tAgo(tday), by: null }); }
-    if (lost) { tday = Math.max(0, tday - 3); hist.push({ from: STAGES[top][0], to: "lost", at: tAgo(tday), by: null }); }
+    for (let k = 1; k <= top; k++) { tday = Math.max(0, tday - int(1, 12)); hist.push({ from: DEFS[k - 1][0], to: DEFS[k][0], at: tAgo(tday), by: null }); }
+    if (lost) { tday = Math.max(0, tday - 3); hist.push({ from: DEFS[top][0], to: "lost", at: tAgo(tday), by: null }); }
     const payments = [];
     if (top >= 4 && price) {
       const part = Math.floor(price / 3);
@@ -3311,26 +3546,29 @@ async function loadDemo() {
     }
     const apps = [];
     const empl = !lost && (stage === "offer" || stage === "probation_passed");
-    if (!lost && si >= SIDX.job_search) {
+    if (!lost && si >= 6) {
       for (let k = 0, n = int(2, 5); k < n; k++) apps.push({ id: newId("x"), company: pick(CO), position: "Аналитик 1С", status: pick(["applied", "hr", "test", "interview", "rejected"]), salary: null, date: dAgo(int(2, 40)), interview: r() < .25 ? `${daysAhead(int(0, 6))}T${pad(int(10, 18))}:00` : "", url: "", notes: "" });
     }
     const salary = empl ? pick([70000, 80000, 90000, 100000, 120000]) : null, company = empl ? pick(CO) : "";
     if (empl) apps.push({ id: newId("x"), company, position: "Аналитик 1С", status: "accepted", salary, date: dAgo(Math.max(tday, 1)), interview: "", url: "", notes: "" });
     const notes = r() < .5 ? [{ id: newId("x"), text: pick(["Созвонились, мотивация высокая, хочет перейти из бухгалтерии.", "Сдал ДЗ по модулю 3, есть замечания по описанию бизнес-процесса.", "Пропустил два занятия, написать в понедельник.", "Резюме отправлено на ревью."]), at: tAgo(Math.max(tday - 1, 0)), by: null }] : [];
     const active = !lost && stage !== "probation_passed";
-    const next = active && r() < .75 ? { text: pick(STEP[STAGES[si][2]]), date: daysAhead(int(-2, 6)) } : null;
+    const next = active && r() < .75 ? { text: pick(STEP[DEFS[si][2]]), date: daysAhead(int(-2, 6)) } : null;
     const doneN = top >= 6 ? 8 : top === 5 ? 7 : top === 4 ? int(1, 6) : 0, progress = {};
     for (let k = 0; k < doneN; k++) progress["m" + (k + 1)] = dAgo(Math.max(1, ago - 10 - k * 9));
     const p = src === p1 ? { id: p1, share: 40, promo: "BLOG1C", utm: "youtube" } : src === p2 ? { id: p2, share: 25, promo: "VKAT", utm: "telegram" } : null;
+    // Пример построен на этапах по умолчанию; если состав этапов изменён, этапы переводятся на ближайшие из настроек
+    const mapped = hist.map(h => ({ ...h, from: h.from && demoStage(h.from), to: demoStage(h.to) })).filter(h => h.to && h.from !== h.to);
+    if (!mapped.length || !demoStage(stage)) continue;
     W.push(["students", newId("students"), {
       name: `${last} ${first}`, phone: `+7 9${int(10, 99)} ${int(100, 999)}-${int(10, 99)}-${int(10, 99)}`, telegram: `@student${100 + i}`, email: "", city: pick(["Москва", "Казань", "Новосибирск", "Алматы", "Екатеринбург", "Минск"]), consent: true,
-      stage, stageAt: hist[hist.length - 1].at, createdAt: hist[0].at, history: hist, lostReason: lost ? pick(["Дорого", "Не тянет по времени", "Передумал", "Не выходит на связь"]) : "",
+      stage: demoStage(stage), stageAt: hist[hist.length - 1].at, createdAt: hist[0].at, history: mapped, lostReason: lost ? pick(["Дорого", "Не тянет по времени", "Передумал", "Не выходит на связь"]) : "",
       cohortId: cohort, mentorId: r() < .6 ? m1 : m2, price, partnerId: p?.id || null, partnerShare: p?.share || 0, promo: p?.promo || "", utmSource: p?.utm || "organic", utmCampaign: "",
       jobCompany: company, jobPosition: empl ? "Аналитик 1С" : "", jobSalary: salary, offerDate: empl ? dAgo(Math.max(tday, 1)) : null, comment: "",
       next, progress, payments, apps, notes, demo: true,
     }]);
   }
-  const live = W.filter(w => w[0] === "students" && !["lost", "probation_passed"].includes(w[2].stage));
+  const live = W.filter(w => w[0] === "students" && isActive(w[2]));
   const meet = (off, time, title, kind, status, extra = {}) => W.push(["meetings", newId("meetings"), { title, kind, date: daysAhead(off), time, duration: kind === "lesson" ? 90 : 45, status, studentId: null, cohortId: null, mentorId: m1, link: "", notes: "", createdAt: tAgo(5), by: null, demo: true, ...extra }]);
   [-7, 0, 7, 14].forEach(off => meet(off, "19:00", "Занятие потока", "lesson", off < 0 ? "done" : "planned", { cohortId: c2 }));
   [[0, "11:00", "Созвон-знакомство", "call", "planned"], [1, "15:30", "Разбор домашки", "call", "planned"], [3, "12:00", "Карьерная консультация", "consult", "planned"],
@@ -3407,7 +3645,7 @@ const ACT = {
   open: d => openStudent(d.id),
   "d-close": () => { if (S.openId) S.openId = null; else S.openDay = null; render(); },
   pipe: d => { S.pipe = d.v; lsSet("crm-menti-pipe", d.v); render(); },
-  quick: d => quickForm(d.st || "new", d.cohort || ""),
+  quick: d => quickForm(d.st || FIRST(), d.cohort || ""),
   import: () => importForm(),
   antab: d => { S.anTab = d.v; render(); },
   "money-open": () => { S.anTab = "money"; go("analytics"); },
@@ -3419,6 +3657,24 @@ const ACT = {
   "lane-fold": d => { const f = new Set(S.foldedLanes || []); f.has(d.id) ? f.delete(d.id) : f.add(d.id); S.foldedLanes = [...f]; render(); },
   "col-more": d => { S.colMax[d.st] = (S.colMax[d.st] || COL_STEP) + COL_STEP; render(); },
   "meet-remind": () => meetRemindForm(),
+  settab: d => { if (setGroups().some(g => g[0] === d.v)) { S.setTab = d.v; render(); window.scrollTo(0, 0); } },
+  "stage-new": () => stageForm(null),
+  "stage-edit": d => { const x = stageById(d.id); if (x) stageForm(x); },
+  "stage-move": d => moveStageRow(d.id, +d.n),
+  "stage-orphans": () => stageOrphansForm(),
+  "stage-reset": (d, el) => {
+    const gone = DEFAULT_STAGES.map(x => x.id), lost = [...D().students, ...S.trash].filter(s => !gone.includes(s.stage)).length;
+    if (lost) return toast(`Сначала переведите ${lost} ${plural(lost, "человека", "человек", "человек")} с ваших этапов: этапы по умолчанию их не содержат`);
+    if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Точно вернуть?"; return; }
+    return saveConfig({ stages: null }, "Возвращены этапы по умолчанию");
+  },
+  "set-list": d => { const def = { lostReasons: DEFAULT_REASONS, stepHints: STEP_HINTS, meetHints: MEET_HINTS, expenseHints: EXPENSE_HINTS }[d.k]; if (def) listForm(d.k, d.t, def); },
+  "set-stuck": () => openModal({ title: "Когда человек «застрял»", values: { n: stuckDays() }, fields: [{ k: "n", label: "Дней на одном этапе", type: "number", req: true, wide: true }],
+    onSubmit: v => { const n = Math.round(+v.n); return n >= 1 && n <= 365 ? saveConfig({ stuckDays: n }, "Сохранено") : "От 1 до 365 дней"; } }),
+  "set-salary": () => { const d = salaryDefaults(); openModal({ title: "Оплата с зарплаты по умолчанию", values: { percent: d.percent, months: d.months },
+    fields: [{ k: "percent", label: "Процент, %", type: "number", req: true }, { k: "months", label: "Сколько месяцев", type: "number", req: true }],
+    onSubmit: v => !(v.percent > 0 && v.percent <= 100) ? "Процент: от 0 до 100" : !(v.months >= 1 && v.months <= 60) ? "Месяцев: от 1 до 60" : saveConfig({ salaryPlan: { percent: +v.percent, months: Math.round(v.months) } }, "Сохранено") }); },
+  "set-payremind": () => payRemindForm(),
   "account-reset": d => { const a = S.accounts.find(x => String(x.id) === d.id); if (a) passwordResetForm(a); },
   "pw-gen": () => { const el = $("#m-password"); if (el) { el.value = genPassword(); el.focus(); el.select(); } },
   "pw-copy": () => { const el = $("#m-password"); if (el && el.value) copyText(el.value, "Пароль скопирован"); },
@@ -3670,7 +3926,7 @@ async function boot() {
   S.mode = staff ? "staff" : "partner";
   if (staff) loadUi();
   if (staff && S.canWrite === false && !S.isOwner) S.readOnly = true;
-  if (staff) db.doc("config/main").onSnapshot(snap => { S.config = snap.exists ? { ...snap.data() } : {}; S.loaded.config = true; scheduleRender(); }, err => { console.warn("config", err); });
+  if (staff) db.doc("config/main").onSnapshot(snap => { S.config = snap.exists ? { ...snap.data() } : {}; S.loaded.config = true; applyStages(S.config); scheduleRender(); }, err => { console.warn("config", err); });
   const cols = S.mode === "partner" ? ["reports"] : COLS;
   for (const c of cols) {
     db.collection(c).onSnapshot(snap => {

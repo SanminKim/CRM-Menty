@@ -37,6 +37,8 @@ vm.runInContext(script + `
   S.trash = rows("students").filter(s => s.deletedAt);  // как на странице: студенты из корзины лежат отдельно
   S.data = { students: rows("students").filter(s => !s.deletedAt), cohorts: rows("cohorts"), partners: rows("partners"), payouts: rows("payouts"),
     team: rows("team"), reports: [], meetings: [], directions: rows("directions"), expenses: rows("expenses") };
+  S.config = data.config && data.config.main && typeof data.config.main === "object" ? data.config.main : {};
+  applyStages(S.config);  // состав этапов из настроек: по нему считается воронка партнёра
   SETTLED = null;
   return parties.map(([kind, id]) => { const r = partyReport(kind, id); delete r.updatedAt; return r; });
 };`, sandbox, { filename: "web/index.html" });
