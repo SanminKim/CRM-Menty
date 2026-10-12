@@ -254,10 +254,23 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .set-nav button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .set-body { max-width: 860px; min-width: 0; }
 .set-about { color: var(--muted); margin: 0 0 14px; }
-.stage-row { border-left: 3px solid transparent; }
+.stage-row { border-left: 3px solid transparent; position: relative; padding-right: 40px; }
 .stage-row.g-sales { border-left-color: var(--g-sales); } .stage-row.g-study { border-left-color: var(--g-study); } .stage-row.g-job { border-left-color: var(--g-job); } .stage-row.g-closed { border-left-color: var(--border); }
-.stage-move { display: inline-flex; gap: 2px; }
+.stage-move { display: none; gap: 2px; }
 .stage-move .btn { min-width: 32px; padding-inline: 0; justify-content: center; }
+.stage-row.dragging { opacity: .5; }
+.stage-row.drop-before { box-shadow: inset 0 3px 0 var(--brand); }
+.stage-row.drop-after { box-shadow: inset 0 -3px 0 var(--brand); }
+/* Крестик удаления появляется при наведении — у этапа и у варианта в списке */
+.stage-x, .opt-x { all: unset; box-sizing: border-box; cursor: pointer; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface); border: 1px solid var(--border); color: var(--muted); font-size: 14px; line-height: 1; opacity: 0; transition: opacity .12s; }
+.stage-x { position: absolute; top: 6px; right: 6px; }
+.stage-x:hover, .opt-x:hover, .stage-x:focus-visible, .opt-x:focus-visible { color: var(--danger); border-color: var(--danger); }
+.stage-row:hover .stage-x, .stage-row:focus-within .stage-x, .opt:hover .opt-x, .opt:focus-within .opt-x, .stage-x:focus-visible, .opt-x:focus-visible { opacity: 1; }
+.opts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.opt { position: relative; display: inline-flex; align-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 99px; padding: 4px 12px; font-size: 13px; }
+.opt-x { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; font-size: 13px; }
+@media (hover: none) { .stage-x, .opt-x { opacity: 1; } .stage-move { display: inline-flex; } .stage-grip { display: none; } } /* на телефоне крестики видны всегда, порядок — стрелками */
 .stage-row .sub { margin-left: auto; white-space: nowrap; }
 .cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 .rows .who.wrap span { white-space: normal; }
@@ -2584,19 +2597,34 @@ function saveConfig(patch, msg) {
   }, msg);
 }
 const linesOf = v => String(v || "").split("\n").map(x => x.trim()).filter(Boolean);
-// Список строк в настройках: показывается через запятую, меняется в окне по одной строке на пункт
+// Список вариантов в настройках (причины отказа, подсказки): «+ Добавить» и крестик на варианте при наведении
+const LIST_DEFAULTS = () => ({ lostReasons: DEFAULT_REASONS, stepHints: STEP_HINTS, meetHints: MEET_HINTS, expenseHints: EXPENSE_HINTS });
 function listPanel(key, title, def, note) {
   const list = textList(S.config[key], def), custom = Array.isArray(S.config[key]);
-  return panel(title, list.length || "", `<div class="pad" id="set-${esc(key)}">${list.length ? `<div class="chips">${list.map(x => `<span class="chip">${esc(x)}</span>`).join("")}</div>` : `<p class="empty">Список пуст: подсказок не будет</p>`}</div>`,
-    `<button class="btn small" data-act="set-list" data-k="${esc(key)}" data-t="${esc(title)}">Изменить</button>`, `${note}${custom ? "" : " Сейчас — список по умолчанию."}`);
+  return panel(title, list.length || "", `<div class="pad" id="set-${esc(key)}">${list.length ? `<ul class="opts">${list.map((x, i) => `<li class="opt"><span>${esc(x)}</span><button class="opt-x" data-act="list-del" data-k="${esc(key)}" data-i="${i}" aria-label="Удалить вариант «${esc(x)}»" title="Удалить">×</button></li>`).join("")}</ul>` : `<p class="empty">Вариантов нет: подсказок не будет</p>`}</div>`,
+    `${custom ? `<button class="btn small ghost" data-act="list-reset" data-k="${esc(key)}">По умолчанию</button>` : ""}<button class="btn small" data-act="list-add" data-k="${esc(key)}" data-t="${esc(title)}">+ Добавить</button>`, note);
 }
-function listForm(key, title, def) {
+function listAddForm(key, title) {
+  const def = LIST_DEFAULTS()[key]; if (!def) return;
   openModal({
-    title, values: { items: textList(S.config[key], def).join("\n") },
-    fields: [{ k: "items", label: "По одному на строке", type: "textarea", rows: 10, wide: true }],
-    link: { label: "Вернуть по умолчанию", go: () => saveConfig({ [key]: null }, "Возвращён список по умолчанию") },
-    onSubmit: v => saveConfig({ [key]: linesOf(v.items).map(x => x.slice(0, 120)).slice(0, 60) }, "Сохранено"),
+    title: `${title}: новый вариант`, submit: "Добавить", values: { text: "" },
+    fields: [{ k: "text", label: "Вариант", req: true, wide: true }],
+    onSubmit: v => {
+      const text = String(v.text || "").trim().slice(0, 120), list = textList(S.config[key], def);
+      if (!text) return "Напишите вариант";
+      if (list.some(x => x.toLowerCase() === text.toLowerCase())) return "Такой вариант уже есть";
+      if (list.length >= 60) return "Вариантов не больше 60";
+      return saveConfig({ [key]: [...list, text] }, "Вариант добавлен");
+    },
   });
+}
+function listDel(key, i) {
+  const def = LIST_DEFAULTS()[key]; if (!def) return;
+  const list = textList(S.config[key], def), x = list[i]; if (x === undefined) return;
+  return saveConfig({ [key]: list.filter((_, j) => j !== i) }).then(ok => ok && toast(`Вариант «${x}» удалён`, () => {
+    const cur = textList(S.config[key], def); if (cur.includes(x)) return;   // возвращаем только этот вариант на прежнее место
+    cur.splice(Math.min(i, cur.length), 0, x); return saveConfig({ [key]: cur }, "Вариант возвращён");
+  }));
 }
 // ----- Этапы воронки -----
 const ASKL = Object.fromEntries(STAGE_ASKS);
@@ -2608,11 +2636,13 @@ function stagesPanel() {
   const lost = [...D().students, ...S.trash].filter(s => !Object.hasOwn(SIDX, s.stage));
   const row = (x, i, arr, movable) => {
     const n = onStage(x.id).length, props = [x.ask ? ASKL[x.ask] : "", x.employed ? "считается трудоустроенным" : "", x.next ? `шаг «${x.next.text}»${x.next.days ? ` через ${days(x.next.days)}` : " в тот же день"}` : ""].filter(Boolean);
-    return `<li class="stage-row g-${esc(x.group)}" data-stage-id="${esc(x.id)}">
-      ${movable ? `<span class="stage-move"><button class="btn small ghost" data-act="stage-move" data-id="${esc(x.id)}" data-n="-1" aria-label="Выше: ${esc(x.label)}"${i ? "" : " disabled"}>↑</button><button class="btn small ghost" data-act="stage-move" data-id="${esc(x.id)}" data-n="1" aria-label="Ниже: ${esc(x.label)}"${i < arr.length - 1 ? "" : " disabled"}>↓</button></span>` : ""}
-      <span class="who wrap"><strong>${movable ? `${i + 1}. ` : ""}${esc(x.label)}</strong><span><span class="badge b-${esc(x.group)}">${esc(GROUPL[x.group])}</span>${props.length ? " " + esc(props.join(" · ")) : ""}${movable && i === arr.length - 1 ? " · путь пройден" : ""}${movable && i === 0 ? " · сюда попадают новые заявки" : ""}</span></span>
+    return `<li class="stage-row g-${esc(x.group)}" data-stage-id="${esc(x.id)}"${movable ? " data-path" : ""}>
+      ${movable ? `<span class="lane-grip stage-grip" id="stage-grip-${esc(x.id)}" role="button" tabindex="0" draggable="true" data-stage-drag="${esc(x.id)}" title="Перетащите, чтобы поменять порядок" aria-label="Переставить этап ${esc(x.label)}: стрелки вверх и вниз">⋮⋮</span>
+        <span class="stage-move"><button class="btn small ghost" data-act="stage-move" data-id="${esc(x.id)}" data-n="-1" aria-label="Выше: ${esc(x.label)}"${i ? "" : " disabled"}>↑</button><button class="btn small ghost" data-act="stage-move" data-id="${esc(x.id)}" data-n="1" aria-label="Ниже: ${esc(x.label)}"${i < arr.length - 1 ? "" : " disabled"}>↓</button></span>` : ""}
+      <span class="who wrap"><strong>${esc(x.label)}</strong><span><span class="badge b-${esc(x.group)}">${esc(GROUPL[x.group])}</span>${props.length ? " " + esc(props.join(" · ")) : ""}${movable && i === arr.length - 1 ? " · путь пройден" : ""}${movable && i === 0 ? " · сюда попадают новые заявки" : ""}</span></span>
       <span class="sub">${n ? `${n} ${plural(n, "человек", "человека", "человек")}` : "пусто"}</span>
-      <button class="btn small ghost" data-act="stage-edit" data-id="${esc(x.id)}">Изменить</button></li>`;
+      <button class="btn small ghost" data-act="stage-edit" data-id="${esc(x.id)}">Изменить</button>
+      <button class="stage-x" data-act="stage-del" data-id="${esc(x.id)}" aria-label="Удалить этап «${esc(x.label)}»" title="Удалить этап">×</button></li>`;
   };
   return panel("Этапы", list.length, `<ul class="rows" id="stage-list">
       <li class="rows-h">Путь студента по порядку</li>${path.map((x, i, arr) => row(x, i, arr, true)).join("")}
@@ -2648,11 +2678,30 @@ function stageForm(x) {
 }
 const newStageId = () => "st_" + newId("x").replace(/[^A-Za-z0-9]/g, "").slice(0, 12);
 const saveStages = (list, msg) => saveConfig({ stages: list.map(x => ({ id: x.id, label: x.label, group: x.group, ask: x.ask, employed: x.employed, next: x.next })) }, msg);
+// Перестановка этапа пути: перед другим этапом (beforeId) или в конец пути (null)
+function placeStage(id, beforeId) {
+  const path = STAGE_LIST.filter(x => x.group !== "closed"), item = path.find(x => x.id === id); if (!item || id === beforeId) return;
+  const rest = path.filter(x => x.id !== id), at = beforeId === null ? rest.length : rest.findIndex(x => x.id === beforeId);
+  if (at < 0) return;
+  rest.splice(at, 0, item);
+  if (rest.every((x, i) => x.id === path[i].id)) return;
+  return saveStages([...rest, ...STAGE_LIST.filter(x => x.group === "closed")], "Порядок этапов изменён");   // фокус на ручке сохраняет render() по её id
+}
 function moveStageRow(id, n) {
-  const path = STAGE_LIST.filter(x => x.group !== "closed"), i = path.findIndex(x => x.id === id), j = i + n;
+  const path = STAGE_LIST.filter(x => x.group !== "closed").map(x => x.id), i = path.indexOf(id), j = i + n;
   if (i < 0 || j < 0 || j >= path.length) return;
-  [path[i], path[j]] = [path[j], path[i]];
-  return saveStages([...path, ...STAGE_LIST.filter(x => x.group === "closed")], "Порядок этапов изменён");
+  return placeStage(id, n < 0 ? path[j] : (path[j + 1] ?? null));
+}
+// Быстрое удаление этапа крестиком: пустой этап удаляется сразу (с «Отменить»), с людьми — через перевод
+function stageDel(id) {
+  const x = stageById(id); if (!x) return;
+  if (!STAGE_LIST.some(y => y.id !== id && y.group !== "closed")) return toast("Это последний открытый этап пути: удалить его нельзя");
+  if (onStage(id).length) return stageDeleteForm(x);
+  const at = STAGE_LIST.findIndex(y => y.id === id);
+  // «Отменить» возвращает только этот этап на прежнее место: правки, сделанные за это время, остаются
+  return saveStages(STAGE_LIST.filter(y => y.id !== id)).then(ok => ok && toast(`Этап «${x.label}» удалён`, () => {
+    if (stageById(id)) return; const cur = STAGE_LIST.slice(); cur.splice(Math.min(at, cur.length), 0, x); return saveStages(cur, "Этап возвращён");
+  }));
 }
 // Перевод людей с этапа на другой: при удалении этапа и для тех, чей этап удалили
 async function moveAll(people, to) {
@@ -2681,10 +2730,11 @@ function stageOrphansForm() {
   });
 }
 function funnelRulesPanel() {
-  return panel("Правила воронки", "", `<ul class="rows" id="funnel-rules">
-      <li><span class="who wrap"><strong>«Застрял» через ${days(stuckDays())} на одном этапе</strong><span>Такие люди собраны на экране «Аналитика» и отмечаются в списке студентов</span></span><button class="btn small ghost" data-act="set-stuck">Изменить</button></li></ul>`)
-    + listPanel("lostReasons", "Причины отказа", DEFAULT_REASONS, "Варианты в окне перевода в отказ. Одинаковые причины складываются в аналитике.")
-    + listPanel("stepHints", "Подсказки для следующего шага", STEP_HINTS, "Варианты в поле «Что сделать» у следующего шага.");
+  const n = stuckDays();
+  return panel("Застрявшие студенты", "", `<ul class="rows" id="funnel-rules">
+      <li><span class="who wrap"><strong>Застрял — ${days(n)} и дольше на одном этапе</strong><span>Если человек столько времени не переходит на следующий этап, CRM напоминает о нём: он попадает в блок «Давно на одном этапе» в «Аналитике», а в разделе «Студенты» его можно отобрать флажком «Застряли». Новые заявки, отказы и прошедшие путь не считаются.</span></span><button class="btn small ghost" data-act="set-stuck">Изменить срок</button></li></ul>`)
+    + listPanel("lostReasons", "Причины отказа", DEFAULT_REASONS, "Варианты в окне перевода в отказ. Одинаковые причины складываются в «Аналитике».")
+    + listPanel("stepHints", "Подсказки для следующего шага", STEP_HINTS, "Варианты в поле «Что сделать», когда назначаете следующий шаг.");
 }
 function salaryPanel() {
   const d = salaryDefaults();
@@ -3668,8 +3718,11 @@ const ACT = {
     if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Точно вернуть?"; return; }
     return saveConfig({ stages: null }, "Возвращены этапы по умолчанию");
   },
-  "set-list": d => { const def = { lostReasons: DEFAULT_REASONS, stepHints: STEP_HINTS, meetHints: MEET_HINTS, expenseHints: EXPENSE_HINTS }[d.k]; if (def) listForm(d.k, d.t, def); },
-  "set-stuck": () => openModal({ title: "Когда человек «застрял»", values: { n: stuckDays() }, fields: [{ k: "n", label: "Дней на одном этапе", type: "number", req: true, wide: true }],
+  "list-add": d => listAddForm(d.k, d.t),
+  "list-del": d => listDel(d.k, +d.i),
+  "list-reset": (d, el) => { if (!LIST_DEFAULTS()[d.k]) return; if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Точно вернуть?"; return; } return saveConfig({ [d.k]: null }, "Возвращён список по умолчанию"); },
+  "stage-del": d => stageDel(d.id),
+  "set-stuck": () => openModal({ title: "Когда считать, что человек застрял", values: { n: stuckDays() }, fields: [{ k: "n", label: "Сколько дней на одном этапе", type: "number", req: true, wide: true, help: "Например, 14: кто две недели не двигается дальше, попадёт в «Давно на одном этапе»" }],
     onSubmit: v => { const n = Math.round(+v.n); return n >= 1 && n <= 365 ? saveConfig({ stuckDays: n }, "Сохранено") : "От 1 до 365 дней"; } }),
   "set-salary": () => { const d = salaryDefaults(); openModal({ title: "Оплата с зарплаты по умолчанию", values: { percent: d.percent, months: d.months },
     fields: [{ k: "percent", label: "Процент, %", type: "number", req: true }, { k: "months", label: "Сколько месяцев", type: "number", req: true }],
@@ -3897,6 +3950,24 @@ document.addEventListener("drop", e => {
 });
 document.addEventListener("dragend", () => { if (S.laneDrag) S.laneDrag = null; document.querySelectorAll(".lane.drop-before, .lane.drop-after, .lane.dragging").forEach(x => x.classList.remove("drop-before", "drop-after", "dragging")); });
 document.addEventListener("keydown", e => { const g = e.target.closest?.("[data-lane-drag]"); if (!g || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return; e.preventDefault(); moveLane(g.dataset.laneDrag, e.key === "ArrowUp" ? -1 : 1); });
+// Порядок этапов в настройках: перетаскивание строки за ручку, стрелки на клавиатуре
+document.addEventListener("dragstart", e => { const g = e.target.closest?.("[data-stage-drag]"); if (!g) return; S.stageDrag = g.dataset.stageDrag; g.closest(".stage-row")?.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", S.stageDrag); });
+const stageTarget = e => { const r = e.target.closest?.(".stage-row[data-path]"); return r && r.dataset.stageId !== S.stageDrag ? r : null; };
+const clearStageDrop = () => document.querySelectorAll(".stage-row.drop-before, .stage-row.drop-after, .stage-row.dragging").forEach(x => x.classList.remove("drop-before", "drop-after", "dragging"));
+document.addEventListener("dragover", e => {
+  if (!S.stageDrag) return; const r = stageTarget(e); if (!r) return; e.preventDefault();
+  const b = r.getBoundingClientRect(), after = e.clientY > b.top + b.height / 2;
+  document.querySelectorAll(".stage-row.drop-before, .stage-row.drop-after").forEach(x => x.classList.remove("drop-before", "drop-after"));
+  r.classList.add(after ? "drop-after" : "drop-before");
+});
+document.addEventListener("drop", e => {
+  if (!S.stageDrag) return; const r = stageTarget(e), id = S.stageDrag; S.stageDrag = null; clearStageDrop();
+  if (!r) return; e.preventDefault();
+  const b = r.getBoundingClientRect(), after = e.clientY > b.top + b.height / 2, ids = STAGE_LIST.filter(x => x.group !== "closed").map(x => x.id);
+  placeStage(id, after ? (ids[ids.indexOf(r.dataset.stageId) + 1] ?? null) : r.dataset.stageId);
+});
+document.addEventListener("dragend", () => { if (S.stageDrag) S.stageDrag = null; clearStageDrop(); });
+document.addEventListener("keydown", e => { const g = e.target.closest?.("[data-stage-drag]"); if (!g || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return; e.preventDefault(); moveStageRow(g.dataset.stageDrag, e.key === "ArrowUp" ? -1 : 1); });
 const sameLane = (c, id) => { const s = stu(id); return !!s && (c.dataset.lane || "") === (cohortName(s.cohortId) ? s.cohortId : "none"); }; // в другой поток карточка не переносится
 document.addEventListener("dragover", e => { const c = e.target.closest?.(".col"); if (!c || !S.drag || !sameLane(c, S.drag)) return; e.preventDefault(); document.querySelectorAll(".col.drop").forEach(x => x !== c && x.classList.remove("drop")); c.classList.add("drop"); });
 document.addEventListener("drop", e => {
