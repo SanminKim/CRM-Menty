@@ -1716,9 +1716,7 @@ function dayHTML(d) {
 // справа неделя или день по часам, месяц или список. Встречу создают нажатием на свободное время или протяжкой,
 // переносят перетаскиванием, длительность меняют за нижний край. Права на изменение проверяет сервер
 const CAL_MODES = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"], ["list", "Список"]];
-const CAL_KINDS = [["call", "Созвоны"], ["lesson", "Занятия"], ["consult", "Консультации"], ["other", "Другое"], ["interview", "Собеседования"], ["step", "Шаги студентов"], ["pay", "Платежи"]];
-const CAL_GROUPS = [["Встречи", ["call", "lesson", "consult", "other"]], ["По студентам", ["interview", "step", "pay"]]];
-const HOUR_PX = 48, SNAP_MIN = 15;
+const CAL_KINDS = [["call", "Созвоны"], ["lesson", "Занятия"], ["consult", "Консультации"], ["other", "Другое"], ["interview", "Собеседования"], ["step", "Шаги студентов"], ["pay", "Платежи"]];const HOUR_PX = 48, SNAP_MIN = 15;
 const calMode = () => CAL_MODES.some(x => x[0] === S.cal.mode) ? S.cal.mode : (typeof matchMedia === "function" && matchMedia("(max-width: 860px)").matches ? "day" : "week");
 const addDays = (d, n) => { const x = new Date(d + "T12:00"); x.setDate(x.getDate() + n); return dstr(x); };
 const weekStart = d => addDays(d, -((new Date(d + "T12:00").getDay() + 6) % 7));
@@ -1820,7 +1818,7 @@ function calendarView() {
   const side = `<aside class="cal-side" aria-label="Календарь">
       ${S.readOnly ? "" : `<button class="btn primary cal-create" data-act="meet-new" data-date="${esc(sel)}">+ Встреча</button>`}
       ${miniHTML(sel, mode)}
-      <div class="cal-kinds" id="cal-kinds">${CAL_GROUPS.map(([title, keys]) => `<div class="cal-kg" role="group" aria-label="${esc(title)}"><b>${esc(title)}</b>${CAL_KINDS.filter(x => keys.includes(x[0])).map(([k, l]) => `<label class="cal-k k-${k}"><input type="checkbox" data-calk="${k}"${hide.has(k) ? "" : " checked"}><i aria-hidden="true"></i>${l}</label>`).join("")}</div>`).join("")}</div>
+      <div class="cal-kinds" id="cal-kinds"><div class="cal-kg" role="group" aria-label="Показывать"><b>Показывать</b>${CAL_KINDS.map(([k, l]) => `<label class="cal-k k-${k}"><input type="checkbox" data-calk="${k}"${hide.has(k) ? "" : " checked"}><i aria-hidden="true"></i>${l}</label>`).join("")}</div></div>
       ${mentorSelect() ? `<div class="cal-kg cal-who"><b>Чьи события</b>${mentorSelect()}</div>` : ""}
       ${late.length ? `<div class="cal-late">${panel("Прошли и не отмечены", late.length, `<ul class="rows">${late.slice(0, 8).map(e => evRow(e, true)).join("")}</ul>`)}</div>` : ""}
     </aside>`;

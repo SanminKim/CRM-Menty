@@ -384,9 +384,6 @@ try:
       check("click on a meeting shows its card", "Встреча из сетки" in pg.inner_text("#calpop") and "09:00–10:30" in pg.inner_text("#calpop"), pg.inner_text("#calpop"))
       pg.click("#calpop [data-act=ev-del]"); pg.click("#calpop [data-act=ev-del]"); pg.wait_for_timeout(400)
       check("meeting deleted from its card", not any(v["title"] == "Встреча из сетки" for v in meets().values()))
-      check("event kinds are split into meetings and student events",
-            pg.locator("#cal-kinds .cal-kg[aria-label='Встречи'] label").count() == 4
-            and pg.locator("#cal-kinds .cal-kg[aria-label='По студентам'] label.k-step").count() == 1)
       steps0 = pg.locator(".wk-allc .ev.k-step").count()
       pg.locator("#cal-kinds label.k-step").click(); pg.wait_for_timeout(200)
       check("a kind of events is hidden by its checkbox", steps0 > 0 and pg.locator(".wk-allc .ev.k-step").count() == 0)
