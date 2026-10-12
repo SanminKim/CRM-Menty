@@ -184,8 +184,8 @@ def backup_import(request):
         upload = request.FILES.get("file")
         if not upload:
             ctx["error"] = "Выберите файл резервной копии"
-        elif upload.size > 20 * 1024 * 1024:
-            ctx["error"] = "Файл больше 20 МБ"
+        elif upload.size > 50 * 1024 * 1024:
+            ctx["error"] = "Файл больше 50 МБ"
         else:
             try:
                 stats = import_backup(upload.read(), overwrite=bool(request.POST.get("overwrite")),

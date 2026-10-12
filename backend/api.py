@@ -12,7 +12,7 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from . import backup, reports, store, telegram, views
+from . import backup, files, reports, store, telegram, views
 from .auth import login_name
 from .models import Account, Doc, TgChat
 
@@ -121,6 +121,23 @@ def telegram_file(request, access, student_id, proof_id):
         if mime == "application/pdf" else "attachment"
     response["Cache-Control"] = "private, no-store"
     return response
+
+
+@require_POST
+@api
+def file_upload(request, access):
+    """Договор или файл к платежу: multipart с полями student, kind (contract | payment), payment и file."""
+    rev, meta = files.upload(access, request.POST.get("student"), request.POST.get("kind"),
+                             request.POST.get("payment") or None, request.FILES.get("file"))
+    return JsonResponse({"rev": rev, "file": meta}, status=201)
+
+
+@require_http_methods(["GET", "DELETE"])
+@api
+def file(request, access, file_id):
+    if request.method == "DELETE":
+        return JsonResponse({"rev": files.remove(access, file_id)})
+    return files.serve(access, file_id)
 
 
 @require_GET

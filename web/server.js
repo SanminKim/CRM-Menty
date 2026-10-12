@@ -5,10 +5,10 @@
   const csrf = () => (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || "";
   async function call(method, url, data) {
     let res;
-    const headers = { "X-CSRFToken": csrf(), "X-Requested-With": "fetch" };
-    if (data !== undefined) headers["Content-Type"] = "application/json";
-    // Запрос не висит бесконечно: после сна ноутбука или смены сети он обрывается и повторяется
-    try { res = await fetch(url, { method, credentials: "same-origin", headers, body: data !== undefined ? JSON.stringify(data) : undefined, signal: AbortSignal.timeout(20000) }); }
+    const headers = { "X-CSRFToken": csrf(), "X-Requested-With": "fetch" }, form = data instanceof FormData;
+    if (data !== undefined && !form) headers["Content-Type"] = "application/json";
+    // Запрос не висит бесконечно: после сна ноутбука или смены сети он обрывается и повторяется. Файл грузится дольше
+    try { res = await fetch(url, { method, credentials: "same-origin", headers, body: form ? data : data !== undefined ? JSON.stringify(data) : undefined, signal: AbortSignal.timeout(form ? 120000 : 20000) }); }
     catch (e) { throw { code: "unavailable" }; }
     if (res.status === 401) { location.href = "/login/?next=" + encodeURIComponent(location.pathname) + location.hash; throw { code: "unauthenticated" }; }
     let out = null; try { out = await res.json(); } catch (e) { }
@@ -144,6 +144,15 @@
       student: id => call("POST", "/api/telegram/student-link/", { studentId: id }),
       // Адрес файла, который студент прислал боту: открывается в новой вкладке, права проверяет сервер
       fileUrl: (studentId, proofId) => `/api/telegram/file/${encodeURIComponent(studentId)}/${encodeURIComponent(proofId)}/`,
+    },
+    // Договор и файлы к платежам (backend/files.py). После загрузки и удаления запись студента обновляется с сервера
+    files: {
+      upload: async (studentId, kind, paymentId, file) => {
+        const f = new FormData(); f.append("student", studentId); f.append("kind", kind); f.append("payment", paymentId || ""); f.append("file", file);
+        const out = await call("POST", "/api/files/", f); await pull().catch(() => { }); return out;
+      },
+      remove: async id => { const out = await call("DELETE", `/api/files/${encodeURIComponent(id)}/`); await pull().catch(() => { }); return out; },
+      url: id => `/api/files/${encodeURIComponent(id)}/`,
     },
     logout: () => {
       const f = document.createElement("form"); f.method = "post"; f.action = "/logout/";

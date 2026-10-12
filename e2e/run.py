@@ -51,6 +51,9 @@ HTMLAnchorElement.prototype.click = function () { if (!this.download) click.call
 """
 def login(page, username, password=PASSWORD):
     page.goto(URL + "login/"); page.fill("input[name=username]", username); page.fill("input[name=password]", password); page.click("button:not([type=button])")
+def tab(page, v):
+    """Вкладка карточки студента: main, money, study, job, hist."""
+    page.click(f".drawer [data-act=card-tab][data-v={v}]"); page.wait_for_selector(f".drawer #d-tab-{v}")
 def shot(page, name, **kw): page.screenshot(path=str(SHOTS / name), **kw)
 def tg(update):
     req = urllib.request.Request(URL + "api/telegram/", data=json.dumps(update).encode(), headers={"Content-Type": "application/json", "X-Telegram-Bot-Api-Secret-Token": TG_SECRET})
@@ -151,6 +154,11 @@ try:
       pg.select_option("#d-stage", "final_project"); pg.wait_for_timeout(300)
       check("stage via select", store()["students/" + did]["stage"] == "final_project")
       check("no instalment button in the card", pg.locator(".drawer [data-act=pay-plan]").count() == 0)
+      check("card opens on the main tab with five tabs", pg.locator(".drawer #d-tabs [role=tab]").count() == 5 and pg.locator(".drawer #d-tab-main").count() == 1 and pg.locator(".drawer [data-act=pay-new]").count() == 0)
+      pg.click(".drawer [data-act=about-edit]"); pg.wait_for_selector("#mform"); pg.fill("#m-about", "Бухгалтер, хочет в аналитики. <b>Пишет вечером</b>"); pg.click("#m-submit"); pg.wait_for_timeout(300)
+      check("short info about the student is saved and shown above the tabs", store()["students/" + did]["about"].startswith("Бухгалтер") and "Пишет вечером" in pg.inner_text("#d-about") and pg.locator("#d-about b").count() == 0)
+      tab(pg, "money")
+      check("money tab: summary, contract and payments", pg.locator(".drawer .msum").count() == 1 and pg.locator(".drawer #d-contract").count() == 1 and pg.locator(".drawer [data-act=pay-new]").count() == 1)
       for _ in range(3): pg.click(".drawer [data-act=pay-new]"); pg.fill("#m-amount", "30000"); pg.click("#m-submit"); pg.wait_for_timeout(300)
       pcount = len(store()["students/" + did]["payments"])
       pg.locator(".drawer [data-act=pay-done]").first.click(); pg.wait_for_timeout(300)
@@ -164,6 +172,9 @@ try:
       check("two fast pay-done both kept", unpaid1 == unpaid0 - 2, (unpaid0, unpaid1))
       pg.click(".drawer [data-act=step-edit]"); pg.wait_for_selector("#mform"); pg.fill("#m-text", "Проверить домашку"); pg.click("#m-submit"); pg.wait_for_timeout(300)
       check("step from drawer", store()["students/" + did]["next"]["text"] == "Проверить домашку")
+      pg.locator(".drawer li.pay:not(.done)").first.locator("[data-act=pay-edit]").click(); pg.wait_for_selector("#m-details"); pg.fill("#m-details", "СБП, операция 12345"); pg.click("#m-submit"); pg.wait_for_timeout(300)
+      check("payment details are kept and shown under the payment", any(x.get("details") == "СБП, операция 12345" for x in store()["students/" + did]["payments"]) and "операция 12345" in pg.inner_text(".drawer .pay-note") and "данные платежа" in store()["students/" + did]["log"][-1]["text"])
+      tab(pg, "hist"); check("history tab lists stages and money changes", pg.locator("#d-hist li").count() >= 1 and pg.locator("#d-log li").count() >= 1); tab(pg, "main")
       pg.select_option("#d-stage", "lost"); pg.wait_for_selector("#mform"); pg.fill("#m-reason", "Дорого"); pg.click("#m-submit"); pg.wait_for_timeout(300)
       st = store()["students/" + did]
       check("lost clears step", st["stage"] == "lost" and st["next"] is None and st["lostReason"] == "Дорого", (st["stage"], st["next"]))
@@ -181,7 +192,7 @@ try:
       # программа в панели студента
       pg.click(".nav >> text=Воронка"); pg.click(".seg >> text=Обучение"); pg.wait_for_timeout(200)
       check("progress on study tiles", pg.locator(".col[data-stage=studying] .tile .prog").count() >= 1)
-      tl = pg.locator(".col[data-stage=studying] .tile").first; pid = tl.get_attribute("data-id"); tl.click(); pg.wait_for_selector(".drawer .mods")
+      tl = pg.locator(".col[data-stage=studying] .tile").first; pid = tl.get_attribute("data-id"); tl.click(); pg.wait_for_selector(".drawer"); tab(pg, "study"); pg.wait_for_selector(".drawer .mods")
       before = sum(1 for v in (store()["students/" + pid].get("progress") or {}).values() if v)
       box = pg.locator(".drawer .mods input:not(:checked)").first; mid = box.get_attribute("data-mod"); box.check(); pg.wait_for_timeout(300)
       pr = store()["students/" + pid]["progress"]
@@ -357,7 +368,7 @@ try:
       # --- журнал денег ---
       lid = pg.evaluate("D().students.find(s => (s.payments||[]).some(p => !p.paid) && !(s.log||[]).length && s.partnerId && D().reports.some(r => r.id === s.partnerId)).id")
       rid = store()["students/" + lid]["partnerId"]; rev0 = store()["reports/" + rid]["revenue"]
-      pg.evaluate(f"openStudent({json.dumps(lid)})"); pg.wait_for_timeout(250)
+      pg.evaluate(f"openStudent({json.dumps(lid)})"); pg.wait_for_timeout(250); tab(pg, "money")
       pg.locator(".drawer [data-act=pay-done]").first.click(); pg.wait_for_timeout(300)
       lg = store()["students/" + lid].get("log", [])
       check("pay-done logged", len(lg) == 1 and "отмечен оплаченным" in lg[0]["text"], lg)
@@ -367,7 +378,7 @@ try:
       pg.locator(".drawer [data-act=pay-edit]").first.click(); pg.wait_for_selector("#mform"); pg.fill("#m-amount", "12345"); pg.click("#m-submit"); pg.wait_for_timeout(300)
       lg = store()["students/" + lid]["log"]
       check("payment edit logged with old and new sum", len(lg) == 2 and "сумма" in lg[-1]["text"] and "12" in lg[-1]["text"], lg)
-      check("money log shown in drawer", pg.locator("#d-log summary").count() == 1 and "2" in pg.inner_text("#d-log summary"))
+      tab(pg, "hist"); check("money log shown in drawer", pg.locator("#d-log li").count() == 2)
       try: pg.wait_for_function(f"() => D().reports.find(r => r.id === {json.dumps(rid)}).revenue !== {rev0}", timeout=15000)
       except Exception: pass
       check("partner report refreshed by itself", store()["reports/" + rid]["revenue"] != rev0, (rev0, store()["reports/" + rid]["revenue"]))
@@ -554,7 +565,7 @@ try:
       # оплата с зарплаты: процент, период, дата первого платежа
       sid = pg.evaluate("D().students.find(s => s.stage === 'offer' && s.jobSalary).id")
       before = pg.evaluate("window.__store")["students/" + sid]
-      pg.evaluate(f"openStudent({json.dumps(sid)})"); pg.wait_for_selector("[data-act=pay-salary]"); pg.click("[data-act=pay-salary]"); pg.wait_for_selector("#mform")
+      pg.evaluate(f"openStudent({json.dumps(sid)})"); tab(pg, "money"); pg.wait_for_selector("[data-act=pay-salary]"); pg.click("[data-act=pay-salary]"); pg.wait_for_selector("#mform")
       pg.fill("#m-salary", "100000"); pg.fill("#m-percent", "15"); pg.fill("#m-months", "6"); pg.fill("#m-first", "2027-01-31")
       check("salary plan form shows the totals", "6 платежей по 15" in pg.inner_text("#m-sum") and "90" in pg.inner_text("#m-sum"), pg.inner_text("#m-sum"))
       pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(500)
@@ -581,13 +592,13 @@ try:
       done = pg.evaluate("window.__store")["students/" + sid]
       first = next(p for p in done["payments"] if p["id"] == pend[0]["id"])
       check("reminder for a payment without amount asks for the income", "12,5% от дохода" in pg.evaluate(f"(() => {{ const s = stu({json.dumps(sid)}); return remindText(s, s.payments.find(isPending)); }})()"))
-      pg.locator("tr", has_text="С дохода 2/3").locator("[data-act=pay-edit]").click(); pg.wait_for_selector("#mform")
+      pg.locator(".drawer li.pay", has_text="С дохода 2/3").locator("[data-act=pay-edit]").click(); pg.wait_for_selector("#mform")
       check("editing a payment without amount changes only the day", pg.locator("#m-amount").count() == 0 and pg.locator("#m-due").count() == 1)
       pg.fill("#m-due", "2027-09-20"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(400)
       moved = next(p for p in pg.evaluate("window.__store")["students/" + sid]["payments"] if p["id"] == pend[1]["id"])
       check("moved settlement day keeps the percent", (moved["due"], moved["percent"], moved["amount"]) == ("2027-09-20", 12.5, None), moved)
       check("income entered: amount is the percent of income, price grows, change is logged", first["amount"] == 10000 and first["income"] == 80000 and done["price"] == after["price"] + 10000 and "Доход за месяц" in done["log"][-1]["text"] and pg.locator("[data-act=pay-income]").count() == 2, (first, done["price"], done["log"][-1]))
-      pg.locator("tr", has_text="С дохода 1/3").locator("[data-act=pay-done]").click(); pg.wait_for_selector("#m-received")
+      pg.locator(".drawer li.pay", has_text="С дохода 1/3").locator("[data-act=pay-done]").click(); pg.wait_for_selector("#m-received")
       check("salary payment asks how much actually came", pg.input_value("#m-received") == "10000" and "Совпадает" in pg.inner_text("#m-sum"))
       pg.fill("#m-received", "8000"); check("form shows the shortfall", "Недоплата" in pg.inner_text("#m-sum") and "2" in pg.inner_text("#m-sum"), pg.inner_text("#m-sum"))
       pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(400)
@@ -595,10 +606,10 @@ try:
       top = [p for p in pg.evaluate("window.__store")["students/" + sid]["payments"] if str(p.get("comment", "")).startswith("Доплата")]
       check("shortfall creates a top-up payment for the difference", len(top) == 1 and top[0]["amount"] == 2000 and not top[0]["paid"] and top[0].get("salary") is True, top)
       check("fact and plan are both kept, the gap is shown in the card and logged", (got["amount"], got["expected"], bool(got["paid"])) == (8000, 10000, True) and "недоплата" in pg.text_content(".drawer") and "с зарплаты недоплачено" in pg.text_content("#pay-history") and "недоплата" in pg.evaluate("window.__store")["students/" + sid]["log"][-1]["text"], got)
-      pg.locator("tr", has_text="С дохода 1/3").filter(has_not_text="Доплата:").locator("[data-act=pay-edit]").click(); pg.wait_for_selector("#mform"); pg.fill("#m-paid", ""); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(400)
+      pg.locator(".drawer li.pay", has_text="С дохода 1/3").filter(has_not_text="Доплата:").locator("[data-act=pay-edit]").click(); pg.wait_for_selector("#mform"); pg.fill("#m-paid", ""); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(400)
       back = next(p for p in pg.evaluate("window.__store")["students/" + sid]["payments"] if p["id"] == pend[0]["id"])
       check("removing the paid mark brings the expected amount back", (back["amount"], back.get("expected"), back["paid"]) == (10000, None, None), back)
-      pg.locator("tr", has_text="С дохода 1/3").filter(has_not_text="Доплата:").locator("[data-act=pay-done]").click(); pg.wait_for_selector("#m-received"); pg.fill("#m-received", "8000"); pg.uncheck("#m-rest"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(400)
+      pg.locator(".drawer li.pay", has_text="С дохода 1/3").filter(has_not_text="Доплата:").locator("[data-act=pay-done]").click(); pg.wait_for_selector("#m-received"); pg.fill("#m-received", "8000"); pg.uncheck("#m-rest"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(400)
       paid0 = pg.evaluate(f"paidSum(stu({json.dumps(sid)}))")
       pg.click(".drawer [data-act=pay-refund]"); pg.wait_for_selector("#mform"); pg.fill("#m-amount", "1000"); pg.fill("#m-comment", "Частичный возврат"); pg.click("#m-submit"); pg.wait_for_selector("#mform", state="detached"); pg.wait_for_timeout(400)
       ref = [p for p in pg.evaluate("window.__store")["students/" + sid]["payments"] if p.get("refund")]
@@ -608,18 +619,37 @@ try:
       # файлы, которые студент прислал боту
       check("salary plan payments are marked for the bot", all(p.get("salary") is True for p in pg.evaluate("window.__store")["students/" + sid]["payments"] if str(p.get("comment", "")).startswith(("С зарплаты", "С дохода"))))
       pg.evaluate(f"updDoc('students', {json.dumps(sid)}, {{ proofs: [{{ id: 'pr1', at: '2026-10-05T10:00:00.000Z', kind: 'photo', mime: 'image/jpeg', fileId: 'F1', name: '', caption: 'Лист <b>за сентябрь</b>' }}, {{ id: 'pr2', at: '2026-10-06T10:00:00.000Z', kind: 'document', mime: 'application/pdf', fileId: 'F2', name: 'часы.pdf', caption: '' }}] }})")
-      pg.evaluate(f"openStudent({json.dumps(sid)})"); pg.wait_for_selector("#proofs li")
+      pg.evaluate(f"openStudent({json.dumps(sid)})"); tab(pg, "money"); pg.wait_for_selector("#proofs li")
       hrefs = [a.get_attribute("href") for a in pg.locator("#proofs a").all()]
       check("card lists files from the student, newest first, with safe links", hrefs == [f"/api/telegram/file/{sid}/pr2/", f"/api/telegram/file/{sid}/pr1/"] and "часы.pdf" in pg.text_content("#proofs") and pg.locator("#proofs b").count() == 0, hrefs)
       pg.locator("#proofs li", has_text="часы.pdf").locator("[data-act=proof-del]").click(); pg.locator("#proofs li", has_text="часы.pdf").locator("[data-act=proof-del]").click(); pg.wait_for_timeout(500)
       check("a file can be removed from the card", [p["id"] for p in pg.evaluate("window.__store")["students/" + sid]["proofs"]] == ["pr1"])
+      # договор и файлы к платежам: лежат на сервере, открываются по ссылке
+      PDF = b"%PDF-1.4\n%e2e\n" + b"0" * 2000
+      with pg.expect_file_chooser() as fc: pg.click(".drawer #d-contract [data-act=file-add]")
+      fc.value.set_files({"name": "Договор Петрова.pdf", "mimeType": "application/pdf", "buffer": PDF}); pg.wait_for_selector(".drawer #d-contract .file")
+      con = pg.evaluate("window.__store")["students/" + sid].get("contract") or {}
+      got = pg.evaluate(f"fetch(SRV.files.url({json.dumps(con.get('id', ''))})).then(async r => [r.status, r.headers.get('content-disposition') || '', (await r.arrayBuffer()).byteLength])")
+      check("contract is attached and downloads as the same file", con.get("name") == "Договор Петрова.pdf" and got[0] == 200 and got[1].startswith("attachment") and got[2] == len(PDF) and "Договор Петрова.pdf" in pg.inner_text(".drawer #d-contract"), (con, got))
+      with pg.expect_file_chooser() as fc: pg.locator(".drawer li.pay.done").first.locator("[data-act=file-add]").click()
+      fc.value.set_files({"name": "чек.png", "mimeType": "image/png", "buffer": b"\x89PNG\r\n\x1a\n" + b"0" * 100}); pg.locator(".drawer li.pay .file", has_text="чек.png").wait_for()
+      pays = pg.evaluate("window.__store")["students/" + sid]["payments"]
+      shot(pg, "s30_card_money.png")
+      check("a receipt is attached to the paid payment by the admin", sum(len(p.get("files") or []) for p in pays) == 1 and pg.locator(".drawer li.pay .file", has_text="чек.png").count() == 1)
+      with pg.expect_file_chooser() as fc: pg.click(".drawer #d-contract [data-act=file-add]")
+      fc.value.set_files({"name": "page.pdf", "mimeType": "application/pdf", "buffer": b"<html><script>alert(1)</script></html>"}); pg.wait_for_timeout(600)
+      check("a file that is not a document is refused with a clear message", "PDF" in pg.inner_text("#toast") and pg.evaluate("window.__store")["students/" + sid]["contract"]["id"] == con["id"], pg.inner_text("#toast"))
+      tab(pg, "main"); check("main tab shows that the contract is attached", "прикреплён" in pg.inner_text(".drawer .msum"))
+      pg.click(".drawer .msum"); pg.wait_for_selector(".drawer #d-tab-money")
+      x = pg.locator(".drawer #d-contract .file-x"); x.click(); x.click(); pg.wait_for_timeout(600)
+      check("contract can be removed", "contract" not in pg.evaluate("window.__store")["students/" + sid] and pg.locator(".drawer #d-contract .file").count() == 0)
       pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
       # история оплат и просрочек
       hid = pg.evaluate("(() => { const id = newId('students'); setDoc('students', id, { name: 'Историк Платежей', stage: 'studying', stageAt: new Date().toISOString(), createdAt: new Date().toISOString(), history: [], notes: [], apps: [], mentorId: null, cohortId: null, payments: [{ id: 'h1', amount: 10000, due: '2026-08-01', paid: '2026-08-01' }, { id: 'h2', amount: 10000, due: '2026-08-10', paid: '2026-08-15' }, { id: 'h3', amount: 10000, due: '2026-09-10', paid: '2026-09-19' }, { id: 'h4', amount: 7000, due: '2026-01-01', paid: null }, { id: 'h5', amount: 1, due: '2099-01-01', paid: null }] }); return id; })()")
       pg.wait_for_function(f"() => !!stu({json.dumps(hid)})"); pg.wait_for_timeout(300)
       hist = pg.evaluate(f"payHistory(stu({json.dumps(hid)}))")
       check("payment history counts on-time, late and overdue payments", (hist["paid"], hist["onTime"], hist["late"], hist["avgLate"], hist["maxLate"], hist["overdue"], hist["overdueSum"]) == (3, 1, 2, 7, 9, 1, 7000) and hist["overdueDays"] > 200, hist)
-      pg.evaluate(f"openStudent({json.dumps(hid)})"); pg.wait_for_selector("#pay-history")
+      pg.evaluate(f"openStudent({json.dumps(hid)})"); tab(pg, "money"); pg.wait_for_selector("#pay-history")
       line = pg.inner_text("#pay-history")
       check("card shows the payment history line and late tags", "вовремя 1 из 3" in line and "с опозданием 2" in line and "сейчас просрочено 1" in line and pg.locator(".drawer .tag.warn", has_text="позже").count() == 2, line)
       pg.keyboard.press("Escape"); pg.click(".nav >> text=Платежи"); pg.wait_for_selector("#pay-kpis")

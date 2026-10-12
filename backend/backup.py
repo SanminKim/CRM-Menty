@@ -13,20 +13,23 @@ from cryptography.fernet import Fernet, InvalidToken
 from django.db import transaction
 from django.utils import timezone
 
-from . import store
-from .models import Doc
+from . import files, store
+from .models import Doc, FileBlob
 
 BACKUP_FORMAT = "crm-menti-backup"
-SUPPORTED_VERSIONS = (1, 2, 3, 4, 5, 6)  # с версии 6 в копии есть направления и расходы
+SUPPORTED_VERSIONS = (1, 2, 3, 4, 5, 6, 7)  # с версии 6 в копии есть направления и расходы, с 7 — файлы студентов
 SECTIONS = ("directions", "cohorts", "team", "partners", "students", "payouts", "meetings", "expenses")
 LABELS = {"cohorts": "Потоки", "team": "Команда", "partners": "Партнёры", "students": "Студенты",
-          "payouts": "Выплаты", "meetings": "Встречи", "directions": "Направления", "expenses": "Расходы"}
+          "payouts": "Выплаты", "meetings": "Встречи", "directions": "Направления", "expenses": "Расходы", "files": "Файлы"}
 
 
 MAGIC = b"CRMENC1\n"       # начало зашифрованной копии
 KDF_ROUNDS = 600_000
 MIN_PASSPHRASE = 12
-MAX_PLAIN_BYTES = 50 * 1024 * 1024   # распакованная копия: с запасом для любой базы CRM, но не больше, чем выдержит сервер
+MAX_PLAIN_BYTES = 80 * 1024 * 1024   # распакованная копия: с запасом для любой базы CRM, но не больше, чем выдержит сервер
+# Сколько содержимого файлов студентов кладётся в копию. Копия уходит в Telegram (до 50 МБ), файл копии в base64 и шифре
+# больше исходных файлов примерно в 1,4 раза. Договоры идут первыми, затем новые файлы; остальные остаются только на сервере
+FILES_IN_BACKUP = 30 * 1024 * 1024
 
 
 class BackupError(ValueError):
@@ -67,9 +70,31 @@ def dump():
     data = {section: [] for section in SECTIONS}
     for doc in Doc.objects.filter(collection__in=SECTIONS).order_by("collection", "doc_id"):
         data[doc.collection].append({**doc.data, "id": doc.doc_id})
+    data["files"], omitted = _dump_files(data["students"])
     moment = timezone.now().strftime("%Y-%m-%dT%H:%M:%S.000Z")
-    return json.dumps({"format": BACKUP_FORMAT, "version": SUPPORTED_VERSIONS[-1], "exportedAt": moment, "data": data},
-                      ensure_ascii=False).encode()
+    out = {"format": BACKUP_FORMAT, "version": SUPPORTED_VERSIONS[-1], "exportedAt": moment, "data": data}
+    if omitted:
+        out["filesOmitted"] = omitted
+    return json.dumps(out, ensure_ascii=False).encode()
+
+
+def _dump_files(students):
+    """Содержимое файлов студентов, пока помещается в FILES_IN_BACKUP. Возвращает (файлы, сколько не поместилось)."""
+    contracts = {s["contract"]["id"] for s in students if isinstance(s.get("contract"), dict)}
+    rows = sorted(FileBlob.objects.defer("data").order_by("id"), key=lambda b: (b.id not in contracts, -b.created_at.timestamp()))
+    out, total, omitted = [], 0, 0
+    for row in rows:
+        if total + row.size > FILES_IN_BACKUP:
+            omitted += 1
+            continue
+        content = files.read(FileBlob.objects.get(pk=row.pk))
+        if content is None:
+            omitted += 1
+            continue
+        total += len(content)
+        out.append({"id": row.id, "studentId": row.student_id, "name": row.name, "mime": row.mime,
+                    "data": base64.b64encode(content).decode()})
+    return out, omitted
 
 
 def parse_backup(raw, passphrase=None):
@@ -104,7 +129,7 @@ def _ref(value, ids):
 @transaction.atomic
 def import_backup(raw, overwrite=False, with_demo=False, passphrase=None):
     data = parse_backup(raw, passphrase)["data"]
-    stats = {k: {"created": 0, "updated": 0, "skipped": 0} for k in SECTIONS}
+    stats = {k: {"created": 0, "updated": 0, "skipped": 0} for k in (*SECTIONS, "files")}
     students = [r for r in _rows(data, "students") if with_demo or not r.get("demo")]
     # Примеры пропускаются, кроме потоков, менторов и партнёров, на которые ссылаются настоящие студенты
     def refs(key):
@@ -141,7 +166,42 @@ def import_backup(raw, overwrite=False, with_demo=False, passphrase=None):
             else:
                 stats[section]["created"] += 1
             store.system_write(section, doc_id, row)
+    _load_files(data, kept["students"], overwrite, stats["files"])
+    # Файлы, на которые загруженные записи не ссылаются, открыть нельзя: убираем их
+    for doc in Doc.objects.filter(collection="students", doc_id__in=kept["students"]):
+        files.prune(doc.doc_id, doc.data)
     return stats
+
+
+def _load_files(data, students, overwrite, stat):
+    """Файлы студентов из копии. Тип проверяется заново, как при загрузке через карточку."""
+    rows = data.get("files") or []
+    if not isinstance(rows, list):
+        raise BackupError("Раздел «files» повреждён")
+    for row in rows:
+        file_id = row.get("id") if isinstance(row, dict) else None
+        if not isinstance(file_id, str) or not files.FILE_ID_RE.fullmatch(file_id) or row.get("studentId") not in students:
+            stat["skipped"] += 1
+            continue
+        try:
+            content = base64.b64decode(row.get("data") or "", validate=True)
+        except (ValueError, TypeError):
+            stat["skipped"] += 1
+            continue
+        mime = files.sniff(content, row.get("name"))
+        if mime is None or len(content) > files.MAX_BYTES:
+            stat["skipped"] += 1
+            continue
+        old = FileBlob.objects.filter(pk=file_id).first()
+        if old is not None:
+            if not overwrite or old.student_id != row["studentId"]:
+                stat["skipped"] += 1
+                continue
+            old.delete()
+            stat["updated"] += 1
+        else:
+            stat["created"] += 1
+        files.store_blob(file_id, row["studentId"], files.clean_name(row.get("name"), mime), mime, content)
 
 
 def summary_lines(stats):

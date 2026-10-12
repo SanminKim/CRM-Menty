@@ -36,6 +36,9 @@ jobs:
           script: |
             set -e
             cd ${{ secrets.DEPLOY_PATH }}
+            OLD=$(git rev-parse HEAD)
             git pull --ff-only
             docker compose up -d --build
+            # Caddyfile подключён файлом: изменения подхватываются только после перезапуска Caddy
+            if ! git diff --quiet "$OLD" HEAD -- docker/Caddyfile; then docker compose restart caddy; fi
             docker image prune -f

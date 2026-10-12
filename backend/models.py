@@ -124,3 +124,23 @@ class TgChat(models.Model):
 
     def __str__(self):
         return f"{self.chat_id} {self.username}".strip()
+
+
+class FileBlob(models.Model):
+    """Файл из карточки студента: договор или документ к платежу. Содержимое хранится зашифрованным (backend/files.py),
+    сведения о файле (имя, размер, кто прикрепил) лежат в записи студента."""
+
+    id = models.CharField(primary_key=True, max_length=32)
+    student_id = models.CharField(max_length=64, db_index=True)
+    name = models.CharField(max_length=200)
+    mime = models.CharField(max_length=100)
+    size = models.IntegerField()
+    data = models.BinaryField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Файл студента"
+        verbose_name_plural = "Файлы студентов"
+
+    def __str__(self):
+        return f"{self.student_id}/{self.id}"

@@ -1899,3 +1899,159 @@ class MeetingAnswerTests(BaseCase):
         self.assertEqual(self.send("put", "meetings", "g9", {"title": "x", "mentorId": "t2", "rsvp": {"a1": {"a": "yes"}}}).status_code, 403)
         self.login("admin")
         self.assertEqual(self.send("patch", "meetings", "g1", {"rsvp": {}}).status_code, 200)
+
+
+PDF = b"%PDF-1.4\n%test\n" + b"0" * 100
+PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 100
+
+
+class StudentFileTests(BaseCase):
+    """Договор и файлы к платежам: хранятся на сервере зашифрованными, видны тому, кто ведёт студента."""
+
+    def setUp(self):
+        store.system_write("students", "s1", student("t1", partnerId="p1", partnerShare=40, payments=[
+            {"id": "x1", "amount": 30000, "due": "2026-09-01", "paid": None},
+            {"id": "x2", "amount": 30000, "due": "2026-08-01", "paid": "2026-08-01"}]))
+
+    def upload(self, kind="contract", payment="", name="Договор.pdf", content=PDF, sid="s1"):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return self.client.post("/api/files/", {"student": sid, "kind": kind, "payment": payment,
+                                                "file": SimpleUploadedFile(name, content, content_type="application/pdf")})
+
+    def data(self, sid="s1"):
+        return Doc.objects.get(collection="students", doc_id=sid).data
+
+    def test_mentor_attaches_a_contract_that_is_stored_encrypted(self):
+        from backend.models import FileBlob
+        self.login("mentor")
+        res = self.upload()
+        self.assertEqual(res.status_code, 201, res.content)
+        meta = self.data()["contract"]
+        self.assertEqual((meta["name"], meta["mime"], meta["size"], meta["by"]), ("Договор.pdf", "application/pdf", len(PDF), f"u{self.mentor.pk}"))
+        self.assertNotIn(b"%PDF", bytes(FileBlob.objects.get(pk=meta["id"]).data))
+        got = self.client.get(f"/api/files/{meta['id']}/")
+        self.assertEqual(got.content, PDF)
+        self.assertEqual(got["X-Content-Type-Options"], "nosniff")
+        self.assertIn("sandbox", got["Content-Security-Policy"])
+        self.assertTrue(got["Content-Disposition"].startswith("attachment"))
+        # новый договор заменяет прежний, старый файл удаляется
+        self.upload(name="v2.pdf")
+        self.assertEqual(self.data()["contract"]["name"], "v2.pdf")
+        self.assertFalse(FileBlob.objects.filter(pk=meta["id"]).exists())
+
+    def test_other_mentor_partner_and_strangers_get_nothing(self):
+        self.login("mentor")
+        file_id = self.upload().json()["file"]["id"]
+        for who in ("other", "blogger"):
+            self.login(who)
+            self.assertEqual(self.client.get(f"/api/files/{file_id}/").status_code, 403, who)
+            self.assertEqual(self.client.delete(f"/api/files/{file_id}/").status_code, 403, who)
+            self.assertEqual(self.upload().status_code, 403, who)
+        self.login("other")
+        self.assertEqual(self.client.get("/api/files/000000000000000000000000/").status_code, 403)
+        self.client.logout()
+        self.assertEqual(self.client.get(f"/api/files/{file_id}/").status_code, 401)
+
+    def test_only_admin_attaches_or_removes_files_of_a_paid_payment(self):
+        self.login("mentor")
+        self.assertEqual(self.upload("payment", "x2", "чек.png", PNG).status_code, 403)
+        res = self.upload("payment", "x1", "чек.png", PNG)
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(self.data()["payments"][0]["files"][0]["name"], "чек.png")
+        self.assertIn("прикреплён файл «чек.png»", self.data()["log"][-1]["text"])  # как и любое изменение платежа
+        self.login("admin")
+        paid = self.upload("payment", "x2", "выписка.pdf").json()["file"]["id"]
+        self.login("mentor")
+        self.assertEqual(self.client.delete(f"/api/files/{paid}/").status_code, 403)
+        self.assertEqual(self.client.get(f"/api/files/{paid}/").status_code, 200)  # смотреть может
+        own = res.json()["file"]["id"]
+        self.assertEqual(self.client.delete(f"/api/files/{own}/").status_code, 200)
+        self.assertNotIn("files", self.data()["payments"][0])
+
+    def test_only_supported_types_and_sizes(self):
+        from backend import files
+        self.login("admin")
+        self.assertEqual(self.upload(name="page.pdf", content=b"<html><script>alert(1)</script>").status_code, 400)
+        self.assertEqual(self.upload(name="x.docx", content=b"PK\x03\x04" + b"0" * 50).status_code, 201)
+        self.assertEqual(self.upload(name="x.zip", content=b"PK\x03\x04" + b"0" * 50).status_code, 400)
+        self.assertEqual(self.upload(name="big.pdf", content=b"%PDF-" + b"0" * files.MAX_BYTES).status_code, 400)
+        self.assertEqual(self.upload(name="../../etc/скан", content=PNG).json()["file"]["name"], "скан.png")
+        self.assertEqual(self.upload("payment", "нет").status_code, 400)
+        self.assertEqual(self.upload(name="счёт\u202egpj.pdf").json()["file"]["name"], "счётgpj.pdf")  # без переворота текста
+        old = files.MAX_PER_STUDENT
+        files.MAX_PER_STUDENT = len(PDF) + 10
+        try:
+            self.assertEqual(self.upload("payment", "x1").status_code, 400)  # общий объём файлов студента ограничен
+        finally:
+            files.MAX_PER_STUDENT = old
+
+    def test_page_cannot_forge_or_drop_file_records(self):
+        from backend.models import FileBlob
+        self.login("mentor")
+        contract = self.upload().json()["file"]
+        receipt = self.upload("payment", "x1", "чек.png", PNG).json()["file"]
+        store.system_write("students", "s2", student("t2", name="Чужой Студент"))
+        self.login("admin")
+        foreign = self.upload(sid="s2").json()["file"]
+        self.login("mentor")
+        fake = {"id": foreign["id"], "name": "чужой.pdf"}
+        pays = [{"id": "x1", "amount": 30000, "due": "2026-09-01", "paid": None, "files": [fake]},
+                {"id": "x2", "amount": 30000, "due": "2026-08-01", "paid": "2026-08-01"},
+                {"id": "x3", "amount": 1000, "due": "2026-10-01", "paid": None, "files": [fake]}]
+        res = self.send("patch", "students", "s1", {"contract": fake, "payments": pays})
+        self.assertEqual(res.status_code, 200, res.content)
+        data = self.data()
+        self.assertEqual(data["contract"]["id"], contract["id"])
+        self.assertEqual([f["id"] for f in data["payments"][0]["files"]], [receipt["id"]])
+        self.assertNotIn("files", data["payments"][2])
+        self.assertEqual(self.client.get(f"/api/files/{foreign['id']}/").status_code, 403)
+        # удалили неоплаченный платёж — его файлы удаляются вместе с ним
+        self.send("patch", "students", "s1", {"payments": pays[1:]})
+        self.assertFalse(FileBlob.objects.filter(pk=receipt["id"]).exists())
+        self.assertTrue(FileBlob.objects.filter(pk=contract["id"]).exists())
+        # студента удалили насовсем — удалились и его файлы
+        self.login("admin")
+        self.send("delete", "students", "s1")
+        self.assertFalse(FileBlob.objects.filter(student_id="s1").exists())
+
+    def test_trashed_student_takes_no_new_files(self):
+        store.system_write("students", "s1", {**self.data(), "deletedAt": "2026-10-01T00:00:00.000Z"})
+        self.login("admin")
+        self.assertEqual(self.upload().status_code, 400)
+
+    def test_files_travel_in_the_backup(self):
+        from backend import backup
+        from backend.models import FileBlob
+        self.login("admin")
+        file_id = self.upload().json()["file"]["id"]
+        dumped = json.loads(backup.dump())
+        self.assertEqual(dumped["version"], 7)
+        self.assertEqual([f["id"] for f in dumped["data"]["files"]], [file_id])
+        FileBlob.objects.all().delete()
+        stats = import_backup(dumped, overwrite=True)
+        self.assertEqual(stats["files"]["created"], 1)
+        self.assertEqual(self.client.get(f"/api/files/{file_id}/").content, PDF)
+        # в копии файл с подменённым содержимым или для чужого студента не загружается
+        dumped["data"]["files"][0]["data"] = base64_of(b"<script>")
+        dumped["data"]["files"].append({"id": "a" * 24, "studentId": "нет", "name": "x.pdf", "data": base64_of(PDF)})
+        stats = import_backup(dumped, overwrite=True)
+        self.assertEqual(stats["files"]["skipped"], 2)
+
+    def test_backup_leaves_out_files_over_the_limit(self):
+        from backend import backup
+        self.login("admin")
+        self.upload("payment", "x1", "чек.png", PNG)
+        contract = self.upload().json()["file"]["id"]
+        old = backup.FILES_IN_BACKUP
+        backup.FILES_IN_BACKUP = len(PDF)
+        try:
+            dumped = json.loads(backup.dump())
+        finally:
+            backup.FILES_IN_BACKUP = old
+        self.assertEqual([f["id"] for f in dumped["data"]["files"]], [contract])  # договор важнее
+        self.assertEqual(dumped["filesOmitted"], 1)
+
+
+def base64_of(raw):
+    import base64
+    return base64.b64encode(raw).decode()

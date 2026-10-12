@@ -127,7 +127,7 @@ def send_document(chat_id, filename, content, caption=""):
         data=body, headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=180) as response:  # копия базы с файлами весит десятки мегабайт
             payload = json.loads(response.read())
     except urllib.error.HTTPError as exc:
         log.warning("Telegram sendDocument отклонён: %s", exc.code)

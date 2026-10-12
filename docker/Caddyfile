@@ -1,11 +1,16 @@
 {$DOMAIN} {
 	encode gzip
-	# Большие тела запросов принимает только загрузка резервной копии
+	# Большие тела запросов принимают только загрузка резервной копии (в ней и файлы студентов) и файлы карточки
 	@upload path /backup/import/
 	request_body @upload {
-		max_size 25MB
+		max_size 55MB
 	}
-	@rest not path /backup/import/
+	# Файлы карточки студента: до 10 МБ (backend/files.py)
+	@files path /api/files/
+	request_body @files {
+		max_size 11MB
+	}
+	@rest not path /backup/import/ /api/files/
 	request_body @rest {
 		max_size 2MB
 	}

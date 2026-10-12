@@ -22,5 +22,7 @@ urlpatterns = [
     path("api/telegram/", telegram.webhook),
     path("api/telegram/link/", api.telegram_link),
     path("api/telegram/student-link/", api.telegram_student_link),
+    path("api/files/", api.file_upload),
+    path("api/files/<str:file_id>/", api.file),
     path("api/telegram/file/<str:student_id>/<str:proof_id>/", api.telegram_file),
 ]

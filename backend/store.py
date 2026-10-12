@@ -11,7 +11,7 @@ import re
 
 from django.db import DataError, transaction
 
-from . import reports
+from . import files, reports
 from .models import COLLECTIONS, Account, Doc, State, Tombstone
 
 ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
@@ -379,6 +379,8 @@ def write(access, collection, doc_id, data, partial):
     old = doc.data if doc else None
     patch = _clean(collection, data)
     new = merge(json.loads(json.dumps(old)), patch) if partial else patch
+    if collection == "students":
+        files.keep(old, new)  # договор и файлы платежей меняются только загрузкой и удалением файла
     _validate(collection, doc_id, new)
     access.check_write(collection, old, new)
     if collection == "directions" and new is not None and reports.terms_problem(new):
@@ -396,6 +398,8 @@ def write(access, collection, doc_id, data, partial):
             raise Invalid("Партнёр или ментор не найден")
     doc.data, doc.rev, doc.updated_by = new, rev, access.user
     _save(doc)
+    if collection == "students" and old is not None:
+        files.prune(doc_id, new)  # удалили неоплаченный платёж — удаляются и его файлы
     if collection == "students" and old is not None and old.get("mentorId") != new.get("mentorId"):
         _touch_meetings(doc_id, rev)
         if isinstance(new.get("mentorId"), str) and new["mentorId"] and not new.get("deletedAt"):
@@ -424,6 +428,7 @@ def delete(access, collection, doc_id):
     if collection == "students":
         from . import telegram
         telegram.forget_student(doc_id)
+        files.forget_student(doc_id)
     _refresh_reports(collection, rev, old, None)
     return rev
 

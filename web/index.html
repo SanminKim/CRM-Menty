@@ -333,8 +333,57 @@ button.kpi.on, button.kpi.on:hover { background: var(--brand-soft); box-shadow: 
 .scrim { position: fixed; inset: 0; background: var(--overlay); z-index: 14; }
 .drawer { position: fixed; z-index: 15; top: 0; right: 0; bottom: 0; width: min(600px, 100%); background: var(--bg); border-left: 1px solid var(--border); box-shadow: var(--pop); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
 .d-head { display: flex; align-items: center; gap: 8px; padding: 16px 16px 16px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
-.d-head h2 { font-size: 18px; font-weight: 600; letter-spacing: -.01em; min-width: 0; overflow-wrap: anywhere; flex: 1; }
-.d-body { overflow-y: auto; padding: 20px 20px calc(28px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 20px; flex: 1; }
+.d-title { flex: 1; min-width: 0; }
+.d-head h2 { font-size: 18px; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.d-sub { color: var(--muted); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+.d-body { overflow-y: auto; padding: 0 20px calc(28px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.d-top { display: flex; flex-direction: column; gap: 14px; padding-top: 18px; }
+.d-tab { display: flex; flex-direction: column; gap: 18px; }
+/* Вкладки карточки остаются на виду, пока листаешь раздел */
+.d-body > * { flex-shrink: 0; }
+.card-tabs { position: sticky; top: 0; z-index: 2; background: var(--bg); margin: 0 -20px; padding: 0 20px; }
+.card-tabs { gap: 0; }
+.card-tabs button { display: inline-flex; align-items: center; gap: 6px; padding: 12px 9px; }
+.card-tabs .cnt { font-size: 12px; color: var(--muted); background: var(--surface-2); border-radius: 99px; padding: 0 7px; font-weight: 500; }
+.card-tabs .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); }
+.about { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--brand); border-radius: var(--radius); padding: 10px 14px; }
+.about-head { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+.about-head .link { margin-left: auto; font-size: 12px; }
+.about-add { all: unset; box-sizing: border-box; cursor: pointer; border: 1px dashed var(--border); border-radius: var(--radius); padding: 9px 14px; color: var(--muted); font-size: 13px; }
+.about-add:hover, .about-add:focus-visible { border-color: var(--brand); color: var(--text); }
+.d-tab > .box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; }
+.d-tab > .box .empty { padding: 0; }
+.msum { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; }
+.msum.click { cursor: pointer; }
+.msum.click:hover, .msum.click:focus-visible { border-color: var(--brand); }
+.msum-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.msum-top strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.msum-top .right { margin-left: auto; font-weight: 600; }
+.msum-bar { display: block; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.msum-bar > span { display: block; height: 100%; background: var(--ok); border-radius: 99px; }
+.msum-foot { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.ok-text { color: var(--ok); }
+.pays { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pay { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+.pay.od { border-left: 3px solid var(--danger); }
+.pay.done { border-left: 3px solid var(--ok); }
+.pay-row { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; }
+.pay-due { min-width: 52px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pay-sum { min-width: 90px; font-variant-numeric: tabular-nums; }
+.pay-row .row-actions { margin-left: auto; }
+.pay-comment { font-size: 13px; color: var(--muted); }
+.pay-note { margin: 0; font-size: 13px; background: var(--surface-2); border-radius: 8px; padding: 6px 10px; }
+.files { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.file { display: inline-flex; align-items: center; max-width: 100%; border: 1px solid var(--border); background: var(--bg); border-radius: 8px; font-size: 13px; }
+.file > a, .file > span { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; color: var(--text); text-decoration: none; min-width: 0; }
+.file > a:hover .fn { text-decoration: underline; }
+.file .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.file small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.file-x { all: unset; cursor: pointer; padding: 4px 9px; color: var(--muted); border-left: 1px solid var(--border); font-size: 13px; }
+.file-x:hover, .file-x:focus-visible { color: var(--danger); }
+.file-x.armed { color: var(--danger); font-weight: 600; }
+.drop-on { outline: 2px dashed var(--brand); outline-offset: 2px; }
+@media (max-width: 520px) { .card-tabs .long, .card-tabs .cnt { display: none; } .card-tabs button { padding-inline: 8px; } }
 .path { list-style: none; display: flex; gap: 3px; margin: 0; padding: 0; }
 .path li { flex: 1; height: 6px; border-radius: 99px; background: var(--surface-2); color: var(--g-sales); }
 .path li.g-study { color: var(--g-study); }
@@ -355,6 +404,7 @@ button.kpi.on, button.kpi.on:hover { background: var(--brand-soft); box-shadow: 
 .stepbox { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
 .stepbox .body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .stepbox .body span { color: var(--muted); font-size: 13px; }
+.stepbox .body .lbl { font-size: 12px; }
 .stepbox.late { border-color: var(--danger); }
 .stepbox.late .body span { color: var(--danger); font-weight: 600; }
 .stepbox.none { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
@@ -548,6 +598,8 @@ details + details { margin-top: 6px; }
   .tile-move { display: block; }
   .filters input[type=search] { max-width: none; }
   .d-body { padding-inline: 16px; }
+  .card-tabs { margin-inline: -16px; padding-inline: 16px; }
+  .pay-row .row-actions { margin-left: 0; width: 100%; }
   .d-head { padding-left: 16px; }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -662,7 +714,7 @@ const S = {
   data: { students: [], cohorts: [], partners: [], payouts: [], team: [], reports: [], meetings: [], directions: [], expenses: [] }, loaded: {}, trash: [],
   view: "today", openId: null, partnerId: null, cohortId: null, reportId: null, pipe: "sales", anTab: "funnel", sel: new Set(), visible: [],
   f: { q: "", cohort: "", mentor: "", partner: "", stage: "" }, showLost: false, payTab: "upcoming",
-  config: {}, moreNoStep: false, histOpen: false, logOpen: false, sort: null, sorts: {}, rows: 0, colMax: {}, cal: { ym: today().slice(0, 7), day: today() }, pending: 0, names: {}, drag: null, busy: false,
+  config: {}, moreNoStep: false, cardTab: "main", sort: null, sorts: {}, rows: 0, colMax: {}, cal: { ym: today().slice(0, 7), day: today() }, pending: 0, names: {}, drag: null, busy: false,
   unknownFailed: null,
 };
 {
@@ -1218,9 +1270,9 @@ function helpView() {
   return headHTML("Справка") + `<div class="guide">
     <section class="card"><h2>Как вести человека</h2><ol>
       <li><strong>Заявка.</strong> Приходит из бота или с сайта, либо добавляется кнопкой «+ Заявка». ${adm ? "Новые заявки без ответственного лежат на экране «Сегодня» в блоке «Без ментора»: нажмите «Взять себе» или «Назначить»." : "Заявка, которую вы добавили сами, сразу закреплена за вами."}</li>
-      <li><strong>Карточка.</strong> Нажмите на имя в любом списке. Вверху карточки — полоса пути и синяя кнопка «Дальше»: она переводит на следующий этап и спрашивает только то, что этому этапу нужно (дату созвона, стоимость, компанию).</li>
+      <li><strong>Карточка.</strong> Нажмите на имя в любом списке. Вверху карточки — полоса пути и синяя кнопка «Дальше»: она переводит на следующий этап и спрашивает только то, что этому этапу нужно (дату созвона, стоимость, компанию). Под ней следующий шаг и «О студенте» — пара строк о человеке, которые важно помнить. Ниже вкладки: «Главное» (контакты, встречи, заметки), «Деньги и договор», «Обучение», «Работа», «История».</li>
       <li><strong>Следующий шаг.</strong> У каждого человека должно быть дело с датой: «написать», «проверить домашку». В нужный день оно появится на экране «Сегодня». Люди без шага собраны там же, в блоке «Без следующего шага».</li>
-      <li><strong>Оплата.</strong> Платёж создаётся при переходе в «Ждём оплату» или кнопкой «+ Платёж» в карточке. Когда деньги пришли, нажмите «Оплачен». Для тех, кто уже работает, есть «+ С зарплаты»: процент от дохода по месяцам.</li>
+      <li><strong>Оплата.</strong> Платёж создаётся при переходе в «Ждём оплату» или кнопкой «+ Платёж» в карточке. Когда деньги пришли, нажмите «Оплачен». Для тех, кто уже работает, есть «+ С зарплаты»: процент от дохода по месяцам. На вкладке «Деньги и договор» прикрепляется договор, а к каждому платежу — данные (способ оплаты, номер чека) и файлы: чек, выписка, скан. Файлы до 10 МБ видят администратор и ментор студента.</li>
       <li><strong>Обучение и работа.</strong> В карточке отмечаются пройденные модули, встречи, отклики на вакансии и собеседования.</li>
       <li><strong>Отказ.</strong> Выберите этап «Отказ / выбыл» и укажите причину. Карточка остаётся в базе.</li>
     </ol></section>
@@ -1775,15 +1827,71 @@ function proofSection(s) {
       ${x.caption ? `<p class="pre">${esc(x.caption)}</p>` : ""}</li>`).join("")}</ul>
       <p class="hint" style="padding-bottom:8px">Студент присылает их боту. В CRM хранится только ссылка: файл открывается из Telegram и виден тем, кто ведёт студента.</p></div></section>`;
 }
+// ----- Файлы карточки: договор и документы к платежам. Лежат на сервере зашифрованными, открываются по ссылке с проверкой прав -----
+const FILE_ACCEPT = ".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx";
+const FILE_MAX = 10 * 1024 * 1024, FILES_PER_PAY = 10;
+const fSize = n => { n = nnum(n); return n >= 1048576 ? `${(n / 1048576).toFixed(1).replace(".", ",")} МБ` : `${Math.max(1, Math.round(n / 1024))} КБ`; };
+const payFiles = x => isObj(x) && Array.isArray(x.files) ? x.files.filter(f => isObj(f) && typeof f.id === "string") : [];
+const canFiles = () => !!SRV?.files && !S.readOnly;
+// Файлы оплаченного платежа добавляет и убирает администратор, как и саму оплату
+const canPayFiles = x => canFiles() && (!x.paid || canConfirm());
+function fileChip(f, canDel) {
+  const label = `<span class="fi" aria-hidden="true">${String(f.mime || "").startsWith("image/") ? "🖼" : "📄"}</span><span class="fn">${esc(f.name || "файл")}</span><small>${esc(fSize(f.size))}</small>`;
+  const who = `${f.by ? personName(f.by) + " · " : ""}${fDT(f.at)}`;
+  return `<span class="file" data-file="${esc(f.id)}">${SRV?.files ? `<a href="${esc(SRV.files.url(f.id))}" target="_blank" rel="noopener" title="${esc("Открыть · прикреплён " + who)}">${label}</a>` : `<span title="${esc(who)}">${label}</span>`}${canDel ? `<button class="file-x" data-act="file-del" data-fid="${esc(f.id)}" aria-label="Убрать файл ${esc(f.name || "")}" title="Убрать файл">×</button>` : ""}</span>`;
+}
+function contractSection(s) {
+  const c = isObj(s.contract) && typeof s.contract.id === "string" ? s.contract : null, can = canFiles();
+  return `<section class="sec" id="d-contract"><header><h3>Договор</h3>${c ? `<span class="sub">прикреплён ${fShort(c.at)}${c.by ? " · " + esc(personName(c.by)) : ""}</span>` : ""}<span class="right"></span>
+      ${can ? `<button class="btn small${c ? " ghost" : ""}" data-act="file-add" data-id="${esc(s.id)}" data-kind="contract">${c ? "Заменить" : "📎 Прикрепить договор"}</button>` : ""}</header>
+    <div class="box drop" ${can ? `data-drop="contract" data-id="${esc(s.id)}"` : ""}>${c ? `<div class="files">${fileChip(c, can)}</div>`
+      : `<p class="empty">${can ? "Договор не прикреплён. Нажмите «Прикрепить договор» или перетащите файл сюда: PDF, Word, скан или фото до 10 МБ." : SRV?.files ? "Договор не прикреплён." : "Договор прикрепляется в CRM на сервере."}</p>`}</div></section>`;
+}
+function payItem(s, x, t) {
+  const od = !x.paid && x.due < t, files = payFiles(x), canAdd = canPayFiles(x) && files.length < FILES_PER_PAY;
+  const tag = isRefund(x) ? `<span class="tag warn">возврат ${fDay(x.paid)}</span>` : x.paid ? (payDelay(x) > 0 ? `<span class="tag warn" title="Срок был ${esc(fDate(x.due))}">оплачен ${fDay(x.paid)} · на ${days(payDelay(x))} позже</span>` : `<span class="tag ok">оплачен ${fDay(x.paid)}</span>`) : isPending(x) ? `<span class="tag ${od ? "danger" : "warn"}">${od ? "ждём доход" : "сумма по доходу"}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`;
+  const acts = `${x.paid ? "" : isPending(x) ? `<button class="btn small" data-act="pay-income" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Указать доход</button> ` : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(s.id)}" data-pid="${esc(x.id)}" title="Скопировать текст напоминания">Напомнить</button> ${canConfirm() ? `<button class="btn small" data-act="pay-done" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Оплачен</button> ` : ""}`}${x.paid && !canConfirm() ? "" : `<button class="btn small ghost" data-act="pay-edit" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Изменить</button>`}`;
+  return `<li class="pay${od ? " od" : x.paid ? " done" : ""}" data-pid="${esc(x.id)}" ${canAdd ? `data-drop="payment" data-id="${esc(s.id)}"` : ""}>
+    <div class="pay-row"><span class="pay-due">${fShort(x.due)}</span><span class="pay-sum">${isPending(x) ? `<span class="sub">${esc(pctText(x.percent))} от дохода</span>` : `<strong>${money(x.amount)}</strong>` + gapText(x)}</span>${tag}<span class="row-actions">${acts}</span></div>
+    ${x.comment ? `<div class="pay-comment">${esc(x.comment)}</div>` : ""}${x.details ? `<p class="pay-note pre">${esc(x.details)}</p>` : ""}
+    ${files.length || canAdd ? `<div class="files">${files.map(f => fileChip(f, canPayFiles(x))).join("")}${canAdd ? `<button class="btn small ghost file-add" data-act="file-add" data-id="${esc(s.id)}" data-kind="payment" data-pid="${esc(x.id)}" title="Чек, выписка, скан: PDF, Word или фото до 10 МБ">📎 Файл</button>` : ""}</div>` : ""}</li>`;
+}
 function paySection(s) {
-  const t = today(), pays = sortBy(s.payments || [], x => x.due);
-  return `<section class="sec"><header><h3>Платежи</h3><span class="sub">${s.price ? `${money(paidSum(s))} из ${money(s.price)}` : pays.length ? money(paidSum(s)) : ""}</span><span class="right"></span>
+  const t = today(), pays = sortBy((s.payments || []).filter(isObj), x => x.due);
+  return `<section class="sec" id="d-pays"><header><h3>Платежи</h3><span class="sub">${pays.length ? `${pays.length} ${plural(pays.length, "платёж", "платежа", "платежей")}` : ""}</span><span class="right"></span>
       <button class="btn small" data-act="pay-new" data-id="${esc(s.id)}">+ Платёж</button>${SGROUP[s.stage] === "job" ? `<button class="btn small" data-act="pay-salary" data-id="${esc(s.id)}">+ С зарплаты</button>` : ""}${canConfirm() && paidSum(s) > 0 ? `<button class="btn small ghost" data-act="pay-refund" data-id="${esc(s.id)}">Возврат</button>` : ""}</header>
-    ${payHistoryLine(s)}<div class="box">${pays.length ? `<div class="table-wrap"><table class="compact"><tbody>
-      ${pays.map(x => { const od = !x.paid && x.due < t; return `<tr><td>${fShort(x.due)}${x.comment ? `<div class="sub">${esc(x.comment)}</div>` : ""}</td><td class="num">${isPending(x) ? `<span class="sub">${esc(pctText(x.percent))} от дохода</span>` : money(x.amount) + gapText(x)}</td>
-        <td>${isRefund(x) ? `<span class="tag warn">возврат ${fDay(x.paid)}</span>` : x.paid ? (payDelay(x) > 0 ? `<span class="tag warn" title="Срок был ${esc(fDate(x.due))}">оплачен ${fDay(x.paid)} · на ${days(payDelay(x))} позже</span>` : `<span class="tag ok">оплачен ${fDay(x.paid)}</span>`) : isPending(x) ? `<span class="tag ${od ? "danger" : "warn"}">${od ? "ждём доход" : "сумма по доходу"}</span>` : od ? `<span class="tag danger">просрочен</span>` : `<span class="tag">ожидается</span>`}</td>
-        <td class="row-actions">${x.paid ? "" : isPending(x) ? `<button class="btn small" data-act="pay-income" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Указать доход</button> ` : `<button class="btn small ghost" data-act="pay-remind" data-id="${esc(s.id)}" data-pid="${esc(x.id)}" title="Скопировать текст напоминания">Напомнить</button> ${canConfirm() ? `<button class="btn small" data-act="pay-done" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Оплачен</button> ` : ""}`}${x.paid && !canConfirm() ? "" : `<button class="btn small ghost" data-act="pay-edit" data-id="${esc(s.id)}" data-pid="${esc(x.id)}">Изменить</button>`}</td></tr>`; }).join("")}
-    </tbody></table></div>` : `<p class="empty">Платежей пока нет</p>`}</div>${S.limited && pays.some(x => !x.paid && !isPending(x)) ? `<p class="hint" style="margin-top:6px">Оплату отмечает администратор, когда деньги пришли.</p>` : ""}${pays.some(x => !x.paid) ? botLine(s) : ""}</section>${proofSection(s)}`;
+    ${payHistoryLine(s)}${pays.length ? `<ul class="pays">${pays.map(x => payItem(s, x, t)).join("")}</ul>` : `<div class="box"><p class="empty">Платежей пока нет. Добавьте их кнопкой «+ Платёж»: к каждому можно приложить данные и файлы.</p></div>`}
+    ${S.limited && pays.some(x => !x.paid && !isPending(x)) ? `<p class="hint" style="margin-top:6px">Оплату отмечает администратор, когда деньги пришли. Файлы к оплаченному платежу тоже прикрепляет он.</p>` : ""}${pays.some(x => !x.paid) ? botLine(s) : ""}</section>`;
+}
+// Файл выбирается обычным окном выбора или перетаскивается на договор или платёж
+let filePick = null;
+function pickFile(sid, kind, pid) {
+  if (!canFiles()) return;
+  if (!filePick) {
+    filePick = document.createElement("input"); filePick.type = "file"; filePick.accept = FILE_ACCEPT; filePick.hidden = true; filePick.id = "file-pick";
+    filePick.addEventListener("change", () => { const f = filePick.files && filePick.files[0], t = filePick.target; filePick.value = ""; if (f && t) uploadFile(t.sid, t.kind, t.pid, f); });
+    document.body.appendChild(filePick);
+  }
+  filePick.target = { sid, kind, pid }; filePick.click();
+}
+function uploadFile(sid, kind, pid, file) {
+  if (!canFiles()) return;
+  if (file.size > FILE_MAX) return toast("Файл больше 10 МБ. Сожмите его или сохраните в PDF поменьше");
+  if (!/\.(pdf|jpe?g|png|webp|docx?)$/i.test(file.name || "")) return toast("Подходят PDF, Word (DOC, DOCX) и фото JPG, PNG, WebP");
+  return save(() => SRV.files.upload(sid, kind, pid || "", file), kind === "contract" ? "Договор прикреплён" : "Файл прикреплён к платежу");
+}
+// Сводка по деньгам: сколько оплачено, сколько осталось, ближайший платёж и договор
+function moneySummary(s, link) {
+  const paid = paidSum(s), price = nnum(s.price), d = debt(s), next = firstUnpaid(s), t = today();
+  const hasPays = (s.payments || []).some(isObj);
+  if (link && !price && !hasPays && !s.contract) return "";
+  const pctPaid = price > 0 ? Math.max(0, Math.min(100, Math.round(paid / price * 100))) : 0, od = next && next.due < t;
+  const nextText = next ? `${isPending(next) ? esc(pctText(next.percent)) + " от дохода" : money(next.amount)} · ${od ? `<span class="danger-text">просрочен с ${fDate(next.due)}</span>` : `до ${fDate(next.due)}`}` : price > 0 && d ? `<span class="warn-text">не назначен</span>` : "нет";
+  const contract = isObj(s.contract) ? `<span class="ok-text">прикреплён</span>` : SGROUP[s.stage] === "sales" ? "нет" : `<span class="warn-text">не прикреплён</span>`;
+  const inner = `<span class="msum-top"><strong>${money(paid)}</strong><span class="muted">${price > 0 ? `оплачено из ${money(price)}` : "оплачено"}</span>${d ? `<span class="right warn-text">осталось ${money(d)}</span>` : price > 0 && paid >= price ? `<span class="right ok-text">оплачено полностью</span>` : ""}</span>
+      ${price > 0 ? `<span class="msum-bar"><span style="width:${pctPaid}%"></span></span>` : ""}
+      <span class="msum-foot"><span>Следующий платёж: ${nextText}</span><span>Договор: ${contract}</span></span>`;
+  return link ? `<button class="msum click" data-act="card-tab" data-v="money" title="Открыть «Деньги и договор»">${inner}</button>` : `<div class="msum">${inner}</div>`;
 }
 function appSection(s) {
   const apps = sortBy(s.apps || [], a => a.date || "").reverse();
@@ -1823,8 +1931,8 @@ const NEXT_STEP = {
   final_project: ["Проверить итоговый проект", 7], job_search: ["Ревью резюме", 2], offer: ["Узнать, как проходит испытательный срок", 30],
 };
 const tgUser = s => { const u = s.telegram ? String(s.telegram).replace(/^@/, "") : ""; return /^[A-Za-z0-9_]{3,}$/.test(u) ? u : ""; };
-const firstUnpaid = s => sortBy((s.payments || []).filter(x => !x.paid), x => x.due || "")[0] || null;
-const firstPayable = s => sortBy((s.payments || []).filter(x => !x.paid && !isPending(x)), x => x.due || "")[0] || null; // у платежа от дохода ещё нет суммы
+const firstUnpaid = s => sortBy((Array.isArray(s.payments) ? s.payments : []).filter(x => isObj(x) && !x.paid), x => x.due || "")[0] || null;
+const firstPayable = s => sortBy((Array.isArray(s.payments) ? s.payments : []).filter(x => isObj(x) && !x.paid && !isPending(x)), x => x.due || "")[0] || null; // у платежа от дохода ещё нет суммы
 // Переход на следующий этап, которому нужны данные (дата созвона, стоимость, оффер), всегда идёт через форму:
 // на доске и в списке этапов так же, как по кнопке «Дальше»
 const ASK_ON = ["call", "waiting_payment", "studying", "offer"];
@@ -1940,9 +2048,25 @@ async function advance(id, to, v) {
   }, "Этап возвращён"));
   return ok;
 }
+// «О студенте»: коротко, кто это и что важно знать. Пишут администратор и ментор студента
+function aboutHTML(s) {
+  const t = typeof s.about === "string" ? s.about.trim() : "";
+  if (!t) return S.readOnly ? "" : `<button class="about-add" data-act="about-edit" data-id="${esc(s.id)}">+ Кратко о студенте: опыт, цель, что важно помнить</button>`;
+  return `<div class="about" id="d-about"><div class="about-head"><span>О студенте</span>${S.readOnly ? "" : `<button class="link" data-act="about-edit" data-id="${esc(s.id)}">Изменить</button>`}</div><p class="pre">${esc(t)}</p></div>`;
+}
+function aboutForm(s) {
+  openModal({
+    title: `О студенте: ${s.name}`, values: { about: typeof s.about === "string" ? s.about : "" },
+    fields: [{ k: "about", label: "Кратко о студенте", type: "textarea", rows: 7, wide: true, ph: "Работает бухгалтером, хочет перейти в аналитики 1С. Учится по вечерам, лучше писать в Telegram. Сильная сторона — Excel", help: "Видят администратор и ментор студента. До 2000 знаков" }],
+    onSubmit: v => {
+      const t = String(v.about || "").trim().slice(0, 2000);
+      return save(() => patchStudent(s.id, cur => (cur.about || "") === t ? null : { about: t || null }), "Сохранено");
+    },
+  });
+}
+const CARD_TABS = [["main", "Главное"], ["money", "Деньги<span class=\"long\"> и договор</span>"], ["study", "Обучение"], ["job", "Работа"], ["hist", "История"]];
 function drawerHTML(s) {
-  const p = partnerById(s.partnerId), d = debt(s), late = stepLate(s);
-  const hist = sortBy(s.history || [], h => h.at).reverse();
+  const p = partnerById(s.partnerId), late = stepLate(s), tab = CARD_TABS.some(x => x[0] === S.cardTab) ? S.cardTab : "main";
   const dd = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
   const tg = s.telegram ? String(s.telegram).replace(/^@/, "") : "";
   const contacts = [
@@ -1952,43 +2076,52 @@ function drawerHTML(s) {
   ].filter(Boolean).join("");
   const step = hasStep(s)
     ? `<div class="stepbox${late ? " late" : ""}"><button class="chk" data-act="step-done" data-id="${esc(s.id)}" aria-label="Отметить выполненным" title="Выполнено"></button>
-        <div class="body"><strong>${esc(s.next.text)}</strong><span>${dueLabel(s.next.date)}${late ? " · просрочено" : ""}</span></div>
+        <div class="body"><span class="lbl">Следующий шаг</span><strong>${esc(s.next.text)}</strong><span>${dueLabel(s.next.date)}${late ? " · просрочено" : ""}</span></div>
         <button class="btn small ghost" data-act="step-edit" data-id="${esc(s.id)}">Изменить</button></div>`
     : isActive(s) ? `<div class="stepbox none"><div class="body"><strong>Следующий шаг не назначен</strong></div><button class="btn small" data-act="step-edit" data-id="${esc(s.id)}">Назначить</button></div>` : "";
   // На продажах слова человека из заявки стоят наверху: с них начинается разговор
   const goal = SGROUP[s.stage] === "sales" && s.comment ? `<div class="goal"><span>Что написал в заявке</span><p class="pre">${esc(s.comment)}</p></div>` : "";
-  // Порядок разделов зависит от этапа: на продажах важнее заметки, на обучении — платежи, на поиске работы — отклики
-  const order = { sales: [noteSection, meetSection, paySection], study: [progSection, meetSection, paySection, noteSection, appSection], job: [appSection, meetSection, noteSection, paySection, progSection], closed: [noteSection, paySection, appSection, meetSection, progSection] }[SGROUP[s.stage]];
-  const log = sortBy(s.log || [], l => l.at).reverse();
   const result = s.jobCompany ? `${esc(s.jobCompany)}${s.jobPosition ? ", " + esc(s.jobPosition) : ""}${s.jobSalary ? " · " + money(s.jobSalary) : ""}${s.offerDate ? " · " + fDate(s.offerDate) : ""}` : "";
-  return `<div class="scrim" data-act="d-close"></div>
-  <aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(s.name)}">
-    <header class="d-head"><h2>${esc(s.name)}${s.demo ? ` <span class="tag">пример</span>` : ""}${s.source === "site" ? ` <span class="tag">с сайта</span>` : s.source === "telegram" ? ` <span class="tag">из Telegram</span>` : ""}</h2>
-      <button class="btn small" data-act="student-edit" data-id="${esc(s.id)}">Изменить</button>
-      <button class="x" id="d-x" data-act="d-close" aria-label="Закрыть">×</button></header>
-    <div class="d-body" id="d-body">
-      ${pathHTML(s)}
-      <div class="d-stage">${nextStage(s) && !S.readOnly ? `<button class="btn primary" id="d-next" data-act="advance" data-id="${esc(s.id)}">Дальше: ${esc(SLABEL[nextStage(s)])} →</button>` : ""}
-        <label class="d-other">Этап<select id="d-stage" data-move="${esc(s.id)}">${STAGES.map(x => opt(x[0], x[1], s.stage)).join("")}</select></label>
-        <span class="muted">${days(daysSince(s.stageAt))} на этапе · заявка от ${fShort(isoDay(s.createdAt))}</span></div>
-      ${step}
-      ${goal}
-      ${contacts ? `<div class="chips">${contacts}</div>` : ""}
-      <dl class="facts">
+  const hist = sortBy((s.history || []).filter(isObj), h => h.at).reverse(), log = sortBy((s.log || []).filter(isObj), l => l.at).reverse();
+  const apps = (s.apps || []).filter(isObj), prog = progressOf(s), overdue = (s.payments || []).some(x => isObj(x) && !x.paid && x.due < today());
+  const badge = { money: overdue ? `<span class="dot danger" title="Есть просроченный платёж"></span>` : "", study: prog ? `<span class="cnt">${prog.done}/${prog.total}</span>` : "", job: apps.length ? `<span class="cnt">${apps.length}</span>` : "", hist: hist.length + log.length ? `<span class="cnt">${hist.length + log.length}</span>` : "" };
+  const facts = `<dl class="facts">
         <dt>Поток</dt><dd>${esc(cohortName(s.cohortId) || "—")}</dd>
         <dt>Ментор</dt><dd>${teamName(s.mentorId) ? esc(teamName(s.mentorId)) : `<span class="warn-text">не назначен</span>`}${!S.limited && !S.readOnly && D().team.length ? ` <button class="link" data-act="assign" data-id="${esc(s.id)}">${teamName(s.mentorId) ? "сменить" : "назначить"}</button>` : ""}</dd>
         <dt>Источник</dt><dd>${p ? esc(p.name) : esc(s.utmSource || "—")}${s.promo ? ` <span class="sub">промокод ${esc(s.promo)}</span>` : ""}</dd>
-        ${d ? `<dt>Остаток</dt><dd class="warn-text">${money(d)}</dd>` : ""}
         ${dd("Город", esc(s.city))}
         ${s.consent ? "" : `<dt>Согласие на ПД</dt><dd class="warn-text">не получено</dd>`}
         ${dd("Причина отказа", esc(s.lostReason))}${dd("Оффер", result)}
         ${dd("Комментарий", s.comment && !goal ? `<span class="pre">${esc(s.comment)}</span>` : "")}
-      </dl>
-      ${order.map(f => f(s)).join("")}
-      <details id="d-hist"${S.histOpen ? " open" : ""}><summary>История этапов: ${hist.length}</summary>
-        <ul class="timeline">${hist.map(h => `<li><span class="muted">${fDT(h.at)}</span> ${h.from ? esc(SLABEL[h.from]) + " → " : ""}<strong>${esc(SLABEL[h.to])}</strong> <span class="muted">· ${esc(personName(h.by))}</span></li>`).join("")}</ul></details>
-      ${log.length ? `<details id="d-log"${S.logOpen ? " open" : ""}><summary>Изменения по деньгам: ${log.length}</summary>
-        <ul class="timeline">${log.map(l => `<li><span class="muted">${fDT(l.at)}</span> ${esc(l.text)} <span class="muted">· ${esc(personName(l.by))}</span></li>`).join("")}</ul></details>` : ""}
+      </dl>`;
+  const timeline = (title, id, list, row, empty) => `<section class="sec" id="${id}"><header><h3>${title}</h3><span class="sub">${list.length || ""}</span></header>
+      <div class="box">${list.length ? `<ul class="timeline">${list.map(row).join("")}</ul>` : `<p class="empty">${empty}</p>`}</div></section>`;
+  const body = {
+    main: () => `${goal}${contacts ? `<div class="chips">${contacts}</div>` : ""}<div class="box facts-box">${facts}</div>${moneySummary(s, true)}${meetSection(s)}${noteSection(s)}`,
+    money: () => `${moneySummary(s, false)}${contractSection(s)}${paySection(s)}${proofSection(s)}`,
+    study: () => progSection(s) || `<div class="box"><p class="empty">${s.cohortId ? "У потока студента пока нет программы. Модули задаются в настройках потока." : "Студент ещё не в потоке. Программа появится, когда его добавят в поток с модулями."}</p></div>`,
+    job: () => `${result ? `<div class="box facts-box"><dl class="facts"><dt>Оффер</dt><dd>${result}</dd></dl></div>` : ""}${appSection(s)}`,
+    hist: () => timeline("Этапы", "d-hist", hist, h => `<li><span class="muted">${fDT(h.at)}</span> ${h.from ? esc(SLABEL[h.from] || h.from) + " → " : ""}<strong>${esc(SLABEL[h.to] || h.to)}</strong> <span class="muted">· ${esc(personName(h.by))}</span></li>`, "Этап ещё не менялся")
+      + timeline("Изменения по деньгам", "d-log", log, l => `<li><span class="muted">${fDT(l.at)}</span> ${esc(l.text)} <span class="muted">· ${esc(personName(l.by))}</span></li>`, "Платежи и стоимость ещё не менялись"),
+  }[tab]();
+  const sub = [SLABEL[s.stage], cohortName(s.cohortId), teamName(s.mentorId)].filter(Boolean).map(esc).join(" · ");
+  return `<div class="scrim" data-act="d-close"></div>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(s.name)}">
+    <header class="d-head"><div class="d-title"><h2>${esc(s.name)}${s.demo ? ` <span class="tag">пример</span>` : ""}${s.source === "site" ? ` <span class="tag">с сайта</span>` : s.source === "telegram" ? ` <span class="tag">из Telegram</span>` : ""}</h2>
+        <div class="d-sub">${sub}</div></div>
+      <button class="btn small" data-act="student-edit" data-id="${esc(s.id)}">Изменить</button>
+      <button class="x" id="d-x" data-act="d-close" aria-label="Закрыть">×</button></header>
+    <div class="d-body" id="d-body">
+      <div class="d-top">
+        ${pathHTML(s)}
+        <div class="d-stage">${nextStage(s) && !S.readOnly ? `<button class="btn primary" id="d-next" data-act="advance" data-id="${esc(s.id)}">Дальше: ${esc(SLABEL[nextStage(s)])} →</button>` : ""}
+          <label class="d-other">Этап<select id="d-stage" data-move="${esc(s.id)}">${STAGES.map(x => opt(x[0], x[1], s.stage)).join("")}</select></label>
+          <span class="muted">${days(daysSince(s.stageAt))} на этапе · заявка от ${fShort(isoDay(s.createdAt))}</span></div>
+        ${step}
+        ${aboutHTML(s)}
+      </div>
+      <nav class="tabs card-tabs" id="d-tabs" role="tablist">${CARD_TABS.map(([k, l]) => `<button role="tab" aria-selected="${k === tab}" data-act="card-tab" data-v="${k}" class="${k === tab ? "on" : ""}">${l}${badge[k] || ""}</button>`).join("")}</nav>
+      <div class="d-tab" id="d-tab-${tab}" role="tabpanel">${body}</div>
     </div>
   </aside>`;
 }
@@ -2364,7 +2497,7 @@ function settingsView() {
   ${trashPanel()}
   ${panel("Резервная копия", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вся база одним файлом: студенты с платежами, откликами, заметками и историей этапов, потоки, встречи, команда, партнёры и выплаты. ${S.server ? "Сервер каждую ночь сохраняет копию сам, но она лежит на том же сервере. Раз в неделю скачивайте файл к себе: из него база восстанавливается на любом сервере." : "Этот же файл загружается в версию для своего сервера при переезде."}</p>
     <div class="actions"><button class="btn" data-act="backup">Скачать резервную копию</button>${S.server ? `<a class="btn" href="${esc(SRV.importUrl)}">Загрузить копию</a>` : ""}</div>
-    <p class="hint" style="margin-top:8px">В файле есть контакты студентов. Храните его там, куда нет доступа посторонним.</p>
+    <p class="hint" style="margin-top:8px">В файле есть контакты студентов. Храните его там, куда нет доступа посторонним.${S.server ? " Договоры и файлы платежей в скачанный файл не входят: они попадают в зашифрованную ночную копию, которую бот присылает администратору." : ""}</p>
     ${S.server ? `<p class="hint" style="margin-top:8px">${S.me?.telegram?.backup ? (S.me.telegram.linked ? "Каждую ночь бот присылает вам в Telegram зашифрованную копию базы. Открыть её можно только паролем копии, он задан на сервере." : "Отправка зашифрованной копии в Telegram включена. Подключите уведомления в блоке «Учётная запись», чтобы получать её.") : "Копии вне сервера выключены. Чтобы бот каждую ночь присылал вам зашифрованную копию базы, задайте на сервере пароль копии BACKUP_PASSPHRASE."}</p>` : ""}</div>`)}
   ${panel("Пример данных", "", `<div class="pad"><p class="muted" style="margin-bottom:10px">Вымышленные студенты, потоки и партнёры с пометкой «пример», чтобы посмотреть, как всё работает. Ваши настоящие записи не затрагиваются.</p>
     <div class="actions">${hasDemo ? `<button class="btn danger" data-act="demo-clear">Удалить примеры</button>` : `<button class="btn" data-act="demo-load">Загрузить пример</button>`}</div></div>`)}
@@ -2377,7 +2510,9 @@ let namesBusy = false;
 async function resolveNames() {
   if (!S.user || namesBusy || S.mode !== "staff") return;
   const ids = new Set(), s = S.openId ? stu(S.openId) : null;
-  if (s) { (s.notes || []).forEach(n => n.by && ids.add(n.by)); (s.history || []).forEach(h => h.by && ids.add(h.by)); (s.log || []).forEach(l => l.by && ids.add(l.by)); }
+  if (s) {
+    for (const x of [...(s.notes || []), ...(s.history || []), ...(s.log || []), s.contract, ...(s.payments || []).flatMap(payFiles)]) if (isObj(x) && typeof x.by === "string" && x.by) ids.add(x.by);
+  }
   S.trash.forEach(x => x.deletedBy && ids.add(x.deletedBy));
   const missing = [...ids].filter(i => !(i in S.names) && !D().team.some(m => m.userId === i));
   if (!missing.length) return;
@@ -2806,16 +2941,19 @@ function paymentForm(s, p) {
     title: p ? "Платёж" : "Новый платёж", values: p ? { ...p } : { due: today() },
     // У платежа от дохода суммы ещё нет: здесь меняются только срок и комментарий, сумму вносит «Указать доход»
     fields: [...(isPending(p) ? [] : [{ k: "amount", label: "Сумма, ₽", type: "number", req: true }]), { k: "due", label: isPending(p) ? "День расчёта" : "Срок оплаты", type: "date", req: true },
-      ...(isPending(p) || !canConfirm() ? [] : [{ k: "paid", label: "Дата оплаты", type: "date", help: "Пусто, если ещё не оплачен" }]), { k: "comment", label: "Комментарий", ph: "Например, «Вторая часть, СБП»", wide: true }],
+      ...(isPending(p) || !canConfirm() ? [] : [{ k: "paid", label: "Дата оплаты", type: "date", help: "Пусто, если ещё не оплачен" }]), { k: "comment", label: "Комментарий", ph: "Например, «Вторая часть, СБП»", wide: true },
+      { k: "details", label: "Данные платежа", type: "textarea", rows: 3, wide: true, ph: "Способ оплаты, номер чека или операции, кто платил, реквизиты", help: "Чек, выписку или скан прикрепите в карточке кнопкой «📎 Файл» у платежа" }],
     onDelete: p ? () => save(() => patchStudent(s.id, cur => {
       const old = (cur.payments || []).find(x => x.id === p.id); if (!old) return null;
-      return { payments: cur.payments.filter(x => x.id !== p.id), log: withLog(cur, logItem(`Платёж удалён: ${payText(old)}${old.paid ? `, был оплачен ${fDate(old.paid)}` : ""}`)) };
+      const nf = payFiles(old).length;
+      return { payments: cur.payments.filter(x => x.id !== p.id), log: withLog(cur, logItem(`Платёж удалён: ${payText(old)}${old.paid ? `, был оплачен ${fDate(old.paid)}` : ""}${nf ? `, вместе с файлами: ${nf}` : ""}`)) };
     }), "Платёж удалён") : null,
     onSubmit: v => {
       const pending = isPending(p);
       if (!pending && !(v.amount > 0)) return "Сумма должна быть больше нуля";
       const item = pending ? { id: p.id, amount: null, percent: p.percent, due: v.due, paid: null, comment: v.comment }
         : { id: p?.id || newId("x"), amount: v.amount, due: v.due, paid: canConfirm() ? v.paid || null : null, comment: v.comment };
+      const details = String(v.details || "").trim().slice(0, 2000); if (details) item.details = details;
       if (p?.salary === true) item.salary = true; // по этой отметке бот просит у студента фото начисления
       if (p?.income != null && !pending) item.income = p.income;
       if (p?.expected != null && item.paid) item.expected = p.expected;
@@ -2831,8 +2969,10 @@ function paymentForm(s, p) {
           if (+old.amount !== +item.amount) ch.push(`сумма ${money(old.amount)} → ${money(item.amount)}`);
           if (old.due !== item.due) ch.push(`срок ${fDate(old.due)} → ${fDate(item.due)}`);
           if ((old.paid || null) !== item.paid) ch.push(`оплата ${old.paid ? fDate(old.paid) : "нет"} → ${item.paid ? fDate(item.paid) : "нет"}`);
+          if ((old.details || "") !== (item.details || "")) ch.push("изменены данные платежа");
           if (ch.length) text = `Платёж изменён (${payText(old)}): ${ch.join("; ")}`;
         }
+        if (old && Array.isArray(old.files)) item.files = old.files; // файлы платежа меняет только сервер при загрузке
         const fixed = item.paid ? markPaid(cur, { ...item, ...(old && dayOf(old.paid) && typeof old.dirId === "string" ? { dirId: old.dirId, paid: old.paid } : {}) }, item.paid) : item;
         const patch = { payments: old ? list.map(x => x.id === p.id ? fixed : x) : [...list, fixed] };
         if (text) patch.log = withLog(cur, logItem(text));
@@ -3256,7 +3396,7 @@ window.addEventListener("popstate", () => {
   if (S.openId || S.openDay) $("#d-x")?.focus({ preventScroll: true });
 });
 function openStudent(id) {
-  const was = S.openId; S.openId = id; S.histOpen = false; S.logOpen = false; closeSearch(); render();
+  const was = S.openId; S.openId = id; if (was !== id) S.cardTab = "main"; closeSearch(); render();
   const el = $(".drawer"); if (el && !was) el.classList.add("enter");
   $("#d-x")?.focus({ preventScroll: true });
 }
@@ -3315,6 +3455,13 @@ const ACT = {
   "proof-del": (d, el) => {
     if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Точно убрать?"; return; }
     return save(() => patchStudent(d.id, cur => ({ proofs: (Array.isArray(cur.proofs) ? cur.proofs : []).filter(x => !x || x.id !== d.pid) })), "Файл убран из карточки");
+  },
+  "card-tab": d => { if (CARD_TABS.some(x => x[0] === d.v)) { S.cardTab = d.v; render(); const b = $("#d-body"), t = $("#d-tabs"); if (b && t && b.scrollTop > t.offsetTop) b.scrollTop = t.offsetTop; $(`#d-tabs [data-v=${d.v}]`)?.focus({ preventScroll: true }); } },
+  "about-edit": d => { const x = stu(d.id); if (x) aboutForm(x); },
+  "file-add": d => pickFile(d.id, d.kind, d.pid),
+  "file-del": (d, el) => {
+    if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Убрать?"; el.classList.add("armed"); return; }
+    return save(() => SRV.files.remove(d.fid), "Файл убран");
   },
   "pay-income": d => { const x = stu(d.id), pay = (x?.payments || []).find(y => y.id === d.pid); if (pay && isPending(pay)) incomeForm(x, pay); },
   "tg-student": async d => {
@@ -3393,6 +3540,16 @@ const ACT = {
   "m-link": () => { const l = MODAL?.link, v = collect(); closeModal(); l && l.go(v); },
   "m-delete": async (d, el) => { if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Нажмите ещё раз"; return; } const r = await MODAL?.onDelete?.(); if (r !== false) closeModal(); },
 };
+const hasFiles = e => !!e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
+const dropOf = e => hasFiles(e) ? e.target.closest?.("[data-drop]") : null;
+// Файл, брошенный мимо договора или платежа, не открывается вместо CRM
+document.addEventListener("dragover", e => { if (!hasFiles(e)) return; e.preventDefault(); const z = dropOf(e); if (!z) { e.dataTransfer.dropEffect = "none"; return; } e.dataTransfer.dropEffect = "copy"; document.querySelectorAll(".drop-on").forEach(x => x !== z && x.classList.remove("drop-on")); z.classList.add("drop-on"); });
+document.addEventListener("dragleave", e => { const z = dropOf(e); if (z && !z.contains(e.relatedTarget)) z.classList.remove("drop-on"); });
+document.addEventListener("drop", e => {
+  if (!hasFiles(e)) return; e.preventDefault();
+  const z = dropOf(e); if (!z) return; z.classList.remove("drop-on");
+  const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) uploadFile(z.dataset.id, z.dataset.drop, z.closest("[data-pid]")?.dataset.pid, f);
+});
 document.addEventListener("click", e => {
   if (S.navMore && !e.target.closest("#nav")) { S.navMore = false; render(); }
   if (!e.target.closest("#gsearch")) $("#gq-res").hidden = true;
@@ -3435,7 +3592,6 @@ document.addEventListener("mousemove", e => {
 });
 window.addEventListener("crm-sync", e => { S.offline = !e.detail.online; renderSync(); });
 document.addEventListener("focusin", e => { if (e.target.id === "gq") renderSearch(); });
-document.addEventListener("toggle", e => { if (e.target.id === "d-hist") S.histOpen = e.target.open; if (e.target.id === "d-log") S.logOpen = e.target.open; }, true);
 document.addEventListener("submit", e => { if (e.target.id === "mform") { e.preventDefault(); submitModal(); } });
 document.addEventListener("keydown", e => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
