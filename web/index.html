@@ -3436,14 +3436,11 @@ function lostForm(s, to = CLOSED()[0]) {
     onSubmit: v => stu(s.id)?.stage === to ? save(() => patchStudent(s.id, () => ({ lostReason: v.reason })), "Сохранено") : moveStage(s.id, to, { lostReason: v.reason, next: null }),
   });
 }
-// Удаление партнёра: доля в направлении правится в направлении, а партнёра со студентами или прошлыми начислениями
-// не удаляют, а отмечают неактивным — кнопка в ошибке делает это сразу
+// Удаление партнёра: если с ним что-то связано, открывается окно передачи (partnerDeleteForm)
 function partnerDelete(p) {
-  const cur = today().slice(0, 7), dir = D().directions.find(d => termsFor(d, cur).some(x => x.kind === "partner" && x.id === p.id));
-  const off = { label: "Сделать неактивным", go: () => save(() => updDoc("partners", p.id, { active: false }), "Партнёр отмечен неактивным: новые заявки за ним не записываются") };
-  if (dir) return showErr(`Партнёр получает долю в направлении «${dir.name}». Сначала уберите его долю.`, { label: `Открыть направление «${dir.name}»`, go: () => directionForm(dir) }), false;
-  if (inTerms("partner", p.id)) return showErr("Партнёр получал долю в прошлых месяцах: удалить его нельзя, иначе пропадут прошлые начисления. Отметьте его неактивным.", off), false;
-  if ([...D().students, ...S.trash].some(s => s.partnerId === p.id)) return showErr("У партнёра есть студенты. Отметьте его неактивным вместо удаления.", off), false;
+  const linked = [...D().students, ...S.trash].some(s => s.partnerId === p.id) || inTerms("partner", p.id)
+    || tgLinks().some(x => x.partnerId === p.id) || (S.accounts || []).some(a => a.role === "partner" && a.linkId === p.id);
+  if (linked) return partnerDeleteForm(p), false;   // есть студенты, доля, ссылки или доступ — спрашиваем, кому их передать
   return save(() => delDoc("partners", p.id), "Партнёр удалён");
 }
 function cohortForm(c, { board = false } = {}) {
@@ -3482,6 +3479,57 @@ function teamForm(m) {
     onSubmit: v => { const id = m?.id || newId("team"); return save(() => setDoc("team", id, { ...(m || {}), name: v.name, id: undefined }), "Сохранено"); },
   });
 }
+// Доля стороны убирается из условий направлений с этого месяца и из запланированных на будущее; прошлые условия не трогаем.
+// Сумма долей не растёт: доля переходит другой стороне того же вида (toId) или остаётся владельцу (toId = null)
+async function moveShare(kind, fromId, toId) {
+  const cur = today().slice(0, 7), has = parties => parties.some(x => x.kind === kind && x.id === fromId);
+  const transfer = parties => {
+    const mine = parties.find(x => x.kind === kind && x.id === fromId); if (!mine) return parties;
+    const rest = parties.filter(x => x !== mine).map(x => ({ ...x }));
+    if (toId) { const t = rest.find(x => x.kind === kind && x.id === toId); if (t) t.share = +(t.share + mine.share).toFixed(2); else rest.push({ kind, id: toId, share: mine.share }); }
+    return rest;
+  };
+  for (const d of D().directions) {
+    const terms = validTerms(d), ahead = terms.filter(t => t.from > cur);
+    if (!has(termsFor(d, cur)) && !ahead.some(t => has(termsFor({ terms: [t] }, t.from)))) continue;
+    const past = terms.filter(t => t.from < cur), first = sortBy(terms, t => t.from)[0];
+    // До первых условий действуют первые: если все условия начинаются не раньше этого месяца, прошлое закрепляем их копией
+    const keep = past.length ? past : first ? [{ ...first, from: "2000-01" }] : [];
+    await setDoc("directions", d.id, { ...d, terms: [...keep, { from: cur, parties: transfer(termsFor(d, cur)) }, ...ahead.map(t => ({ ...t, parties: transfer(termsFor({ terms: [t] }, t.from)) }))], id: undefined });
+  }
+}
+// Удаление партнёра: его студенты переходят другому партнёру (или остаются без партнёра), ссылки на бота — тоже,
+// доля в направлениях с этого месяца — новому партнёру или владельцу. Прошлые начисления и выплаты остаются с подписью «Партнёр удалён»
+function partnerDeleteForm(p) {
+  const people = [...D().students, ...S.trash].filter(s => s.partnerId === p.id), cur = today().slice(0, 7);
+  const dirs = D().directions.filter(d => termsFor(d, cur).some(x => x.kind === "partner" && x.id === p.id));
+  const links = tgLinks().filter(x => x.partnerId === p.id);   // и ссылка из его промокода, пока список ссылок не заводили
+  const acc = (S.accounts || []).find(a => a.role === "partner" && a.linkId === p.id), others = D().partners.filter(x => x.id !== p.id && x.active !== false);
+  openModal({
+    title: `Удалить партнёра: ${p.name}`, submit: "Удалить", wide: true, values: { to: others[0]?.id || "", share: "to" },
+    fields: [{ k: "to", label: people.length ? `Кому передать ${people.length} ${plural(people.length, "студента", "студентов", "студентов")}${links.length ? " и ссылки на бота" : ""}` : "Кому передать его ссылки и долю", type: "select", wide: true,
+        options: [...others.map(x => [x.id, x.name]), ["", "Никому: без партнёра"]], help: "Студенты будут считаться пришедшими от выбранного партнёра" },
+      ...(dirs.length ? [{ k: "share", label: `Его доля в направлениях с ${monthName(cur).toLowerCase()}: ${dirs.map(d => d.name).join(", ")}`, type: "select", wide: true, options: [["to", "Перейдёт выбранному партнёру"], ["owner", "Останется владельцу"]] }] : [])],
+    extra: `<p class="hint">Прошлые начисления и выплаты сохранятся в расчётах с подписью «Партнёр удалён».${links.length ? " Ссылки на бота без нового партнёра станут вашими, с его именем в подписи." : ""}${acc ? ` Его учётная запись «${esc(acc.username)}» будет отключена.` : ""}</p>`,
+    onSubmit: v => {
+      const to = others.some(x => x.id === v.to) ? v.to : null, share = shareFor(to);
+      return save(async () => {
+        // Ссылки записываются первыми: если сервер их не примет, ничего другого ещё не изменено
+        if (links.length) await updDoc("config", "main", { tgLinks: tgLinks().map(x => x.partnerId === p.id ? { code: x.code, partnerId: to, label: to ? x.label || "" : (x.label || p.name).slice(0, 80) } : { code: x.code, partnerId: x.partnerId || null, label: x.label || "" }) });
+        for (const st of people) {
+          const patch = { partnerId: to, partnerShare: share };
+          if (S.trash.some(x => x.id === st.id)) await updDoc("students", st.id, patch);
+          else await patchStudent(st.id, c => c.partnerId === p.id ? patch : null);
+        }
+        await moveShare("partner", p.id, v.share !== "owner" ? to : null);
+        // Учётная запись отключается до удаления: сервер сверяет её связь с записью партнёра. Не удалилось — включаем обратно
+        if (acc && SRV) await SRV.accounts.update(acc.id, { active: false });
+        try { await delDoc("partners", p.id); }
+        catch (e) { if (acc && SRV) await SRV.accounts.update(acc.id, { active: true }).catch(() => { }); throw e; }
+      }, `Партнёр ${p.name} удалён${to ? `, студенты переданы: ${partnerById(to)?.name || ""}` : ""}`);
+    },
+  });
+}
 // Удаление ментора: его студенты и встречи переходят другому, доля в направлениях с этого месяца — ему же или владельцу.
 // Прошлые начисления и выплаты остаются в расчёте с подписью «Ментор удалён»
 function mentorDeleteForm(m) {
@@ -3502,21 +3550,7 @@ function mentorDeleteForm(m) {
           else await patchStudent(st.id, c => c.mentorId === m.id ? { mentorId: to } : null);
         }
         for (const x of meets) await updDoc("meetings", x.id, { mentorId: to });
-        // Доля ментора убирается из условий с этого месяца и из запланированных на будущее; прошлые условия не трогаем.
-        // Сумма долей не растёт: доля переходит другому или остаётся владельцу
-        const transfer = parties => {
-          const mine = parties.find(x => x.kind === "mentor" && x.id === m.id); if (!mine) return parties;
-          const rest = parties.filter(x => x !== mine).map(x => ({ ...x }));
-          if (v.share !== "owner" && to) { const t = rest.find(x => x.kind === "mentor" && x.id === to); if (t) t.share = +(t.share + mine.share).toFixed(2); else rest.push({ kind: "mentor", id: to, share: mine.share }); }
-          return rest;
-        };
-        for (const d of dirs) {
-          const terms = validTerms(d), past = terms.filter(t => t.from < cur), first = sortBy(terms, t => t.from)[0];
-          // До первых условий действуют первые: если все условия начинаются не раньше этого месяца, прошлое закрепляем их копией
-          const keep = past.length ? past : first ? [{ ...first, from: "2000-01" }] : [];
-          const ahead = terms.filter(t => t.from > cur).map(t => ({ ...t, parties: transfer(termsFor({ terms: [t] }, t.from)) }));
-          await setDoc("directions", d.id, { ...d, terms: [...keep, { from: cur, parties: transfer(termsFor(d, cur)) }, ...ahead], id: undefined });
-        }
+        await moveShare("mentor", m.id, v.share !== "owner" ? to : null);
         // Учётная запись отключается до удаления: сервер сверяет её связь с записью в команде. Не удалилось — включаем обратно
         if (acc && SRV) await SRV.accounts.update(acc.id, { active: false });
         try { await delDoc("team", m.id); }
