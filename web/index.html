@@ -568,8 +568,11 @@ td.mxc { padding: 4px 2px; text-align: center; }
 .mini-d.in { background: var(--brand-soft); }
 .mini-d.now { color: var(--brand); font-weight: 700; }
 .mini-d:focus-visible { outline: 2px solid var(--brand); }
-.cal-kinds { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
-.cal-kinds b { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+.cal-kinds { display: flex; flex-direction: column; gap: 14px; font-size: 14px; }
+.cal-kg { display: flex; flex-direction: column; gap: 4px; }
+.cal-kg + .cal-kg, .cal-who { border-top: 1px solid var(--border); padding-top: 12px; }
+.cal-who { font-size: 14px; }
+.cal-kg b { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
 .cal-k { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 2px 0; }
 .cal-k input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .cal-k i { width: 14px; height: 14px; border-radius: 4px; border: 2px solid var(--kc); flex: none; }
@@ -676,8 +679,9 @@ details + details { margin-top: 6px; }
   .cal-side { position: static; order: 2; }
   .cal-side .mini, .cal-create { display: none; }
   .cal-create-m { display: inline-flex; }
-  .cal-kinds { flex-direction: row; flex-wrap: wrap; gap: 4px 12px; }
-  .cal-kinds b { width: 100%; }
+  .cal-kg { flex-direction: row; flex-wrap: wrap; gap: 4px 12px; }
+  .cal-kg b { width: 100%; }
+  .cal-kg + .cal-kg, .cal-who { border-top: 0; padding-top: 0; }
   .cal-bar h2 { order: -1; width: 100%; margin: 0 0 4px; }
   .wk-scroll { height: 62vh; }
   .wk-head, .wk-all, .wk-body { grid-template-columns: 40px repeat(var(--days), minmax(0, 1fr)); }
@@ -1713,6 +1717,7 @@ function dayHTML(d) {
 // переносят перетаскиванием, длительность меняют за нижний край. Права на изменение проверяет сервер
 const CAL_MODES = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"], ["list", "Список"]];
 const CAL_KINDS = [["call", "Созвоны"], ["lesson", "Занятия"], ["consult", "Консультации"], ["other", "Другое"], ["interview", "Собеседования"], ["step", "Шаги студентов"], ["pay", "Платежи"]];
+const CAL_GROUPS = [["Встречи", ["call", "lesson", "consult", "other"]], ["По студентам", ["interview", "step", "pay"]]];
 const HOUR_PX = 48, SNAP_MIN = 15;
 const calMode = () => CAL_MODES.some(x => x[0] === S.cal.mode) ? S.cal.mode : (typeof matchMedia === "function" && matchMedia("(max-width: 860px)").matches ? "day" : "week");
 const addDays = (d, n) => { const x = new Date(d + "T12:00"); x.setDate(x.getDate() + n); return dstr(x); };
@@ -1815,8 +1820,8 @@ function calendarView() {
   const side = `<aside class="cal-side" aria-label="Календарь">
       ${S.readOnly ? "" : `<button class="btn primary cal-create" data-act="meet-new" data-date="${esc(sel)}">+ Встреча</button>`}
       ${miniHTML(sel, mode)}
-      <div class="cal-kinds" id="cal-kinds"><b>Показывать</b>${CAL_KINDS.map(([k, l]) => `<label class="cal-k k-${k}"><input type="checkbox" data-calk="${k}"${hide.has(k) ? "" : " checked"}><i aria-hidden="true"></i>${l}</label>`).join("")}</div>
-      ${mentorSelect()}
+      <div class="cal-kinds" id="cal-kinds">${CAL_GROUPS.map(([title, keys]) => `<div class="cal-kg" role="group" aria-label="${esc(title)}"><b>${esc(title)}</b>${CAL_KINDS.filter(x => keys.includes(x[0])).map(([k, l]) => `<label class="cal-k k-${k}"><input type="checkbox" data-calk="${k}"${hide.has(k) ? "" : " checked"}><i aria-hidden="true"></i>${l}</label>`).join("")}</div>`).join("")}</div>
+      ${mentorSelect() ? `<div class="cal-kg cal-who"><b>Чьи события</b>${mentorSelect()}</div>` : ""}
       ${late.length ? `<div class="cal-late">${panel("Прошли и не отмечены", late.length, `<ul class="rows">${late.slice(0, 8).map(e => evRow(e, true)).join("")}</ul>`)}</div>` : ""}
     </aside>`;
   return headHTML("Календарь", "", "", "Нажмите на свободное время, чтобы назначить встречу, или протяните по часам. Встречу можно перетащить на другое время, а за нижний край — изменить длительность.") + `<div class="calx">${side}
