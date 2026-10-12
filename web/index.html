@@ -254,6 +254,8 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .set-nav button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .set-body { max-width: 860px; min-width: 0; }
 .set-about { color: var(--muted); margin: 0 0 14px; }
+.set-sub { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 10px 0 -4px; }
+.set-sub:first-child { margin-top: 0; }
 .stage-row { border-left: 3px solid transparent; position: relative; padding-right: 40px; }
 .stage-row.g-sales { border-left-color: var(--g-sales); } .stage-row.g-study { border-left-color: var(--g-study); } .stage-row.g-job { border-left-color: var(--g-job); } .stage-row.g-closed { border-left-color: var(--border); }
 .stage-move { display: none; gap: 2px; }
@@ -267,6 +269,13 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .stage-x { position: absolute; top: 6px; right: 6px; }
 .stage-x:hover, .opt-x:hover, .stage-x:focus-visible, .opt-x:focus-visible { color: var(--danger); border-color: var(--danger); }
 .stage-row:hover .stage-x, .stage-row:focus-within .stage-x, .opt:hover .opt-x, .opt:focus-within .opt-x, .stage-x:focus-visible, .opt-x:focus-visible { opacity: 1; }
+.dir-rows { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.dir-row { display: flex; align-items: center; gap: 8px; }
+.dir-row select { flex: 1; min-width: 0; }
+.dir-share { display: inline-flex; align-items: center; gap: 4px; }
+.dir-share input { width: 84px; text-align: right; }
+.dir-row .dir-x { position: static; opacity: 1; flex: none; width: 26px; height: 26px; }
+.dir-own { margin: 12px 0 0; }
 .opts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .opt { position: relative; display: inline-flex; align-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 99px; padding: 4px 12px; font-size: 13px; }
 .opt-x { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; font-size: 13px; }
@@ -2344,34 +2353,61 @@ const inTerms = (kind, id) => D().directions.some(d => validTerms(d).some(t => t
 const termsText = parts => [...parts.map(x => `${esc(partyName(x))} ${x.share}%`), `вам ${ownPct(parts)}%`].join(" · ");
 function directionsPanel() {
   const cur = today().slice(0, 7), loose = D().cohorts.filter(c => !dirById(c.directionId)).length;
-  return panel("Направления", "", (D().directions.length ? `<ul class="rows">${D().directions.map(d => `<li><span class="who wrap"><strong>${esc(d.name)}</strong><span>${termsText(termsFor(d, cur))}</span>
+  return panel("Направления и доли", "", (D().directions.length ? `<ul class="rows">${D().directions.map(d => `<li><span class="who wrap"><strong>${esc(d.name)}</strong><span>${termsText(termsFor(d, cur))}</span>
       <span>потоков: ${D().cohorts.filter(c => c.directionId === d.id).length}</span></span><button class="btn small ghost" data-act="direction-edit" data-id="${esc(d.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Направлений пока нет</p>`)
-    + `<p class="hint pad">Направление задаёт, между кем и в каких долях делится чистая выручка. ${loose ? `Потоков без направления: ${loose} — их оплаты ни с кем не делятся.` : "Процент считается от оплат студентов за вычетом расходов."}</p>`,
+    + `<p class="hint pad">У каждого направления свой список: какие менторы и партнёры получают долю и сколько процентов. ${loose ? `Потоков без направления: ${loose} — их оплаты ни с кем не делятся.` : ""}</p>`,
     S.readOnly ? "" : `<button class="btn small" data-act="direction-new">+ Направление</button>`);
+}
+// Участники направления: строки «человек — процент». Человек выбирается из команды (менторы) и партнёров,
+// строки добавляются кнопкой «+ Участник» и убираются крестиком. Остаток после всех долей — владельцу
+let DIRFORM = null;
+const dirKey = (kind, id) => (kind === "partner" ? "p_" : "m_") + id;
+function dirPeople(now) {
+  const list = [...D().team.map(m => ({ kind: "mentor", id: m.id, name: m.name })),
+    ...D().partners.filter(p => p.active !== false || now.some(x => x.kind === "partner" && x.id === p.id)).map(p => ({ kind: "partner", id: p.id, name: p.name }))];
+  // Сторона из действующих условий, которой уже нет в справочнике, остаётся в форме: её долю можно убрать только явно
+  for (const x of now) if (!list.some(y => y.kind === x.kind && y.id === x.id)) list.push({ kind: x.kind, id: x.id, name: partyName(x) });
+  return list;
+}
+function dirRowsHTML() {
+  const f = DIRFORM, used = new Set(f.rows.map(r => r.key).filter(Boolean));
+  const opts = (cur, kind) => f.people.filter(x => x.kind === kind && (!used.has(dirKey(x.kind, x.id)) || dirKey(x.kind, x.id) === cur)).map(x => opt(dirKey(x.kind, x.id), x.name, cur)).join("");
+  const total = sum(f.rows.filter(r => r.key), r => +r.share || 0), free = f.people.filter(x => !used.has(dirKey(x.kind, x.id))).length;
+  return `${f.rows.length ? `<ul class="dir-rows">${f.rows.map((r, i) => `<li class="dir-row">
+      <select id="dir-who-${i}" data-dir-i="${i}" data-dir-f="key" aria-label="Участник">${opt("", "Выберите человека", r.key)}${D().team.length || f.people.some(x => x.kind === "mentor") ? `<optgroup label="Менторы">${opts(r.key, "mentor")}</optgroup>` : ""}${f.people.some(x => x.kind === "partner") ? `<optgroup label="Партнёры">${opts(r.key, "partner")}</optgroup>` : ""}</select>
+      <span class="dir-share"><input type="number" id="dir-share-${esc(r.key || "new" + i)}" data-dir-i="${i}" data-dir-f="share" min="0" max="100" step="0.1" value="${esc(r.share ?? "")}" aria-label="Процент"><span>%</span></span>
+      <button type="button" class="opt-x dir-x" data-act="dir-del" data-i="${i}" aria-label="Убрать участника" title="Убрать">×</button></li>`).join("")}</ul>` : `<p class="empty">Пока никого: вся выручка направления остаётся владельцу.</p>`}
+    ${free ? `<button type="button" class="btn small" data-act="dir-add">+ Участник</button>` : ""}
+    ${f.people.some(x => x.kind === "mentor") ? "" : `<p class="hint">Менторов в списке нет: сначала добавьте их в Настройки → «Команда и партнёры» → «Команда».</p>`}
+    <p class="dir-own"><strong id="m-own" class="${total > 100 ? "danger-text" : ""}">${total > 100 ? `Доли в сумме ${total}% — больше 100%` : `Владельцу остаётся: ${+(100 - total).toFixed(2)}%`}</strong></p>`;
+}
+function dirRedraw(focus) { const box = $("#dir-parts"); if (!box) return; box.innerHTML = dirRowsHTML(); if (focus) $(focus)?.focus(); }
+function dirInput(el) {
+  const i = +el.dataset.dirI, r = DIRFORM?.rows[i]; if (!r) return;
+  if (el.dataset.dirF === "key") { r.key = el.value; dirRedraw(`#dir-share-${CSS.escape(r.key || "new" + i)}`); }
+  else { r.share = el.value === "" ? null : +el.value; const m = $("#m-own"); if (m) { const t = sum(DIRFORM.rows.filter(x => x.key), x => +x.share || 0); m.textContent = t > 100 ? `Доли в сумме ${t}% — больше 100%` : `Владельцу остаётся: ${+(100 - t).toFixed(2)}%`; m.classList.toggle("danger-text", t > 100); } }
 }
 function directionForm(d) {
   const cur = today().slice(0, 7), now = d ? termsFor(d, cur) : [], terms = d ? validTerms(d) : [];
   const first = terms.length ? sortBy(terms, t => t.from)[0].from : "2000-01";
   const next = (() => { const x = new Date(); return monthKey(new Date(x.getFullYear(), x.getMonth() + 1, 1)); })();
-  const key = (kind, id) => (kind === "partner" ? "p_" : "m_") + id;
-  const people = [...D().partners.filter(p => p.active !== false || now.some(x => x.kind === "partner" && x.id === p.id)).map(p => ({ kind: "partner", id: p.id, name: p.name })), ...D().team.map(m => ({ kind: "mentor", id: m.id, name: m.name }))];
-  // Сторона из действующих условий, которой уже нет в справочнике, остаётся в форме: её долю можно убрать только явно
-  for (const x of now) if (!people.some(y => y.kind === x.kind && y.id === x.id)) people.push({ kind: x.kind, id: x.id, name: partyName(x) });
-  const values = { name: d?.name || "", from: cur };
-  for (const x of now) values[key(x.kind, x.id)] = x.share;
-  const own = () => { const el = $("#m-own"); if (!el) return; const total = sum(people, x => +($("#m-" + CSS.escape(key(x.kind, x.id)))?.value) || 0); el.textContent = total > 100 ? `Доли в сумме ${total}% — больше 100%` : `Вам остаётся: ${100 - total}%`; el.classList.toggle("danger-text", total > 100); };
+  DIRFORM = { people: dirPeople(now), rows: now.map(x => ({ key: dirKey(x.kind, x.id), share: x.share })) };
   openModal({
-    title: d ? "Направление" : "Новое направление", wide: true, values,
+    title: d ? "Направление" : "Новое направление", wide: true, values: { name: d?.name || "", from: cur },
     fields: [{ k: "name", label: "Название", req: true, ph: "Аналитик 1С с нуля", wide: !d },
       ...(d ? [{ k: "from", label: "Условия действуют с", type: "select", options: [[first, "С самого начала (исправление)"], [next, monthName(next) + " (со следующего месяца)"], ...lastMonths(12).map(k => [k, monthName(k)])], help: "Месяцы до этого считаются по прежним условиям. Условия, заданные на более поздние месяцы, заменяются этими" }] : []),
-      { section: "Партнёры: процент от чистой выручки" }, ...D().partners.length ? people.filter(x => x.kind === "partner").map(x => ({ k: key(x.kind, x.id), label: x.name, type: "number", ph: "не участвует" })) : [],
-      { section: "Менторы: процент от чистой выручки" }, ...people.filter(x => x.kind === "mentor").map(x => ({ k: key(x.kind, x.id), label: x.name, type: "number", ph: "не участвует" }))],
-    extra: `<p><strong id="m-own">Вам остаётся: ${ownPct(now)}%</strong></p><p class="hint">Пустое поле — человек не участвует. Чистая выручка — оплаты студентов направления за месяц минус расходы. ${people.length ? "" : "Добавьте партнёра и менторов в настройках, чтобы включить их в состав."}</p>`,
-    onInput: own,
+      { section: "Кто получает долю" }],
+    extra: `<div id="dir-parts">${dirRowsHTML()}</div><p class="hint">Доля — процент от того, что принесло направление за месяц после расходов.</p>`,
     onDelete: d ? () => D().cohorts.some(c => c.directionId === d.id) ? (showErr("К направлению привязаны потоки. Сначала перенесите их в другое направление."), false) : D().expenses.some(e => e.directionId === d.id) ? (showErr("По направлению записаны расходы. Удалите их или перенесите в другое направление."), false) : save(() => delDoc("directions", d.id), "Направление удалено") : null,
     onSubmit: v => {
-      const parties = [];
-      for (const x of people) { const val = v[key(x.kind, x.id)]; if (val === null || val === undefined || val === "") continue; if (!(val >= 0 && val <= 100)) return `${x.name}: процент от 0 до 100`; if (val > 0) parties.push({ kind: x.kind, id: x.id, share: val }); }
+      const parties = [], f = DIRFORM;
+      for (const r of f.rows) {
+        if (!r.key) { if (r.share === null || r.share === undefined) continue; return "Выберите человека для каждой доли"; }
+        const x = f.people.find(y => dirKey(y.kind, y.id) === r.key); if (!x) continue;
+        if (r.share === null || r.share === undefined || r.share === 0) return `${x.name}: укажите процент или уберите строку крестиком`;
+        if (!(r.share > 0 && r.share <= 100)) return `${x.name}: процент от 0 до 100`;
+        parties.push({ kind: x.kind, id: x.id, share: r.share });
+      }
       if (sum(parties, x => x.share) > 100) return "Доли в сумме больше 100%";
       const from = d ? v.from : "2000-01";
       if (!/^\d{4}-\d{2}$/.test(from)) return "Выберите месяц";
@@ -2569,7 +2605,7 @@ function trashPanel() {
 const SET_GROUPS = [
   ["funnel", "Воронка и этапы", "Из каких этапов состоит путь студента, что спрашивать при переходе, когда человек «застрял», причины отказа и подсказки шагов."],
   ["team", "Команда и партнёры", "Кто работает в CRM, что каждый видит и какие у школы партнёры."],
-  ["money", "Деньги", "Направления и доли сторон, оплата с зарплаты, текст напоминания о платеже и статьи расходов."],
+  ["money", "Оплаты и расходы", "Сверху — как платят студенты: оплата с зарплаты и напоминание о платеже. Ниже — деньги школы: кто получает долю с направления и на что школа тратит."],
   ["meet", "Встречи и Telegram", "Уведомления в Telegram, напоминания студентам о встречах и готовые названия встреч."],
   ["data", "Данные", "Резервная копия, корзина и пример данных."],
   ["me", "Мой профиль", "Ваш пароль и оформление."],
@@ -2760,7 +2796,8 @@ function settingsView() {
   const body = S.limited ? { me: () => accountPanel() + themePanel(), data: () => trashPanel() }[k]() : {
     funnel: () => stagesPanel() + funnelRulesPanel(),
     team: () => teamPanel() + sharePanel() + partnersPanel(),
-    money: () => directionsPanel() + salaryPanel() + payRemindPanel() + listPanel("expenseHints", "Статьи расходов", EXPENSE_HINTS, "Подсказки в поле «На что» при добавлении расхода в разделе «Выплаты»."),
+    money: () => `<h2 class="set-sub" id="set-sub-students">Оплаты студентов</h2>` + salaryPanel() + payRemindPanel()
+      + `<h2 class="set-sub" id="set-sub-school">Доли и операционные расходы школы</h2>` + directionsPanel() + listPanel("expenseHints", "Статьи расходов", EXPENSE_HINTS, "Варианты в поле «На что», когда записываете расход школы в разделе «Выплаты»."),
     meet: () => (S.server ? tgPanel() + meetRemindPanel() : "") + listPanel("meetHints", "Готовые названия встреч", MEET_HINTS, "Подсказки в поле «Название» новой встречи."),
     data: () => backupPanel() + trashPanel() + demoPanel(),
     me: () => (S.server ? accountPanel() : "") + themePanel(),
@@ -3826,6 +3863,8 @@ const ACT = {
   "partner-edit": d => partnerForm(partnerById(d.id)),
   "partner-open": d => { S.partnerId = d.id; S.view = "partner"; S.payView = "partners"; render(); window.scrollTo(0, 0); },
   "payout-new": d => payoutForm(d.kind === "mentor" ? "mentor" : "partner", d.id),
+  "dir-add": () => { if (!DIRFORM) return; DIRFORM.rows.push({ key: "", share: null }); dirRedraw(`#dir-who-${DIRFORM.rows.length - 1}`); },
+  "dir-del": d => { if (!DIRFORM) return; DIRFORM.rows.splice(+d.i, 1); dirRedraw(); },
   "direction-new": () => directionForm(null), "direction-edit": d => { const x = dirById(d.id); if (x) directionForm(x); },
   "expense-new": () => expenseForm(null), "expense-edit": d => { const x = D().expenses.find(e => e.id === d.id); if (x) expenseForm(x); },
   "expense-del": (d, el) => { if (el.dataset.armed) return save(() => delDoc("expenses", d.id), "Расход удалён"); el.dataset.armed = "1"; el.textContent = "Точно удалить?"; },
@@ -3871,6 +3910,7 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("change", e => {
   const el = e.target;
+  if (el.dataset.dirF === "key") return dirInput(el);   // участник направления выбран
   if (el.dataset.filter) { S.f[el.dataset.filter] = el.value; S.rows = 0; render(); }
   if (el.dataset.fcheck) { S.f[el.dataset.fcheck] = el.checked ? "1" : ""; S.rows = 0; render(); }
   if (el.id === "pay-month") { S.payMonth = el.value; render(); }
@@ -3887,6 +3927,7 @@ document.addEventListener("change", e => {
 });
 let qT;
 document.addEventListener("input", e => {
+  if (e.target.dataset?.dirF === "share") return dirInput(e.target);
   if (e.target.id === "f-q") { S.f.q = e.target.value; clearTimeout(qT); qT = setTimeout(render, 180); }
   if (e.target.id === "gq") renderSearch();
   if (MODAL?.onInput && e.target.closest("#mform")) MODAL.onInput();
