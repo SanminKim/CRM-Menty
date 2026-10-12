@@ -745,6 +745,15 @@ try:
       row = pg.locator("#tg-links li[data-code=BLOG1C]"); row.hover(); row.locator("[data-act=tglink-del]").click(); pg.wait_for_timeout(400)
       check("a partner link is deleted without touching the partner", "BLOG1C" not in [x["code"] for x in cfg()["tgLinks"]] and pg.evaluate("D().partners.some(p => p.promo === 'BLOG1C')"))
       pg.click("#toast button"); pg.wait_for_timeout(400); check("deleting a link can be undone", "BLOG1C" in [x["code"] for x in cfg()["tgLinks"]])
+      # ошибка «сначала сделайте вот это» ведёт туда, где это поправить
+      setgo(pg, "team"); pg.locator(".panel", has_text="Партнёры").first.locator("li", has_text="1С без боли").locator("[data-act=partner-edit]").click(); pg.wait_for_selector("#mform")
+      pg.click("[data-act=m-delete]"); pg.click("[data-act=m-delete]"); pg.wait_for_selector("#m-err [data-act=m-errgo]")
+      check("blocked partner deletion offers a jump to the direction", "Открыть направление" in pg.inner_text("#m-err"), pg.inner_text("#m-err"))
+      pg.click("#m-err [data-act=m-errgo]"); pg.wait_for_selector("#dir-parts"); check("the jump opens the direction form", pg.locator("#dir-parts .dir-row").count() >= 1); pg.keyboard.press("Escape")
+      busy = pg.evaluate("D().cohorts.find(c => D().students.some(s => s.cohortId === c.id)).id")
+      pg.evaluate(f"cohortForm(D().cohorts.find(c => c.id === {json.dumps(busy)}))"); pg.wait_for_selector("#mform")
+      pg.click("[data-act=m-delete]"); pg.click("[data-act=m-delete]"); pg.wait_for_selector("#m-err [data-act=m-errgo]"); pg.click("#m-err [data-act=m-errgo]"); pg.wait_for_timeout(300)
+      check("blocked cohort deletion jumps to the cohort's students", pg.evaluate("S.view") == "cohort" and pg.evaluate("S.cohortId") == busy and pg.locator("#mform").count() == 0)
       # удаление ментора со студентами: они переходят другому ментору
       linked = pg.evaluate("S.accounts.map(a => a.linkId)")
       gone = pg.evaluate(f"D().team.filter(m => !{json.dumps(linked)}.includes(m.id)).map(m => [m.id, D().students.filter(s => s.mentorId === m.id).length]).sort((a, b) => b[1] - a[1])[0]")

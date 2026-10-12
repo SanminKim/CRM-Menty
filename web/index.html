@@ -256,6 +256,7 @@ tfoot td { border-top: 1px solid var(--border); border-bottom: 0; font-weight: 6
 .set-about { color: var(--muted); margin: 0 0 14px; }
 .set-sub { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 10px 0 -4px; }
 .set-sub:first-child { margin-top: 0; }
+.err-go { color: inherit; font-weight: 600; text-decoration: underline; }
 .stage-row { border-left: 3px solid transparent; position: relative; padding-right: 40px; }
 .stage-row.g-sales { border-left-color: var(--g-sales); } .stage-row.g-study { border-left-color: var(--g-study); } .stage-row.g-job { border-left-color: var(--g-job); } .stage-row.g-closed { border-left-color: var(--border); }
 .stage-move { display: none; gap: 2px; }
@@ -2378,7 +2379,7 @@ function dirRowsHTML() {
       <span class="dir-share"><input type="number" id="dir-share-${esc(r.key || "new" + i)}" data-dir-i="${i}" data-dir-f="share" min="0" max="100" step="0.1" value="${esc(r.share ?? "")}" aria-label="Процент"><span>%</span></span>
       <button type="button" class="opt-x dir-x" data-act="dir-del" data-i="${i}" aria-label="Убрать участника" title="Убрать">×</button></li>`).join("")}</ul>` : `<p class="empty">Пока никого: вся выручка направления остаётся владельцу.</p>`}
     ${free ? `<button type="button" class="btn small" data-act="dir-add">+ Участник</button>` : ""}
-    ${f.people.some(x => x.kind === "mentor") ? "" : `<p class="hint">Менторов в списке нет: сначала добавьте их в Настройки → «Команда и партнёры» → «Команда».</p>`}
+    ${f.people.some(x => x.kind === "mentor") ? "" : `<p class="hint">Менторов в списке нет: сначала добавьте их в команду. <button type="button" class="link" data-act="m-errgo-team">Добавить ментора →</button></p>`}
     <p class="dir-own"><strong id="m-own" class="${total > 100 ? "danger-text" : ""}">${total > 100 ? `Доли в сумме ${total}% — больше 100%` : `Владельцу остаётся: ${+(100 - total).toFixed(2)}%`}</strong></p>`;
 }
 function dirRedraw(focus) { const box = $("#dir-parts"); if (!box) return; box.innerHTML = dirRowsHTML(); if (focus) $(focus)?.focus(); }
@@ -2386,6 +2387,15 @@ function dirInput(el) {
   const i = +el.dataset.dirI, r = DIRFORM?.rows[i]; if (!r) return;
   if (el.dataset.dirF === "key") { r.key = el.value; dirRedraw(`#dir-share-${CSS.escape(r.key || "new" + i)}`); }
   else { r.share = el.value === "" ? null : +el.value; const m = $("#m-own"); if (m) { const t = sum(DIRFORM.rows.filter(x => x.key), x => +x.share || 0); m.textContent = t > 100 ? `Доли в сумме ${t}% — больше 100%` : `Владельцу остаётся: ${+(100 - t).toFixed(2)}%`; m.classList.toggle("danger-text", t > 100); } }
+}
+// Удаление направления: если к нему что-то привязано, ошибка ведёт туда, где это поправить
+function directionDelete(d) {
+  const cs = D().cohorts.filter(c => c.directionId === d.id);
+  if (cs.length) return showErr(`К направлению привязаны потоки: ${cs.map(c => c.name).join(", ")}. Сначала перенесите их в другое направление.`,
+    cs.length === 1 ? { label: `Изменить поток «${cs[0].name}»`, go: () => cohortForm(cs[0]) } : { label: "Открыть потоки", go: () => go("cohorts") }), false;
+  if (D().expenses.some(e => e.directionId === d.id)) return showErr("По направлению записаны расходы. Удалите их или перенесите в другое направление.",
+    { label: "Открыть расходы", go: () => { S.payView = "expenses"; go("payouts"); } }), false;
+  return save(() => delDoc("directions", d.id), "Направление удалено");
 }
 function directionForm(d) {
   const cur = today().slice(0, 7), now = d ? termsFor(d, cur) : [], terms = d ? validTerms(d) : [];
@@ -2398,7 +2408,7 @@ function directionForm(d) {
       ...(d ? [{ k: "from", label: "Условия действуют с", type: "select", options: [[first, "С самого начала (исправление)"], [next, monthName(next) + " (со следующего месяца)"], ...lastMonths(12).map(k => [k, monthName(k)])], help: "Месяцы до этого считаются по прежним условиям. Условия, заданные на более поздние месяцы, заменяются этими" }] : []),
       { section: "Кто получает долю" }],
     extra: `<div id="dir-parts">${dirRowsHTML()}</div><p class="hint">Доля — процент от того, что принесло направление за месяц после расходов.</p>`,
-    onDelete: d ? () => D().cohorts.some(c => c.directionId === d.id) ? (showErr("К направлению привязаны потоки. Сначала перенесите их в другое направление."), false) : D().expenses.some(e => e.directionId === d.id) ? (showErr("По направлению записаны расходы. Удалите их или перенесите в другое направление."), false) : save(() => delDoc("directions", d.id), "Направление удалено") : null,
+    onDelete: d ? () => directionDelete(d) : null,
     onSubmit: v => {
       const parties = [], f = DIRFORM;
       for (const r of f.rows) {
@@ -3023,7 +3033,11 @@ async function submitModal() {
   if (res === false) { btn.disabled = false; return; }
   closeModal();
 }
-function showErr(msg) { const e = $("#m-err"); e.textContent = msg; e.hidden = false; }
+// Ошибка в окне. Если исправлять нужно в другом месте, рядом кнопка, которая сразу туда ведёт: { label, go }
+function showErr(msg, act = null) {
+  const e = $("#m-err"); if (MODAL) MODAL.errGo = act && act.go;
+  e.innerHTML = `${esc(msg)}${act ? ` <button type="button" class="link err-go" data-act="m-errgo">${esc(act.label)} →</button>` : ""}`; e.hidden = false;
+}
 
 // ----- Формы -----
 const cohortOpts = () => [["", "—"], ...sortBy(D().cohorts, c => c.start || "").reverse().map(c => [c.id, c.name])];
@@ -3422,6 +3436,16 @@ function lostForm(s, to = CLOSED()[0]) {
     onSubmit: v => stu(s.id)?.stage === to ? save(() => patchStudent(s.id, () => ({ lostReason: v.reason })), "Сохранено") : moveStage(s.id, to, { lostReason: v.reason, next: null }),
   });
 }
+// Удаление партнёра: доля в направлении правится в направлении, а партнёра со студентами или прошлыми начислениями
+// не удаляют, а отмечают неактивным — кнопка в ошибке делает это сразу
+function partnerDelete(p) {
+  const cur = today().slice(0, 7), dir = D().directions.find(d => termsFor(d, cur).some(x => x.kind === "partner" && x.id === p.id));
+  const off = { label: "Сделать неактивным", go: () => save(() => updDoc("partners", p.id, { active: false }), "Партнёр отмечен неактивным: новые заявки за ним не записываются") };
+  if (dir) return showErr(`Партнёр получает долю в направлении «${dir.name}». Сначала уберите его долю.`, { label: `Открыть направление «${dir.name}»`, go: () => directionForm(dir) }), false;
+  if (inTerms("partner", p.id)) return showErr("Партнёр получал долю в прошлых месяцах: удалить его нельзя, иначе пропадут прошлые начисления. Отметьте его неактивным.", off), false;
+  if ([...D().students, ...S.trash].some(s => s.partnerId === p.id)) return showErr("У партнёра есть студенты. Отметьте его неактивным вместо удаления.", off), false;
+  return save(() => delDoc("partners", p.id), "Партнёр удалён");
+}
 function cohortForm(c, { board = false } = {}) {
   openModal({
     title: c ? "Поток" : "Новый поток", wide: true, values: c ? { ...c, directionId: c.directionId || "", modules: (c.modules || []).map(m => m.title).join("\n") } : { active: true, directionId: D().directions.length === 1 ? D().directions[0].id : "" },
@@ -3430,7 +3454,7 @@ function cohortForm(c, { board = false } = {}) {
       { k: "start", label: "Старт", type: "date" }, { k: "end", label: "Окончание обучения", type: "date" }, { k: "active", label: "Идёт набор или обучение", type: "checkbox" },
       { k: "link", label: "Постоянная ссылка на занятия", type: "url", wide: true, ph: "https://telemost.yandex.ru/…", help: "Бот пришлёт её студентам потока, если у самого занятия ссылки нет" },
       { k: "modules", label: "Программа: модули, по одному в строке", type: "textarea", rows: 7, wide: true, ph: "Введение в 1С\nОписание бизнес-процессов\nНаписание ТЗ", help: "По модулям отмечается прогресс студентов. Чтобы отметки сохранились, переименовывайте по одному модулю за сохранение." }],
-    onDelete: c ? () => [...D().students, ...S.trash].some(s => s.cohortId === c.id) ? (showErr("В потоке есть студенты. Сначала перенесите их в другой поток."), false) : save(() => delDoc("cohorts", c.id), "Поток удалён") : null,
+    onDelete: c ? () => [...D().students, ...S.trash].some(s => s.cohortId === c.id) ? (showErr("В потоке есть студенты. Сначала перенесите их в другой поток: на странице потока выберите всех и нажмите «Поток».", { label: "Открыть студентов потока", go: () => ACT["cohort-open"]({ id: c.id }) }), false) : save(() => delDoc("cohorts", c.id), "Поток удалён") : null,
     onSubmit: v => {
       if (v.link && !/^https?:\/\//i.test(v.link)) return "Ссылка должна начинаться с http:// или https://";
       const id = c?.id || newId("cohorts"), isNew = !c;
@@ -3589,7 +3613,7 @@ function partnerForm(p) {
     fields: [{ k: "name", label: "Название", req: true, ph: "Блог «…»", wide: true },
       { k: "promo", label: "Промокод", help: "Для заявок с сайта. Ссылки на бота заводятся отдельно: «Встречи и Telegram» → «+ Ссылка»" }, { k: "utm", label: "utm_source" }, { k: "contacts", label: "Контакты и реквизиты", type: "textarea", wide: true },
       { k: "active", label: "Активен", type: "checkbox" }],
-    onDelete: p ? () => inTerms("partner", p.id) ? (showErr("Партнёр участвует в условиях направления. Сначала уберите его долю в настройках направления."), false) : [...D().students, ...S.trash].some(s => s.partnerId === p.id) ? (showErr("У партнёра есть студенты. Отметьте его неактивным вместо удаления."), false) : save(() => delDoc("partners", p.id), "Партнёр удалён") : null,
+    onDelete: p ? () => partnerDelete(p) : null,
     onSubmit: v => {
       const id = p?.id || newId("partners");
       return save(() => setDoc("partners", id, { ...(p || {}), ...v, id: undefined }), p ? "Сохранено" : "Партнёр добавлен. Его процент задаётся в направлении: Настройки → Направления");
@@ -3959,8 +3983,15 @@ const ACT = {
   undo: () => { const f = UNDO; UNDO = null; $("#toast").hidden = true; f && f(); },
   "m-close": () => closeModal(),
   "m-bg": (d, el, e) => { if (e.target === el) closeModal(); },
+  "m-errgo-team": () => { closeModal(); teamForm(null); },
+  "m-errgo": () => { const go = MODAL?.errGo; closeModal(); if (go) go(); },
   "m-link": () => { const l = MODAL?.link, v = collect(); closeModal(); l && l.go(v); },
-  "m-delete": async (d, el) => { if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Нажмите ещё раз"; return; } const r = await MODAL?.onDelete?.(); if (r !== false) closeModal(); },
+  "m-delete": async (d, el) => {
+    if (!el.dataset.armed) { el.dataset.armed = "1"; el.dataset.label = el.textContent; el.textContent = "Нажмите ещё раз"; return; }
+    const r = await MODAL?.onDelete?.();
+    if (r !== false) closeModal();
+    else if (el.isConnected) { delete el.dataset.armed; el.textContent = el.dataset.label; }   // удаление не прошло: кнопка снова обычная
+  },
 };
 const hasFiles = e => !!e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
 const dropOf = e => hasFiles(e) ? e.target.closest?.("[data-drop]") : null;
