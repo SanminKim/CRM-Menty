@@ -635,6 +635,8 @@ td.mxc { padding: 4px 2px; text-align: center; }
 .wev.st-missed, .wev.st-cancelled { opacity: .55; }
 .wev.st-missed .wev-n, .wev.st-cancelled .wev-n { text-decoration: line-through; }
 .wev.dragging, .wev.lifted { z-index: 5; box-shadow: var(--pop); opacity: .95; cursor: grabbing; }
+.wev.ghost { z-index: 6; pointer-events: none; box-shadow: var(--pop); outline: 2px dashed var(--kc); outline-offset: -2px; }
+.wev.ghost-src { opacity: .35; }
 /* Встречи рядом: наведённая поднимается поверх соседних; в узком блоке — только название мелким шрифтом */
 .wev:hover, .wev:focus-visible { z-index: 4; box-shadow: 0 2px 10px rgba(0, 0, 0, .18); }
 .wev.narrow { padding: 2px 4px; font-size: 11px; line-height: 13px; }
@@ -1328,6 +1330,7 @@ function render() {
   if (tblX && $("#tbl")) $("#tbl").scrollLeft = tblX;
   if ($("#wk-scroll")) $("#wk-scroll").scrollTop = wkY ?? 8 * HOUR_PX - 12;   // неделя открывается с утра, дальше помнит прокрутку
   if (aid && aid !== "mform" && aid !== "gq" && !aid.startsWith("m-")) { const el = document.getElementById(aid); if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (sel && el.setSelectionRange) try { el.setSelectionRange(sel[0], sel[1]); } catch (e) { } } }
+  if (GHOST) drawGhost();   // предпросмотр встречи переживает перерисовку
   renderSync();
   resolveNames();
   syncUrl();
@@ -1877,7 +1880,7 @@ function evPop(key, anchor) {
   const guests = g.mentors.filter(id => id !== m.mentorId).map(teamName).filter(Boolean);
   const who = solo ? `<p><button class="link" data-act="open" data-id="${esc(e.s.id)}">${esc(e.s.name)}</button>${e.s.mentorId && teamName(e.s.mentorId) ? ` <span class="sub">· ментор ${esc(teamName(e.s.mentorId))}</span>` : ""}</p>` : "";
   // Перенос прямо из карточки: дата и время; встреча без времени остаётся на весь день
-  const mv = canMove(m) && (m.status || "planned") === "planned" ? `<div class="pop-move" id="pop-move" data-id="${esc(m.id)}"><input type="date" id="pm-date" value="${esc(e.date)}" aria-label="Дата">${e.start !== null
+  const mv = canMove(m) && (m.status || "planned") === "planned" ? `<div class="pop-move" id="pop-move" data-id="${esc(m.id)}" data-key="${esc(key)}"><input type="date" id="pm-date" value="${esc(e.date)}" aria-label="Дата">${e.start !== null
     ? `<input type="time" id="pm-from" value="${fromMin(e.start)}" aria-label="Начало"><span>–</span><input type="time" id="pm-to" value="${fromMin(Math.min(e.start + e.dur, 1439))}" aria-label="Конец">` : ""}</div>` : "";
   const body = `${mv}${who}${g.cohorts.map(c => `<p class="sub">${esc(cohortName(c) || "Поток")} · вся группа</p>`).join("")}${teamName(m.mentorId) ? `<p class="sub">Проводит ${esc(teamName(m.mentorId))}</p>` : ""}
       ${guests.length ? `<p class="sub">Также ${guests.length > 1 ? "менторы" : "ментор"}: ${esc(guests.join(", "))}</p>` : ""}${hidden ? `<p class="sub">И ещё ${hidden} ${plural(hidden, "студент", "студента", "студентов")} других менторов</p>` : ""}
@@ -1889,12 +1892,52 @@ function evPop(key, anchor) {
   popShow(`<header><span class="pop-dot ${esc(evCls(e))}" id="pop-dot"></span><div><h3>${esc(e.title)}</h3><p class="sub">${esc(when)}${kindL ? " · " + esc(kindL.toLowerCase()) : ""}</p></div><button class="x" data-act="pop-close" aria-label="Закрыть">×</button></header>
     <div class="pop-body">${body}</div><footer>${acts}</footer>`, anchor.getBoundingClientRect());
 }
+// Предпросмотр в сетке: пока встречу создают или меняют её время в карточке, она уже видна на своём месте и своего размера
+let GHOST = null;   // { date, start, end, title, cls, src — ключ блока, который переносят }
+const durText = n => n >= 60 ? `${Math.floor(n / 60)} ч${n % 60 ? ` ${n % 60} мин` : ""}` : `${n} мин`;
+function drawGhost() {
+  document.querySelectorAll(".wev.ghost").forEach(x => x.remove());
+  document.querySelectorAll(".wev.ghost-src").forEach(x => x.classList.remove("ghost-src"));
+  const g = GHOST; if (!g || !isDay(g.date) || g.start === null || !(g.end > g.start)) return;
+  if (g.src) document.querySelector(`.wev[data-ev="${CSS.escape(g.src)}"]`)?.classList.add("ghost-src");
+  const col = document.querySelector(`.wk-col[data-date="${CSS.escape(g.date)}"]`); if (!col) return;
+  const el = document.createElement("div"), h = Math.max((g.end - g.start) * HOUR_PX / 60, 18);
+  el.className = `wev ghost ${g.cls || "k-call"}${h < 30 ? " short" : ""}`; el.setAttribute("aria-hidden", "true");
+  el.style.cssText = `top:${g.start * HOUR_PX / 60}px;height:${h}px;left:1px;width:calc(100% - 3px)`;
+  el.innerHTML = `<span class="wev-t">${fromMin(g.start)}–${fromMin(g.end)} · ${durText(g.end - g.start)}</span><span class="wev-n">${esc(g.title || "Новая встреча")}</span>`;
+  col.appendChild(el);
+}
+// Время в быстрой форме и в карточке встречи: конец сдвигается вместе с началом, длительность остаётся
+function shiftEnd(fromEl, toEl) {
+  const a = toMin(fromEl.value), a0 = toMin(fromEl.dataset.was || fromEl.defaultValue), b0 = toMin(toEl?.value);
+  if (toEl && a !== null && a0 !== null && b0 !== null) toEl.value = fromMin(Math.min(a + Math.max(b0 - a0, SNAP_MIN), 1439));
+  if (a !== null) fromEl.dataset.was = fromEl.value;
+}
+function qInput(t) {
+  const q = QDRAFT; if (!q) return;
+  if (t.id === "q-from") shiftEnd(t, $("#q-to"));
+  const d = $("#q-date")?.value, a = toMin($("#q-from")?.value), b = toMin($("#q-to")?.value);
+  if (isDay(d)) q.date = d; if (a !== null) q.start = a; if (b !== null) q.end = b;
+  const sub = $("#q-when"); if (sub) sub.textContent = q.end > q.start ? `${dayLong(q.date)}, ${fromMin(q.start)}–${fromMin(q.end)} · ${durText(q.end - q.start)}` : "Конец должен быть позже начала";
+  GHOST = { ...GHOST, date: q.date, start: q.start, end: q.end, title: String($("#q-title")?.value || "").trim() }; drawGhost();
+}
+function pmInput(t) {
+  const box = $("#pop-move"); if (!box) return;
+  if (t.id === "pm-from") shiftEnd(t, $("#pm-to"));
+  const e = CALMAP.get(box.dataset.key), a = toMin($("#pm-from")?.value), b = toMin($("#pm-to")?.value), d = $("#pm-date")?.value;
+  if (!e || a === null || b === null) return;
+  GHOST = { date: d, start: a, end: b, title: e.title, cls: evCls(e), src: box.dataset.key }; drawGhost();
+}
 // Быстрое создание: название и время уже подставлены; «Подробнее» открывает полную форму
 function quickMeet(date, start, end, rect) {
   QDRAFT = { date, start, end, color: "" };
-  popShow(`<form id="qform"><header><span class="pop-dot k-call" id="pop-dot"></span><div><h3>Новая встреча</h3><p class="sub">${esc(dayLong(date))}, ${fromMin(start)}–${fromMin(end)}</p></div><button type="button" class="x" data-act="pop-close" aria-label="Закрыть">×</button></header>
-    <div class="pop-body"><input id="q-title" list="q-hints" placeholder="Название, например «Созвон-знакомство»" aria-label="Название встречи" autocomplete="off" maxlength="200"><datalist id="q-hints">${meetHints().map(h => `<option value="${esc(h)}">`).join("")}</datalist>${swatchesHTML("", "q-color")}</div>
-    <footer><button type="button" class="btn small ghost" data-act="q-more">Подробнее</button><span class="sp"></span><button type="submit" class="btn small primary">Сохранить</button></footer></form>`, rect);
+  GHOST = { date, start, end, title: "", cls: "k-call" }; drawGhost();
+  const g = $(".wev.ghost");
+  if (g && innerWidth <= 860) { CALKEEP = Date.now(); g.scrollIntoView({ block: "start" }); }   // на телефоне карточка встаёт под новой встречей: встречу прокручиваем наверх
+  if (g) rect = g.getBoundingClientRect();   // карточка встаёт рядом с новой встречей, не закрывая её
+  popShow(`<form id="qform"><header><span class="pop-dot k-call" id="pop-dot"></span><div><h3>Новая встреча</h3><p class="sub" id="q-when">${esc(dayLong(date))}, ${fromMin(start)}–${fromMin(end)} · ${durText(end - start)}</p></div><button type="button" class="x" data-act="pop-close" aria-label="Закрыть">×</button></header>
+    <div class="pop-body"><div class="pop-move"><input type="date" id="q-date" value="${esc(date)}" aria-label="Дата"><input type="time" id="q-from" value="${fromMin(start)}" aria-label="Начало"><span>–</span><input type="time" id="q-to" value="${fromMin(Math.min(end, 1439))}" aria-label="Конец"></div><input id="q-title" list="q-hints" placeholder="Название, например «Созвон-знакомство»" aria-label="Название встречи" autocomplete="off" maxlength="200"><datalist id="q-hints">${meetHints().map(h => `<option value="${esc(h)}">`).join("")}</datalist>${swatchesHTML("", "q-color")}</div>
+    <footer><button type="button" class="btn small ghost" data-act="q-more">Подробнее</button><span class="sp"></span><button type="submit" class="btn small primary">Сохранить</button></footer></form>`, rect, true);
   $("#q-title")?.focus();
 }
 // Дата и время, изменённые в карточке встречи, сохраняются, когда карточку закрывают: с подтверждением «Сохранить изменения?»
@@ -1916,8 +1959,9 @@ function commitMove(p) {
   const a = toMin(p.from), b = toMin(p.to);
   return moveMeet(p.id, p.date, a, p.dur ? b - a : undefined);   // длительность — только если меняли время
 }
-function popShow(html, rect) {
-  const pend = takeMove(); if (pend && !moveProblem(pend)) setTimeout(() => commitMove(pend));   // открыли другую встречу — как щелчок мимо карточки
+function popShow(html, rect, keepGhost = false) {
+  const pend = takeMove(); if (pend && !moveProblem(pend)) setTimeout(() => commitMove(pend));   // открыли другую встречу — как щелчок мимо карточки; её предпросмотр не трогаем
+  if (!keepGhost) { GHOST = null; drawGhost(); }
   let box = $("#calpop");
   if (!box) { box = document.createElement("div"); box.id = "calpop"; box.className = "calpop"; box.setAttribute("role", "dialog"); document.body.appendChild(box); }
   box.innerHTML = html; box.hidden = false;
@@ -1936,11 +1980,19 @@ function closePop(save = false) {
   const pend = save ? takeMove() : null;
   if (pend && moveProblem(pend)) { toast(moveProblem(pend)); $("#pm-from")?.focus(); return; }   // ошибку можно исправить: карточка остаётся открытой
   const b = $("#calpop"); if (b && !b.hidden) { b.hidden = true; b.innerHTML = ""; } QDRAFT = null;
-  if (pend) setTimeout(() => commitMove(pend));
+  if (pend) { GHOST = { ...GHOST, keep: true }; setTimeout(() => Promise.resolve(commitMove(pend)).finally(() => { if (GHOST?.keep) { GHOST = null; drawGhost(); } })); }   // пока спрашиваем «Сохранить изменения?», предпросмотр остаётся
+  else { GHOST = null; drawGhost(); }
+}
+// Дата и время из полей быстрой формы или null, если заполнены не полностью
+function qWhen() {
+  const date = $("#q-date")?.value, start = toMin($("#q-from")?.value), end = toMin($("#q-to")?.value);
+  return isDay(date) && start !== null && end !== null && end > start ? { date, start, end } : null;
 }
 function qSave() {
-  const q = QDRAFT, title = String($("#q-title")?.value || "").trim().slice(0, 200); if (!q) return;
+  const title = String($("#q-title")?.value || "").trim().slice(0, 200), w = qWhen(); if (!QDRAFT) return;
   if (!title) { $("#q-title")?.focus(); return toast("Напишите название встречи"); }
+  if (!w) { $("#q-from")?.focus(); return toast("Укажите дату и время: конец позже начала"); }
+  const q = { ...QDRAFT, ...w };
   closePop();
   return save(() => setDoc("meetings", newId("meetings"), { title, date: q.date, time: fromMin(q.start), kind: "call", ...(q.color ? { color: q.color } : {}), duration: q.end - q.start, studentId: null, cohortId: null,
     mentorId: myTeam()?.id || null, link: "", notes: "", ...(S.server ? { remind: true } : {}), status: "planned", createdAt: new Date().toISOString(), by: S.myId }), `Встреча «${title}»: ${dayLong(q.date)}, ${fromMin(q.start)}`);
@@ -3320,7 +3372,7 @@ function fieldsHTML(spec, vals) {
     else if (f.type === "checkbox") { out += `<label class="field checkbox"><input type="checkbox" id="${id}" name="${name}"${v ? " checked" : ""}><span>${esc(f.label)}</span></label>`; continue; }
     else ctl = `<input id="${id}" name="${name}" type="${f.type || "text"}" value="${esc(v)}"${f.type === "number" ? ' step="any" min="0" inputmode="decimal"' : ""}${f.auto ? ` autocomplete="${esc(f.auto)}"` : ""}${req}${f.ph ? ` placeholder="${esc(f.ph)}"` : ""}${f.list ? ` list="${id}-list" autocomplete="off"` : ""}>${f.list ? `<datalist id="${id}-list">${f.list.map(x => `<option value="${esc(x)}">`).join("")}</datalist>` : ""}`;
     const quick = f.quick ? `<div class="chips">${[["Сегодня", 0], ["Завтра", 1], ["Через 3 дня", 3], ["Через неделю", 7]].map(([l, n]) => `<button type="button" class="chip" data-act="qdate" data-target="${id}" data-days="${n}">${l}</button>`).join("")}</div>` : "";
-    out += `<label class="field${f.wide ? " span2" : ""}"><span>${esc(f.label)}${f.req ? " *" : ""}</span>${ctl}${quick}${f.help ? `<small>${esc(f.help)}</small>` : ""}</label>`;
+    out += `<label class="field${f.wide ? " span2" : ""}"><span>${esc(f.label)}${f.req ? " *" : ""}</span>${ctl}${quick}${f.help ? `<small id="${id}-help">${esc(f.help)}</small>` : ""}</label>`;
   }
   return out + close();
 }
@@ -3682,7 +3734,7 @@ function meetingForm(m, prefill = {}) {
     title: m ? "Встреча" : "Новая встреча", wide: true, values: vals, submit: m ? "Сохранить" : "Добавить",
     fields: [{ k: "title", label: "Название", req: true, wide: true, ph: "Разбор домашки", list: meetHints() },
       { k: "date", label: "Дата", type: "date", req: true, quick: true }, { k: "time", label: "Время", type: "time", help: "Пусто — на весь день" },
-      { k: "kind", label: "Тип", type: "select", options: MEET_KINDS }, { k: "duration", label: "Длительность, мин", type: "number" },
+      { k: "kind", label: "Тип", type: "select", options: MEET_KINDS }, { k: "duration", label: "Длительность, мин", type: "number", help: " " },
       { k: "people", label: "Участники", type: "people", help: "Менторы, студенты и потоки: на занятие потока приходят все, кто в нём учится" },
       ...(S.limited ? [] : [{ k: "mentorId", label: "Кто проводит", type: "select", options: teamOpts() }]),
       { k: "color", label: "Цвет в календаре", type: "select", options: [["", "По типу встречи"], ...MEET_COLORS] },
@@ -3720,7 +3772,13 @@ function meetingForm(m, prefill = {}) {
       return ok;
     },
   });
-  if (MODAL) { MODAL.people = people; drawPeople(); }
+  if (MODAL) { MODAL.people = people; MODAL.onInput = meetSpan; drawPeople(); meetSpan(); }
+}
+// Сколько займёт встреча: под длительностью в форме — «13:00–14:30 · 1 ч 30 мин»
+function meetSpan() {
+  const el = $("#m-duration-help"); if (!el) return;
+  const a = toMin($("#m-time")?.value), d = num($("#m-duration")?.value), n = d > 0 ? Math.min(Math.round(d), 1440) : 60;
+  el.textContent = a === null ? "Без времени — встреча на весь день" : `Займёт ${fromMin(a)}–${fromMin(Math.min(a + n, 1440))} · ${durText(n)}`;
 }
 // ----- Участники встречи в форме: плашки и поиск по менторам, студентам и потокам -----
 const PPL_KIND = { mentors: "ментор", students: "студент", cohorts: "поток" };
@@ -4347,7 +4405,7 @@ const ACT = {
   "ev-open": (d, el) => evPop(el.dataset.ev, el),
   "pop-close": () => closePop(true),
   // Цвет выбирается в открытой карточке: она остаётся открытой, кружок и блок меняют цвет сразу
-  "q-color": d => { if (!QDRAFT) return; QDRAFT.color = MEET_COLORS.some(x => x[0] === d.c) ? d.c : ""; markSwatch("q-color", QDRAFT.color, "k-call"); },
+  "q-color": d => { if (!QDRAFT) return; QDRAFT.color = MEET_COLORS.some(x => x[0] === d.c) ? d.c : ""; markSwatch("q-color", QDRAFT.color, "k-call"); if (GHOST) { GHOST.cls = `k-call${QDRAFT.color ? ` c-${QDRAFT.color} mc` : ""}`; drawGhost(); } },
   "ev-color": d => {
     const m = meetById(d.id); if (!m || !canMove(m)) return;
     const c = MEET_COLORS.some(x => x[0] === d.c) ? d.c : "";
@@ -4355,7 +4413,7 @@ const ACT = {
     markSwatch("ev-color", c, `k-${MEET_KINDS.some(x => x[0] === m.kind) ? m.kind : "other"}`);
     return save(() => updDoc("meetings", d.id, { color: c }));
   },
-  "q-more": () => { const q = QDRAFT, title = String($("#q-title")?.value || "").trim(); closePop(); if (q) meetingForm(null, { date: q.date, time: fromMin(q.start), duration: q.end - q.start, color: q.color || "", ...(title ? { title } : {}) }); },
+  "q-more": () => { const q = QDRAFT && { ...QDRAFT, ...(qWhen() || {}) }, title = String($("#q-title")?.value || "").trim(); closePop(); if (q) meetingForm(null, { date: q.date, time: fromMin(q.start), duration: q.end - q.start, color: q.color || "", ...(title ? { title } : {}) }); },
   "ev-del": (d, el) => {
     if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Точно удалить?"; return; }
     closePop(); const m = meetById(d.id); if (!m) return;
@@ -4529,7 +4587,8 @@ document.addEventListener("input", e => {
   if (e.target.id === "gq") renderSearch();
   if (e.target.id === "m-pq") pplSuggest();
   // В карточке встречи конец сдвигается вместе с началом: длительность остаётся прежней
-  if (e.target.id === "pm-from") { const to = $("#pm-to"), a = toMin(e.target.value), a0 = toMin(e.target.dataset.was || e.target.defaultValue), b0 = toMin(to?.value); if (to && a !== null && a0 !== null && b0 !== null) to.value = fromMin(Math.min(a + Math.max(b0 - a0, SNAP_MIN), 1439)); if (a !== null) e.target.dataset.was = e.target.value; }
+  if (/^pm-(date|from|to)$/.test(e.target.id)) pmInput(e.target);
+  if (/^q-(date|from|to|title)$/.test(e.target.id)) qInput(e.target);
   if (MODAL?.onInput && e.target.closest("#mform")) MODAL.onInput();
 });
 // Подсказка над столбцом графика
