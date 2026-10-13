@@ -2138,3 +2138,182 @@ class BotLinkTests(BaseCase):
         for bad in ([{"code": "stu_x"}], [{"code": "a b"}], [{"code": "A"}, {"code": "a"}], [{"code": "x", "label": 5}], "нет"):
             self.assertEqual(self.send("put", "config", "main", {"tgLinks": bad}).status_code, 400, bad)
         self.assertEqual(self.send("put", "config", "main", {"tgLinks": [{"code": "ok", "partnerId": "p1", "label": ""}]}).status_code, 200)
+
+
+class MeetingGuestTests(BaseCase):
+    """Участники встречи (менторы, студенты, потоки), права на неё и сообщения участникам в Telegram."""
+
+    def setUp(self):
+        from unittest import mock
+        from backend import meetings, telegram
+        from backend.models import TgChat
+        self.sent = []
+        patcher = mock.patch.object(telegram, "send", side_effect=lambda chat_id, text, **kw: self.sent.append((chat_id, text, kw)) or {"ok": True})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch.object(telegram, "enabled", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        # Сообщения уходят в фоне; в тестах — сразу, чтобы их можно было проверить
+        patcher = mock.patch.object(meetings, "dispatch", side_effect=meetings.deliver)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        store.system_write("cohorts", "c1", {"name": "Поток 2", "link": "https://telemost.yandex.ru/j/111"})
+        for sid, mentor, stage, chat in (("g1", "t1", "studying", 501), ("g2", "t2", "studying", 502), ("g3", "t1", "new", 503)):
+            store.system_write("students", sid, student(mentor, name=f"Ученик {sid}", stage=stage, cohortId="c1" if sid != "g3" else None, tgId=chat))
+            TgChat.objects.create(chat_id=chat, student_id=sid, state="done")
+        TgChat.objects.create(chat_id=801, user=self.mentor)
+        TgChat.objects.create(chat_id=802, user=self.other)
+        TgChat.objects.create(chat_id=800, user=self.admin)
+
+    def meeting(self, **extra):
+        return {"title": "Разбор кейса", "date": "2030-05-14", "time": "10:00", "duration": 60, "kind": "call",
+                "mentorId": "t1", "status": "planned", **extra}
+
+    def act(self, method, doc_id, data=None, notify=True):
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.generic(method.upper(), f"/api/db/meetings/{doc_id}/" + ("?notify=1" if notify else ""),
+                                       data=json.dumps(data or {}), content_type="application/json")
+
+    def to(self, chat):
+        return [text for c, text, kw in self.sent if c == chat]
+
+    def test_invited_mentor_sees_but_cannot_change_the_meeting(self):
+        store.system_write("meetings", "x1", self.meeting(mentorId="t2", studentIds=["g2"], mentorIds=["t1"]))
+        store.system_write("meetings", "x2", self.meeting(mentorId="t2", studentIds=["g2"]))
+        self.login("mentor")
+        self.assertIn("x1", self.ids(self.sync(), "meetings"))
+        self.assertNotIn("x2", self.ids(self.sync(), "meetings"))
+        self.assertEqual(self.send("patch", "meetings", "x1", {"time": "11:00"}).status_code, 403)
+        self.assertEqual(self.send("delete", "meetings", "x1").status_code, 403)
+        self.login("blogger")
+        self.assertEqual(self.sync()["docs"].get("meetings", []), [])
+        self.assertEqual(self.send("put", "meetings", "x3", self.meeting()).status_code, 403)
+
+    def test_mentor_invites_own_students_any_mentor_and_cohort_but_not_foreign_students(self):
+        self.login("mentor")
+        ok = self.meeting(studentIds=["g1", "g3"], mentorIds=["t2"], cohortIds=["c1"])
+        self.assertEqual(self.send("put", "meetings", "y1", ok).status_code, 200)
+        self.assertEqual(self.send("put", "meetings", "y2", self.meeting(studentIds=["g1", "g2"])).status_code, 403)
+        self.assertEqual(self.send("patch", "meetings", "y1", {"studentIds": ["g2"]}).status_code, 403)
+        self.assertEqual(self.send("put", "meetings", "y3", self.meeting(mentorId="t2", mentorIds=["t1"])).status_code, 403)
+        for bad in ({"studentIds": "g1"}, {"mentorIds": [1]}, {"cohortIds": ["a b"]}, {"studentIds": [f"s{i}" for i in range(301)]}):
+            self.assertEqual(self.send("put", "meetings", "y4", self.meeting(**bad)).status_code, 400, bad)
+
+    def test_participants_include_listed_students_and_cohorts(self):
+        from backend import meetings
+        students = {d.doc_id: d.data for d in Doc.objects.filter(collection="students")}
+        self.assertEqual(meetings.participants(self.meeting(studentIds=["g3"], cohortIds=["c1"]), students), ["g1", "g2", "g3"])
+        self.assertEqual(meetings.participants({"studentId": "g3", "studentIds": "мусор", "cohortIds": [5]}, students), ["g3"])
+        self.assertEqual(meetings.guests(self.meeting(mentorIds=["t2", "t2", None])).mentors, ("t1", "t2"))
+
+    def test_reassigned_listed_student_hides_the_meeting_from_the_old_mentor(self):
+        store.system_write("meetings", "z1", self.meeting(mentorId="t2", studentIds=["g1"]))
+        self.login("mentor")
+        first = self.sync()
+        self.assertIn("z1", self.ids(first, "meetings"))
+        self.login("admin")
+        self.send("patch", "students", "g1", {"mentorId": "t2"})
+        self.login("mentor")
+        later = self.sync(since=first["rev"], epoch=first["epoch"])
+        self.assertIn("z1", later["removed"].get("meetings", []))
+
+    def test_new_meeting_invites_everyone_but_the_author(self):
+        self.login("mentor")
+        res = self.act("put", "n1", self.meeting(title="Разбор +7 900 123-45-67", studentIds=["g3"], mentorIds=["t2"], cohortIds=["c1"]))
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self.to(801), [])                                  # автору не пишем
+        self.assertEqual(len(self.to(802)), 1)
+        self.assertIn("пригласили", self.to(802)[0])
+        self.assertIn("#/calendar/day-2030-05-14", self.to(802)[0])
+        for chat in (501, 502, 503):
+            self.assertEqual(len(self.to(chat)), 1, chat)
+            self.assertIn("10:00", self.to(chat)[0])
+            self.assertNotIn("123-45", self.to(chat)[0])                    # телефон из названия не уходит
+        student_msg = next(kw for c, text, kw in self.sent if c == 501)
+        self.assertIn("reply_markup", student_msg)                            # кнопки «Буду / Не буду»
+        self.assertIn("telemost", self.to(501)[0])
+        self.assertEqual(self.to(800), [])                                  # администратор не участник
+
+    def test_nothing_is_sent_without_the_flag_or_for_past_meetings(self):
+        self.login("mentor")
+        self.act("put", "q1", self.meeting(studentIds=["g1"]), notify=False)
+        self.act("put", "q2", self.meeting(date="2020-01-01", studentIds=["g1"]))
+        self.act("patch", "q1", {"time": "12:00"}, notify=False)
+        self.assertEqual(self.sent, [])
+
+    def test_move_tells_who_stays_invites_added_and_releases_removed(self):
+        store.system_write("meetings", "v1", self.meeting(studentIds=["g1", "g3"], mentorIds=["t2"]))
+        self.login("mentor")
+        self.act("patch", "v1", {"date": "2030-05-15", "time": "12:30", "studentIds": ["g1"], "mentorIds": [], "cohortIds": ["c1"]})
+        self.assertIn("перенесена", self.to(501)[0])
+        self.assertIn("10:00", self.to(501)[0])
+        self.assertIn("12:30", self.to(501)[0])
+        self.assertIn("больше не участвуете", self.to(503)[0])
+        self.assertIn("больше не участвуете", self.to(802)[0])
+        self.assertIn("пригласили", self.to(502)[0])                       # пришёл вместе с потоком
+        self.sent.clear()
+        self.act("patch", "v1", {"duration": 60})                           # ничего не изменилось — ничего не пишем
+        self.act("patch", "v1", {"notes": "внутренняя заметка", "color": "red"})
+        self.assertEqual(self.sent, [])
+
+    def test_delete_and_cancel_tell_everyone(self):
+        store.system_write("meetings", "w1", self.meeting(studentIds=["g1"], mentorIds=["t2"]))
+        store.system_write("meetings", "w2", self.meeting(studentIds=["g3"]))
+        self.login("mentor")
+        self.act("delete", "w1")
+        self.assertIn("отменена", self.to(501)[0])
+        self.assertIn("отменена", self.to(802)[0])
+        self.act("patch", "w2", {"status": "cancelled"})
+        self.assertIn("отменена", self.to(503)[0])
+
+    def test_students_are_quiet_when_the_meeting_says_so_but_mentors_are_told(self):
+        self.login("mentor")
+        self.act("put", "r1", self.meeting(studentIds=["g1"], mentorIds=["t2"], remind=False))
+        self.assertEqual(self.to(501), [])
+        self.assertEqual(len(self.to(802)), 1)
+
+    def test_switching_student_messages_off_tells_nobody_they_left(self):
+        store.system_write("meetings", "o1", self.meeting(studentIds=["g1"]))
+        self.login("mentor")
+        self.act("patch", "o1", {"remind": False})
+        self.assertEqual(self.sent, [])
+
+    def test_bad_date_or_move_to_the_past_saves_quietly(self):
+        store.system_write("meetings", "b1", self.meeting(studentIds=["g1"]))
+        self.login("mentor")
+        self.assertEqual(self.act("patch", "b1", {"date": "2030-02-31"}).status_code, 200)
+        self.assertEqual(self.act("patch", "b1", {"date": "2020-01-01"}).status_code, 200)
+        self.assertEqual(self.sent, [])   # о переносе в прошлое не пишем «отменена»
+
+    def test_notifications_are_capped_per_person(self):
+        from backend import meetings
+        cache.clear()
+        self.addCleanup(cache.clear)
+        store.system_write("meetings", "c9", self.meeting(studentIds=["g1"]))
+        self.login("mentor")
+        for i in range(meetings.NOTIFY_LIMIT + 3):
+            self.assertEqual(self.act("patch", "c9", {"time": f"{10 + i % 2}:{i:02d}"}).status_code, 200)
+        self.assertEqual(len(self.to(501)), meetings.NOTIFY_LIMIT)
+
+    def test_partner_cannot_use_notify(self):
+        self.login("blogger")
+        self.assertEqual(self.act("put", "p9", self.meeting()).status_code, 403)
+        self.assertEqual(self.sent, [])
+
+    def test_link_change_is_sent(self):
+        store.system_write("meetings", "l1", self.meeting(studentIds=["g1"], link="https://old.example/1"))
+        self.login("mentor")
+        self.act("patch", "l1", {"link": "https://new.example/2"})
+        self.assertIn("https://new.example/2", self.to(501)[0])
+
+    def test_reminder_reaches_invited_mentors(self):
+        import datetime
+        from django.utils import timezone
+        from backend import scheduler
+        cache.clear()
+        self.addCleanup(cache.clear)
+        store.system_write("meetings", "k1", self.meeting(date="2026-10-06", time="15:00", mentorIds=["t2"]))
+        scheduler._reminders(timezone.make_aware(datetime.datetime(2026, 10, 6, 14, 50)))
+        self.assertEqual(len(self.to(801)), 1)
+        self.assertEqual(len(self.to(802)), 1)

@@ -154,6 +154,8 @@ def import_backup(raw, overwrite=False, with_demo=False, passphrase=None):
             if section == "meetings" and row.get("studentId") and row["studentId"] not in kept["students"]:
                 stats[section]["skipped"] += 1
                 continue
+            if section == "meetings" and isinstance(row.get("studentIds"), list):
+                row["studentIds"] = [x for x in row["studentIds"] if x in kept["students"]]  # студентов не из копии убираем
             kept.setdefault(section, set()).add(doc_id)
             if section == "team" and row.get("userId"):
                 # Ключ человека из версии в Claude: по нему подписываются его старые заметки

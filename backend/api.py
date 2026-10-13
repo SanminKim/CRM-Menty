@@ -154,9 +154,11 @@ def sync(request, access):
 @require_http_methods(["PUT", "PATCH", "DELETE"])
 @api
 def doc(request, access, collection, doc_id):
+    # ?notify=1 — автор встречи просит сообщить участникам в Telegram об изменении
+    notify = collection == "meetings" and request.GET.get("notify") == "1"
     if request.method == "DELETE":
-        return JsonResponse({"rev": store.delete(access, collection, doc_id)})
-    rev, data = store.write(access, collection, doc_id, body(request), partial=request.method == "PATCH")
+        return JsonResponse({"rev": store.delete(access, collection, doc_id, notify=notify)})
+    rev, data = store.write(access, collection, doc_id, body(request), partial=request.method == "PATCH", notify=notify)
     return JsonResponse({"rev": rev, "doc": data})
 
 

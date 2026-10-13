@@ -94,10 +94,12 @@ class Access:
         if collection == "students":
             return bool(self.link_id) and data.get("mentorId") == self.link_id
         if collection == "meetings":
-            if data.get("studentId"):
-                return self._owns_student(data["studentId"]) or (
-                    bool(self.link_id) and data.get("mentorId") == self.link_id)
-            return True  # занятия группы видят все менторы
+            from . import meetings  # позднее подключение: meetings пользуется этим модулем
+            g = meetings.guests(data)
+            if g.students:
+                # встреча со студентами: её видят ведущий, приглашённые менторы и ментор хотя бы одного из студентов
+                return (bool(self.link_id) and self.link_id in g.mentors) or any(self._owns_student(s) for s in g.students)
+            return True  # занятия потока и встречи без студентов видят все менторы
         return True
 
     def visible(self, doc):
@@ -138,15 +140,18 @@ class Access:
             self._check_direction(old, new)
             return
         if collection == "meetings":
+            from . import meetings
             if new is not None and (old or {}).get("rsvp") != new.get("rsvp"):
                 raise Denied  # ответы студентов «буду / не буду» записывает только бот
             for data in (old, new):
                 if data is None:
                     continue
                 own = bool(self.link_id) and data.get("mentorId") == self.link_id
-                if data.get("studentId"):
-                    # встреча со студентом: студент должен быть своим, а проводить её может только сам ментор
-                    if not self._owns_student(data["studentId"]) or not (own or not data.get("mentorId")):
+                students = meetings.guests(data).students
+                if students:
+                    # встреча со студентами: все они должны быть своими, а проводить её может только сам ментор.
+                    # Приглашённый ментор встречу видит, но не меняет; позвать можно любого ментора и любой поток
+                    if not all(self._owns_student(s) for s in students) or not (own or not data.get("mentorId")):
                         raise Denied
                 elif not own:
                     raise Denied  # занятие группы правит тот, кто его проводит
@@ -315,7 +320,9 @@ def _clean(collection, data):
 
 def _touch_meetings(student_id, rev):
     """Видимость встречи зависит от ментора студента: при его смене встречи должны «обновиться»."""
-    Doc.objects.filter(collection="meetings", data__studentId=student_id).update(rev=rev)
+    from . import meetings
+    ids = [d.pk for d in Doc.objects.filter(collection="meetings").only("pk", "data") if student_id in meetings.guests(d.data).students]
+    Doc.objects.filter(pk__in=ids).update(rev=rev)
 
 
 MONEY_KEYS = ("id", "paid", "amount", "expected", "dirId", "refund")
@@ -365,7 +372,7 @@ def _pin_payments(old, new):
 
 
 @transaction.atomic
-def write(access, collection, doc_id, data, partial):
+def write(access, collection, doc_id, data, partial, notify=False):
     """set (partial=False) или update (partial=True). Возвращает (ревизия, документ для пользователя)."""
     _validate(collection, doc_id, data)
     if access.role not in (Account.Role.ADMIN, Account.Role.MENTOR):
@@ -382,6 +389,10 @@ def write(access, collection, doc_id, data, partial):
     if collection == "students":
         files.keep(old, new)  # договор и файлы платежей меняются только загрузкой и удалением файла
     _validate(collection, doc_id, new)
+    if collection == "meetings":
+        from . import meetings  # позднее подключение: meetings пользуется этим модулем
+        if meetings.guests_problem(new):
+            raise Invalid(meetings.guests_problem(new))
     access.check_write(collection, old, new)
     if collection == "directions" and new is not None and reports.terms_problem(new):
         raise Invalid(reports.terms_problem(new))
@@ -410,13 +421,16 @@ def write(access, collection, doc_id, data, partial):
         _touch_meetings(doc_id, rev)
         if isinstance(new.get("mentorId"), str) and new["mentorId"] and not new.get("deletedAt"):
             _tell_mentor(new["mentorId"], str(new.get("name") or "")[:100], access.user, doc_id)
+    if collection == "meetings" and notify:
+        from . import meetings
+        meetings.tell(doc_id, old, new, access.user)  # автор попросил сообщить участникам
     _refresh_reports(collection, rev, old, new)
     visible = access.visible(doc)
     return rev, present(doc, visible, _team_links()) if visible is not None else None
 
 
 @transaction.atomic
-def delete(access, collection, doc_id):
+def delete(access, collection, doc_id, notify=False):
     _validate(collection, doc_id)
     if not access.is_admin and not access.is_mentor:
         raise Denied
@@ -435,6 +449,9 @@ def delete(access, collection, doc_id):
         from . import telegram
         telegram.forget_student(doc_id)
         files.forget_student(doc_id)
+    if collection == "meetings" and notify:
+        from . import meetings
+        meetings.tell(doc_id, old, None, access.user)
     _refresh_reports(collection, rev, old, None)
     return rev
 

@@ -57,6 +57,11 @@ def setgo(page, g):
 def tab(page, v):
     """Вкладка карточки студента: main, money, study, job, hist."""
     page.click(f".drawer [data-act=card-tab][data-v={v}]"); page.wait_for_selector(f".drawer #d-tab-{v}")
+def ask(page, choice="yes", wait=1500):
+    """Отвечает на «Сообщить участникам?», если вопрос появился. Возвращает, был ли вопрос."""
+    try: page.wait_for_selector("#asknote", timeout=wait)
+    except Exception: return False
+    page.click(f"#asknote [data-a={choice}]"); page.wait_for_timeout(300); return True
 def shot(page, name, **kw): page.screenshot(path=str(SHOTS / name), **kw)
 def tg(update):
     req = urllib.request.Request(URL + "api/telegram/", data=json.dumps(update).encode(), headers={"Content-Type": "application/json", "X-Telegram-Bot-Api-Secret-Token": TG_SECRET})
@@ -323,11 +328,19 @@ try:
       pg.click(".cal-side [data-act=meet-new]"); pg.wait_for_selector("#mform"); shot(pg, "s19_meeting_form.png")
       pg.fill("#m-title", "Тестовая встреча"); pg.fill("#m-link", "javascript:alert(1)"); pg.click("#m-submit"); pg.wait_for_timeout(150)
       check("meeting link scheme checked", "http" in pg.inner_text("#m-err") and len(meets()) == n_m)
-      pg.fill("#m-link", "https://example.com/room"); pg.fill("#m-time", "09:15"); pg.select_option("#m-studentId", index=1); msid = pg.input_value("#m-studentId")
-      pg.click("#m-submit"); pg.wait_for_timeout(300)
+      pg.fill("#m-link", "https://example.com/room"); pg.fill("#m-time", "09:15")
+      msid = pg.evaluate("sortBy(D().students.filter(isActive), s => s.name)[0].id")
+      pg.fill("#m-pq", pg.evaluate(f"stu({json.dumps(msid)}).name")); pg.wait_for_timeout(150); pg.keyboard.press("Enter")
+      check("participant picked from search", pg.evaluate("MODAL.people.students") == [msid] and pg.locator("#m-ppl .ppl-students").count() == 1)
+      pg.click("#m-submit")
+      pg.wait_for_selector("#asknote", timeout=3000)
+      check("saving asks whether to tell the participants", "1 участнику" in pg.inner_text("#asknote"), pg.inner_text("#asknote"))
+      pg.click("#asknote [data-a=cancel]"); pg.wait_for_timeout(200)
+      check("cancel in the question keeps the form and saves nothing", pg.locator("#mform").count() == 1 and not any(v["title"] == "Тестовая встреча" for v in meets().values()))
+      pg.click("#m-submit"); ask(pg, "yes"); pg.wait_for_timeout(300)
       mk = [k for k, v in meets().items() if v["title"] == "Тестовая встреча"]
       mt = meets()[mk[0]] if mk else {}
-      check("meeting created", len(mk) == 1 and mt["date"] == today and mt["time"] == "09:15" and mt["studentId"] == msid and mt["status"] == "planned" and mt["link"].startswith("https://"), mt)
+      check("meeting created", len(mk) == 1 and mt["date"] == today and mt["time"] == "09:15" and mt.get("studentIds") == [msid] and not mt.get("studentId") and mt["status"] == "planned" and mt["link"].startswith("https://"), mt)
       row = pg.locator(".cal-wrap .rows li", has_text="Тестовая встреча").first
       check("meeting link rendered safely", row.locator("a[href='https://example.com/room'][rel=noopener]").count() == 1)
       notes0 = len(store()["students/" + msid].get("notes", []))
@@ -341,13 +354,13 @@ try:
       # форма встречи открыта, а отметку ставит другой человек: правка названия не затирает статус
       pg.locator(".cal-wrap .rows li", has_text="Тестовая встреча").first.locator(".who").click(); pg.wait_for_selector("#mform")
       pg.evaluate(f"S.db.collection('meetings').doc({json.dumps(mk[0].split('/')[1])}).update({{notes: 'чужая заметка'}})"); pg.wait_for_timeout(150)
-      pg.fill("#m-duration", "30"); pg.click("#m-submit"); pg.wait_for_timeout(300)
+      pg.fill("#m-duration", "30"); pg.click("#m-submit"); ask(pg, "no", 600); pg.wait_for_timeout(300)
       check("meeting form keeps others' edits", meets()[mk[0]]["notes"] == "чужая заметка" and meets()[mk[0]]["duration"] == 30 and meets()[mk[0]]["status"] == "done", meets()[mk[0]])
       pg.locator(".cal-wrap .rows li", has_text="Тестовая встреча").first.locator(".who").click(); pg.wait_for_selector("#mform")
-      pg.select_option("#m-status", "planned"); pg.click("#m-submit"); pg.wait_for_timeout(400)
+      pg.select_option("#m-status", "planned"); pg.click("#m-submit"); ask(pg, "no"); pg.wait_for_timeout(400)
       check("undo meeting mark", meets()[mk[0]]["status"] == "planned" and len(store()["students/" + msid]["notes"]) == notes0)
       pg.locator(".cal-wrap .rows li", has_text="Тестовая встреча").first.locator(".who").click(); pg.wait_for_selector("#mform")
-      pg.fill("#m-date", tomorrow); pg.click("#m-submit"); pg.wait_for_timeout(300)
+      pg.fill("#m-date", tomorrow); pg.click("#m-submit"); ask(pg, "yes"); pg.wait_for_timeout(300)
       check("meeting rescheduled, calendar follows", meets()[mk[0]]["date"] == tomorrow and pg.locator(f"#cal-{tomorrow}.sel").count() == 1 and meets()[mk[0]]["title"] == "Тестовая встреча")
       pg.click(f"#cal-{tomorrow}"); pg.wait_for_selector(".drawer #day-title")
       check("day card lists the meeting of that day", "Тестовая встреча" in pg.text_content(".drawer") and "Шаги по студентам" not in pg.text_content(".drawer"), pg.inner_text(".drawer")[:300])
@@ -389,8 +402,29 @@ try:
       pg.click("#ev-color-colors [data-c=red]"); pg.wait_for_timeout(400)
       check("colour changed from the meeting card", next(v for v in meets().values() if v["title"] == "Встреча из сетки").get("color") == "red"
             and pg.locator(".wev.c-red", has_text="Встреча из сетки").count() == 1 and pg.locator("#calpop [data-act=ev-del]").count() == 1)
+      pg.fill("#pm-from", "14:00"); pg.fill("#pm-to", "15:30"); pg.click("#pop-move [data-act=ev-move]"); pg.wait_for_timeout(500)
+      qm = next(v for v in meets().values() if v["title"] == "Встреча из сетки")
+      check("meeting moved from its card without a question when nobody else is invited", (qm["time"], qm["duration"]) == ("14:00", 90) and pg.locator("#asknote").count() == 0, qm)
+      pg.locator(".wev", has_text="Встреча из сетки").click(); pg.wait_for_selector("#calpop [data-act=ev-del]")
       pg.click("#calpop [data-act=ev-del]"); pg.click("#calpop [data-act=ev-del]"); pg.wait_for_timeout(400)
       check("meeting deleted from its card", not any(v["title"] == "Встреча из сетки" for v in meets().values()))
+      # встреча с потоком целиком, отдельным студентом и вторым ментором: вопрос о сообщении, перенос в месяце
+      cid = pg.evaluate("D().cohorts[0]?.id || ''")
+      pg.click(".cal-side [data-act=meet-new]"); pg.wait_for_selector("#mform"); pg.fill("#m-title", "Общий разбор"); pg.fill("#m-time", "18:00")
+      pg.click("#m-pq"); pg.wait_for_timeout(150)
+      check("empty search lists cohorts with 'whole cohort' first", pg.locator("#m-pl li.ppl-head").count() == pg.evaluate("D().cohorts.length") and "весь поток" in pg.inner_text("#m-pl li.ppl-head >> nth=0"))
+      pg.locator(f"#m-pl li.ppl-head[data-id='{cid}']").click(); pg.wait_for_timeout(100)
+      solo = pg.locator("#m-pl li.ppl-sub").first; solo_id = solo.get_attribute("data-id"); solo.click(); pg.wait_for_timeout(100)
+      check("whole cohort and a single student can both be added", pg.evaluate("MODAL.people.cohorts") == [cid] and pg.evaluate("MODAL.people.students") == [solo_id])
+      pg.click("#m-submit"); ask(pg, "yes"); pg.wait_for_timeout(400)
+      gm_key, gm = next((k, v) for k, v in meets().items() if v["title"] == "Общий разбор")
+      check("group meeting saved with lists", gm.get("cohortIds") == [cid] and gm.get("studentIds") == [solo_id], gm)
+      pg.click("[data-act=cal-mode][data-v=month]"); pg.wait_for_selector(".cal-grid")
+      chip = pg.locator(".cal-grid .ev.can", has_text="Общий разбор").first; cb = chip.bounding_box(); tb = pg.locator(f".cal-cell[data-d='{tomorrow}']").bounding_box()
+      pg.mouse.move(cb["x"] + 6, cb["y"] + 3); pg.mouse.down(); pg.mouse.move(tb["x"] + 30, tb["y"] + 45, steps=8); pg.mouse.up()
+      asked = ask(pg, "no"); pg.wait_for_timeout(400)
+      check("meeting dragged to another day in the month view", asked and meets()[gm_key]["date"] == tomorrow and meets()[gm_key]["time"] == "18:00" and pg.locator(".drawer").count() == 0, meets()[gm_key])
+      pg.click("[data-act=cal-mode][data-v=week]"); pg.wait_for_selector("#cal-week")
       pg.set_viewport_size({"width": 1440, "height": 900}); shot(pg, "s35_calendar_week.png")
       pg.click(".nav >> text=Сегодня"); pg.wait_for_timeout(200)
       pg.click("#today-kpis [data-v=meets]"); pg.wait_for_timeout(150)
@@ -400,7 +434,7 @@ try:
       pg.evaluate(f"openStudent({json.dumps(msid)})"); pg.wait_for_timeout(250)
       check("drawer meetings section", pg.locator(".drawer .sec", has_text="Встречи").locator("tr").count() >= 1)
       pg.locator(".drawer [data-act=meet-new]").click(); pg.wait_for_selector("#mform")
-      check("meeting from drawer prefilled", pg.input_value("#m-studentId") == msid and pg.input_value("#m-title") == "Созвон"); pg.keyboard.press("Escape")
+      check("meeting from drawer prefilled", pg.evaluate("MODAL.people.students") == [msid] and pg.input_value("#m-title") == "Созвон"); pg.keyboard.press("Escape")
       # --- журнал денег ---
       lid = pg.evaluate("D().students.find(s => (s.payments||[]).some(p => !p.paid) && !(s.log||[]).length && s.partnerId && D().reports.some(r => r.id === s.partnerId)).id")
       rid = store()["students/" + lid]["partnerId"]; rev0 = store()["reports/" + rid]["revenue"]
@@ -434,14 +468,14 @@ try:
       check("undo restores from trash", not store()["students/" + lid].get("deletedAt") and pg.evaluate("D().students.length") == n_s)
       pg.evaluate(f"trashStudent({json.dumps(lid)})"); pg.wait_for_timeout(300); pg.evaluate(f"trashStudent({json.dumps(msid)})"); pg.wait_for_timeout(300)
       setgo(pg, "data"); shot(pg, "s20_trash.png", full_page=True)
-      check("trashed student's meetings hidden", pg.evaluate(f"events('0000-00-00','9999-99-99').every(e => !e.m || e.m.studentId !== {json.dumps(msid)}) && D().meetings.some(m => m.studentId === {json.dumps(msid)})"))
+      check("trashed student's meetings hidden", pg.evaluate(f"events('0000-00-00','9999-99-99').every(e => !e.m || mg(e.m).cohorts.length || !mg(e.m).students.includes({json.dumps(msid)})) && D().meetings.some(m => mg(m).students.includes({json.dumps(msid)}))"))
       check("trash panel", pg.locator(".panel", has_text="Корзина").locator("li").count() == 2)
       pg.click("[data-act=backup]"); pg.wait_for_timeout(300); bk2 = json.loads(pg.evaluate("window.__saved.data"))
       check("backup keeps trashed students", sum(1 for x in bk2["data"]["students"] if x.get("deletedAt")) == 2)
       pg.locator(f"[data-act=trash-restore][data-id='{lid}']").click(); pg.wait_for_timeout(300)
       check("restore from settings", not store()["students/" + lid].get("deletedAt") and pg.evaluate("S.trash.length") == 1)
       btn = pg.locator(f"[data-act=trash-purge][data-id='{msid}']"); btn.click(); pg.wait_for_timeout(100); pg.locator(f"[data-act=trash-purge][data-id='{msid}']").click(); pg.wait_for_timeout(400)
-      check("purge removes student and personal meetings", ("students/" + msid) not in store() and not any(v.get("studentId") == msid for v in meets().values()) and pg.locator(".panel", has_text="Корзина").count() == 0)
+      check("purge removes student and personal meetings", ("students/" + msid) not in store() and not any(v.get("studentId") == msid or msid in (v.get("studentIds") or []) for v in meets().values()) and pg.locator(".panel", has_text="Корзина").count() == 0)
       # --- сортировка таблицы ---
       pg.click(".nav >> text=Студенты"); pg.wait_for_timeout(200)
       names = lambda: pg.locator("tbody tr.click td:nth-child(2) strong").all_inner_texts()
@@ -839,7 +873,7 @@ try:
       nxt("Связались", {"#m-note": "Хочет в аналитики, начнёт в ноябре"})
       d = doc(); check("contacted: note saved and step set", d["stage"] == "contacted" and any(n["text"].startswith("Хочет в аналитики") for n in d["notes"]) and d["next"]["text"] == "Договориться о созвоне", d.get("next"))
       nxt("Созвон", {"#m-mdate": "2026-12-01", "#m-mtime": "15:30"})
-      d = doc(); meets = [m for k, m in pg.evaluate("window.__store").items() if k.startswith("meetings/") and m.get("studentId") == fid]
+      d = doc(); meets = [m for k, m in pg.evaluate("window.__store").items() if k.startswith("meetings/") and fid in (m.get("studentIds") or [])]
       check("call: meeting created and step on that day", d["stage"] == "call" and len(meets) == 1 and meets[0]["date"] == "2026-12-01" and meets[0]["time"] == "15:30" and d["next"] == {"text": "Созвон", "date": "2026-12-01"}, (meets, d.get("next")))
       nxt("Ждём оплату", {"#m-price": "90000", "#m-first": "2026-12-05"})
       d = doc(); check("waiting payment: price, one payment, log", d["stage"] == "waiting_payment" and d["price"] == 90000 and [x["amount"] for x in d["payments"]] == [90000] and pg.locator("#m-parts").count() == 0 and d["payments"][0]["due"] == "2026-12-05" and len(d["log"]) == 2 and d["next"]["text"] == "Проверить оплату", d.get("log"))

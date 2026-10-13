@@ -74,13 +74,13 @@ def _digests(now):
     if not staff:
         return
     students = [(i, s) for i, s in _docs("students") if not s.get("deletedAt")]
-    meetings = [m for _, m in _docs("meetings")]
+    meeting_list = [m for _, m in _docs("meetings")]
     team = {i for i, _ in _docs("team")}
     for chat_id, role, link_id in staff:
         if not _once(f"sched:digest:{today}:{chat_id}"):
             continue
         try:
-            text = _digest(today, role == Account.Role.ADMIN, link_id, students, meetings, team)
+            text = _digest(today, role == Account.Role.ADMIN, link_id, students, meeting_list, team)
         except Exception:  # кривая запись не должна оставить без сводки остальных
             log.exception("Планировщик: сводка не собрана")
             continue
@@ -88,7 +88,7 @@ def _digests(now):
             telegram.send(chat_id, f"{text}\n{settings.PUBLIC_URL}/")
 
 
-def _digest(today, is_admin, link_id, students, meetings, team):
+def _digest(today, is_admin, link_id, students, meeting_list, team):
     mine = [(i, s) for i, s in students if is_admin or (link_id and s.get("mentorId") == link_id)]
     own_ids = {i for i, _ in mine}
     stages = reports.current_stages()
@@ -105,9 +105,9 @@ def _digest(today, is_admin, link_id, students, meetings, team):
     # Платёж от дохода без суммы: студент ещё не сообщил, сколько заработал
     no_income = [p for p in late_pays if reports._number(p.get("amount")) <= 0 and _percent(p.get("percent"))]
     pay_today = [p for p in unpaid if p["due"][:10] == today]
-    meets = [m for m in meetings if reports._day(m.get("date")) == today and (m.get("status") or "planned") == "planned"
-             and (is_admin or (link_id and m.get("mentorId") == link_id)
-                  or (isinstance(m.get("studentId"), str) and m["studentId"] in own_ids))]
+    meets = [m for m in meeting_list if reports._day(m.get("date")) == today and (m.get("status") or "planned") == "planned"
+             and (is_admin or (link_id and link_id in meetings.guests(m).mentors)
+                  or any(s in own_ids for s in meetings.guests(m).students))]
     orphans = [s for s in active if not (isinstance(s.get("mentorId"), str) and s["mentorId"] in team)] if is_admin else []
     lines = []
     if due:
@@ -144,8 +144,9 @@ def _reminders(now):
         if not 0 < left <= REMIND_MINUTES or not _once(f"sched:meet:{meeting_id}:{today}T{clock}"):
             continue
         staff = _staff() if staff is None else staff
-        mentor = m.get("mentorId") if isinstance(m.get("mentorId"), str) else ""
-        to = [chat for chat, role, link in staff if mentor and link == mentor] \
+        # Ведущему и приглашённым менторам; встреча без менторов — администратору
+        mentors = meetings.guests(m).mentors
+        to = [chat for chat, role, link in staff if link and link in mentors] \
             or [chat for chat, role, link in staff if role == Account.Role.ADMIN]
         # Название пишут сотрудники: ссылки убираются, а длинные числа прячутся, чтобы в Telegram не ушёл телефон
         title = PHONE_RE.sub("…", leads.plain(m.get("title") if isinstance(m.get("title"), str) else "", 80)) or "встреча"

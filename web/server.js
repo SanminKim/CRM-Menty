@@ -90,13 +90,15 @@
   }
   const newId = () => { const a = new Uint8Array(15); crypto.getRandomValues(a); return Array.from(a, b => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"[b % 62]).join(""); };
   const url = (c, id) => `/api/db/${encodeURIComponent(c)}/${encodeURIComponent(id)}/`;
+  const q = o => o && o.notify ? "?notify=1" : "";
   const snapDoc = (c, id) => { const cur = col(c).get(id); return { id, exists: !!cur, data: () => cur ? clone(cur.data) : undefined }; };
   const docRef = (c, id) => ({
     id, path: c + "/" + id,
     get: async () => snapDoc(c, id),
-    set: async data => put(c, id, await call("PUT", url(c, id), data)),
-    update: async data => put(c, id, await call("PATCH", url(c, id), data)),
-    delete: async () => { const res = await call("DELETE", url(c, id)); const cur = col(c).get(id); gone.set(c + "/" + id, res.rev); if (cur && cur.rev <= res.rev) col(c).delete(id); emit(new Set([c])); },
+    // { notify: true }: сообщить участникам встречи в Telegram об изменении (сервер принимает только для встреч)
+    set: async (data, o) => put(c, id, await call("PUT", url(c, id) + q(o), data)),
+    update: async (data, o) => put(c, id, await call("PATCH", url(c, id) + q(o), data)),
+    delete: async o => { const res = await call("DELETE", url(c, id) + q(o)); const cur = col(c).get(id); gone.set(c + "/" + id, res.rev); if (cur && cur.rev <= res.rev) col(c).delete(id); emit(new Set([c])); },
     onSnapshot: next => { const fn = () => next(snapDoc(c, id)); subs.push({ col: c, fn }); setTimeout(fn, 0); return () => { }; },
   });
   const colRef = c => ({

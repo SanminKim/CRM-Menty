@@ -427,7 +427,8 @@ button.kpi.on, button.kpi.on:hover { background: var(--brand-soft); box-shadow: 
 .file-x:hover, .file-x:focus-visible { color: var(--danger); }
 .file-x.armed { color: var(--danger); font-weight: 600; }
 .drop-on { outline: 2px dashed var(--brand); outline-offset: 2px; }
-@media (max-width: 520px) { .card-tabs .long, .card-tabs .cnt { display: none; } .card-tabs button { padding-inline: 8px; } }
+.card-tabs .sh { display: none; }
+@media (max-width: 520px) { .card-tabs .long, .card-tabs .cnt { display: none; } .card-tabs .sh { display: inline; } .card-tabs button { padding-inline: 8px; } }
 .path { list-style: none; display: flex; gap: 3px; margin: 0; padding: 0; }
 .path li { flex: 1; height: 6px; border-radius: 99px; background: var(--surface-2); color: var(--g-sales); }
 .path li.g-study { color: var(--g-study); }
@@ -634,6 +635,40 @@ td.mxc { padding: 4px 2px; text-align: center; }
 .wev.st-missed, .wev.st-cancelled { opacity: .55; }
 .wev.st-missed .wev-n, .wev.st-cancelled .wev-n { text-decoration: line-through; }
 .wev.dragging, .wev.lifted { z-index: 5; box-shadow: var(--pop); opacity: .95; cursor: grabbing; }
+/* Встречи рядом: наведённая поднимается поверх соседних; в узком блоке — только название мелким шрифтом */
+.wev:hover, .wev:focus-visible { z-index: 4; box-shadow: 0 2px 10px rgba(0, 0, 0, .18); }
+.wev.narrow { padding: 2px 4px; font-size: 11px; line-height: 13px; }
+.wev.narrow .wev-t, .wev.narrow .wev-s { display: none; }
+.wev.narrow .wev-n { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.cal-grid .ev.can { cursor: grab; }
+.cal-grid .ev.dragging { opacity: .5; }
+.cal-cell.drop-to { outline: 2px dashed var(--brand); outline-offset: -3px; background: var(--brand-soft); }
+.pop-move { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+.pop-move input { min-height: 32px; padding: 2px 6px; font-size: 13px; }
+.pop-move input[type=date] { flex: 1 1 100%; }
+.pop-move input[type=time] { width: 112px; }
+/* Участники встречи в форме */
+.ppl-field > span:first-child { font-size: 13px; color: var(--muted); }
+.ppl { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0; }
+.ppl-c { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface-2); border-radius: 99px; padding: 2px 4px 2px 10px; font-size: 13px; max-width: 100%; }
+.ppl-c .sub { font-size: 11px; }
+.ppl-c .x { width: 24px; height: 24px; font-size: 15px; }
+.ppl-mentors { border-color: var(--brand); } .ppl-cohorts { border-color: var(--g-study); }
+.ppl-add { position: relative; }
+.ppl-add input { width: 100%; }
+.ppl-list { position: absolute; z-index: 3; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-ctl); box-shadow: var(--pop); max-height: 280px; overflow-y: auto; }
+.ppl-list li { display: flex; flex-direction: column; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.ppl-list li[aria-selected="true"], .ppl-list li[data-act]:hover { background: var(--surface-2); }
+.ppl-list li .sub { font-size: 12px; }
+.ppl-list li.ppl-head { margin-top: 4px; border-top: 1px solid var(--border); border-radius: 0 0 6px 6px; }
+.ppl-list li.ppl-head:first-child { margin-top: 0; border-top: 0; }
+.ppl-list li.ppl-sub { padding-left: 24px; }
+/* «Сообщить участникам?» поверх формы встречи */
+.ask-over { z-index: 35; place-items: center; }
+.modal.ask { max-width: 440px; padding: 18px 20px 14px; }
+.modal.ask h2 { margin: 0 0 8px; font-size: 18px; }
+.modal.ask p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+.modal.ask footer { padding: 0; }
 .wk-sel { position: absolute; left: 2px; right: 2px; background: var(--brand-soft); border: 1px dashed var(--brand); border-radius: 6px; font-size: 12px; padding: 2px 6px; color: var(--brand); z-index: 4; pointer-events: none; }
 .cal-dragging, .cal-dragging * { user-select: none; }
 /* Карточка события и быстрое создание */
@@ -1078,9 +1113,11 @@ function events(from, to) {
   const out = [];
   for (const m of D().meetings) {
     if (!m.date || m.date < from || m.date > to) continue;
-    const s = m.studentId ? stu(m.studentId) : null, mid = m.mentorId || s?.mentorId;
-    if (m.studentId && !s) continue; // студент в корзине: его встречи вернутся вместе с ним
-    if (f === "none" ? !!teamName(mid) : (mid && !okMentor(mid))) continue;
+    const g = mg(m), ss = g.students.map(stu).filter(Boolean), s = ss[0] || null;
+    // все студенты встречи в корзине: встреча вернётся вместе с ними
+    if (g.students.length && !ss.length && !g.cohorts.length && g.students.every(id => S.trash.some(t => t.id === id))) continue;
+    const mids = [...g.mentors, ...ss.map(x => x.mentorId)].filter(Boolean);
+    if (f === "none" ? mids.some(id => !!teamName(id)) : (mids.length && !mids.some(okMentor))) continue;
     out.push({ type: "m", date: m.date, time: m.time || "", title: m.title || "Встреча", kind: m.kind || "other", status: m.status || "planned", m, s });
   }
   for (const s of D().students) {
@@ -1472,10 +1509,10 @@ function helpView() {
   return headHTML("Справка") + `<div class="guide">
     <section class="card"><h2>Как вести человека</h2><ol>
       <li><strong>Заявка.</strong> Приходит из бота или с сайта, либо добавляется кнопкой «+ Заявка». ${adm ? "Новые заявки без ответственного лежат на экране «Сегодня» в блоке «Без ментора»: нажмите «Взять себе» или «Назначить»." : "Заявка, которую вы добавили сами, сразу закреплена за вами."}</li>
-      <li><strong>Карточка.</strong> Нажмите на имя в любом списке. Вверху карточки — полоса пути и синяя кнопка «Дальше»: она переводит на следующий этап и спрашивает только то, что этому этапу нужно (дату созвона, стоимость, компанию). Под ней следующий шаг и «О студенте» — пара строк о человеке, которые важно помнить. Ниже вкладки: «Главное» (контакты, встречи, заметки), «Деньги и договор», «Обучение», «Работа», «История».</li>
+      <li><strong>Карточка.</strong> Нажмите на имя в любом списке. Вверху карточки — полоса пути и синяя кнопка «Дальше»: она переводит на следующий этап и спрашивает только то, что этому этапу нужно (дату созвона, стоимость, компанию). Под ней следующий шаг и «О студенте» — пара строк о человеке, которые важно помнить. Ниже вкладки: «Главное» (контакты, встречи, заметки), «Договор и оплаты», «Обучение», «Работа», «История».</li>
       <li><strong>Следующий шаг.</strong> У каждого человека должно быть дело с датой: «написать», «проверить домашку». В нужный день оно появится на экране «Сегодня». Люди без шага собраны там же, в блоке «Без следующего шага».</li>
       <li><strong>Свои этапы.</strong> Состав воронки меняется в Настройках → «Воронка и этапы»: этапы можно переименовать, добавить, переставить и удалить. У этапа задаётся группа (доска), что спросить при переходе и шаг по умолчанию.</li>
-      <li><strong>Оплата.</strong> Платёж создаётся при переходе в «Ждём оплату» или кнопкой «+ Платёж» в карточке. Когда деньги пришли, нажмите «Оплачен». Для тех, кто уже работает, есть «+ С зарплаты»: процент от дохода по месяцам. На вкладке «Деньги и договор» прикрепляется договор, а к каждому платежу — данные (способ оплаты, номер чека) и файлы: чек, выписка, скан. Файлы до 10 МБ видят администратор и ментор студента.</li>
+      <li><strong>Оплата.</strong> Платёж создаётся при переходе в «Ждём оплату» или кнопкой «+ Платёж» в карточке. Когда деньги пришли, нажмите «Оплачен». Для тех, кто уже работает, есть «+ С зарплаты»: процент от дохода по месяцам. На вкладке «Договор и оплаты» прикрепляется договор, а к каждому платежу — данные (способ оплаты, номер чека) и файлы: чек, выписка, скан. Файлы до 10 МБ видят администратор и ментор студента.</li>
       <li><strong>Обучение и работа.</strong> В карточке отмечаются пройденные модули, встречи, отклики на вакансии и собеседования.</li>
       <li><strong>Отказ.</strong> Выберите этап «Отказ / выбыл» и укажите причину. Карточка остаётся в базе.</li>
     </ol></section>
@@ -1661,7 +1698,7 @@ function evRow(e, withDate = false) {
   if (e.type === "i") return `<li class="click" data-act="open" data-id="${esc(e.s.id)}"><span class="evt">${esc(when)}</span>
     <span class="who"><strong>${esc(e.title)}</strong><span>${esc(e.s.name)}${e.a.position ? " · " + esc(e.a.position) : ""}</span></span><span class="tag warn">собеседование</span></li>`;
   const m = e.m, late = e.status === "planned" && e.date < t;
-  const sub = [e.s ? e.s.name : m.cohortId ? `${cohortName(m.cohortId) || "Поток"} · вся группа` : "", teamName(m.mentorId), m.duration ? `${m.duration} мин` : ""].filter(Boolean).join(" · ");
+  const sub = [meetWho(m), teamName(m.mentorId), m.duration ? `${m.duration} мин` : ""].filter(Boolean).join(" · ");
   return `<li class="click" data-act="meet-edit" data-id="${esc(m.id)}"><span class="evt${late ? " danger-text" : ""}">${esc(when)}</span>
     <span class="who"><strong>${esc(e.title)}</strong><span>${esc(sub)}</span></span>
     ${e.status !== "planned" ? `<span class="tag${e.status === "done" ? " ok" : ""}">${esc((MEETL[e.status] || e.status).toLowerCase())}</span>` : late ? `<span class="tag danger">не отмечена</span>` : ""}
@@ -1669,16 +1706,27 @@ function evRow(e, withDate = false) {
 }
 // Участники встречи и их ответы «буду / не буду». Правило то же, что на сервере (backend/meetings.py, participants):
 // тот, с кем встреча назначена, и учащиеся потока, если это занятие группы. Ментор видит только своих студентов.
+// Кто позван на встречу (как meetings.guests на сервере): ведущий и приглашённые менторы, студенты поимённо и потоки
+const idsOf = (...vals) => [...new Set(vals.flatMap(v => Array.isArray(v) ? v : [v]).filter(x => typeof x === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(x)))];
+const mg = m => ({ mentors: idsOf(m?.mentorId, m?.mentorIds), students: idsOf(m?.studentId, m?.studentIds), cohorts: idsOf(m?.cohortId, m?.cohortIds) });
+// Коротко, с кем встреча: «Иванов Пётр», «Поток 2 · вся группа», «5 участников»
+function meetWho(m) {
+  const g = mg(m), ss = g.students.map(stu).filter(Boolean), guests = g.mentors.length - (m.mentorId && g.mentors.includes(m.mentorId) ? 1 : 0);
+  if (g.cohorts.length === 1 && !g.students.length && !guests) return `${cohortName(g.cohorts[0]) || "Поток"} · вся группа`;
+  if (g.students.length === 1 && !g.cohorts.length && !guests) return ss[0]?.name || "студент";
+  const n = meetPeople(m).length + (g.students.length - ss.length) + guests;
+  return n ? `${n} ${plural(n, "участник", "участника", "участников")}` : "";
+}
 function meetPeople(m) {
-  const out = D().students.filter(s => !isClosed(s.stage) && ((typeof m.studentId === "string" && s.id === m.studentId)
-    || (typeof m.cohortId === "string" && m.cohortId && s.cohortId === m.cohortId && MEET_STUDY.includes(s.stage))));
+  const g = mg(m);
+  const out = D().students.filter(s => !isClosed(s.stage) && (g.students.includes(s.id) || (g.cohorts.includes(s.cohortId) && MEET_STUDY.includes(s.stage))));
   const rsvp = isObj(m.rsvp) ? m.rsvp : {};
   const answer = s => isObj(rsvp[s.id]) && ["yes", "no"].includes(rsvp[s.id].a) ? rsvp[s.id].a : null;
   // Подключён ли к боту: номер чата Telegram записан в карточке
   const bot = s => typeof s.tgId === "number";
   return sortBy(out, s => String(s.name || "").toLowerCase()).map(s => ({ s, a: answer(s), bot: bot(s) }));
 }
-const meetLink = m => [m.link, cohortById(m.cohortId)?.link].find(x => typeof x === "string" && /^https?:\/\//i.test(x.trim())) || "";
+const meetLink = m => [m.link, ...mg(m).cohorts.map(c => cohortById(c)?.link)].find(x => typeof x === "string" && /^https?:\/\//i.test(x.trim())) || "";
 function peopleHTML(m) {
   const people = meetPeople(m); if (!people.length) return "";
   const yes = people.filter(x => x.a === "yes").length, no = people.filter(x => x.a === "no").length;
@@ -1722,7 +1770,9 @@ const fromMin = n => `${pad(Math.floor(n / 60))}:${pad(n % 60)}`;
 const snapMin = n => Math.max(0, Math.min(1440 - SNAP_MIN, Math.round(n / SNAP_MIN) * SNAP_MIN));
 const dayLong = d => { const s = new Date(d + "T12:00").toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "long" }); return s[0].toUpperCase() + s.slice(1); };
 // Можно ли переносить встречу: администратор — любую, ментор — свою (то же правило на сервере, Access.check_write)
-const canMove = m => !S.readOnly && (!S.limited || (!!S.me?.linkId && m.mentorId === S.me.linkId && (!m.studentId || !!stu(m.studentId))) || (!m.mentorId && !!m.studentId && !!stu(m.studentId)));
+// Ментор: свою встречу; если в ней есть студенты — все они должны быть его, а ведущий — он сам или никто
+const canMove = m => { if (S.readOnly) return false; if (!S.limited) return true; const st = mg(m).students, me = S.me?.linkId, own = !!me && m.mentorId === me;
+  return st.length ? st.every(id => !!stu(id)) && (own || !m.mentorId) : own; };
 const evKey = e => "m:" + e.m.id;
 let CALMAP = new Map(), CALDRAG = null, CALRENDER = false, QDRAFT = null;
 // Всё, что видно в календаре за период: только встречи (собеседования, шаги и платежи — на экране «Сегодня» и в карточке студента)
@@ -1739,15 +1789,17 @@ const chipText = e => `${e.time ? e.time + " " : ""}${going(e) ? going(e) + " " 
 function layoutDay(list) {
   const evs = sortBy(list, e => e.start).map(e => ({ e, s: e.start, f: Math.min(e.start + Math.max(e.dur, 20), 1440) })), out = [];
   let group = [], end = -1;
-  const flush = () => { const cols = []; for (const x of group) { let c = cols.findIndex(f => f <= x.s); if (c < 0) { c = cols.length; cols.push(0); } cols[c] = x.f; x.c = c; } for (const x of group) { x.n = cols.length; out.push(x); } group = []; };
+  // Встреча растягивается вправо, пока справа нет пересекающейся с ней: узкими остаются только те, что действительно рядом
+  const flush = () => { const cols = []; for (const x of group) { let c = cols.findIndex(f => f <= x.s); if (c < 0) { c = cols.length; cols.push(0); } cols[c] = x.f; x.c = c; }
+    for (const x of group) { x.n = cols.length; let end = x.n; for (const y of group) if (y.c > x.c && y.c < end && y.s < x.f && x.s < y.f) end = y.c; x.w = end - x.c; out.push(x); } group = []; };
   for (const x of evs) { if (x.s >= end) { flush(); end = -1; } group.push(x); end = Math.max(end, x.f); }
   flush();
   return out;
 }
 function blockHTML(x) {
-  const e = x.e, w = 100 / x.n, can = e.type === "m" && canMove(e.m), h = Math.max((x.f - x.s) * HOUR_PX / 60, 18);
-  return `<div class="wev ${esc(evCls(e))} st-${esc(e.status || "planned")}${can ? " can" : ""}${h < 30 ? " short" : h < 50 ? " mid" : ""}" data-ev="${esc(evKey(e))}" role="button" tabindex="0" title="${esc(chipText(e))}"
-    style="top:${x.s * HOUR_PX / 60}px;height:${h}px;left:calc(${x.c * w}% + 1px);width:calc(${w}% - 3px)">
+  const e = x.e, w = 100 / x.n, can = e.type === "m" && canMove(e.m), h = Math.max((x.f - x.s) * HOUR_PX / 60, 18), narrow = x.n > 1 && x.w / x.n <= .5;
+  return `<div class="wev ${esc(evCls(e))} st-${esc(e.status || "planned")}${can ? " can" : ""}${h < 30 ? " short" : h < 50 ? " mid" : ""}${narrow ? " narrow" : ""}" data-ev="${esc(evKey(e))}" role="button" tabindex="0" title="${esc(chipText(e))}"
+    style="top:${x.s * HOUR_PX / 60}px;height:${h}px;left:calc(${x.c * w}% + 1px);width:calc(${x.w * w}% - 3px)">
     <span class="wev-t">${esc(e.time)}${e.type === "m" ? "–" + fromMin(Math.min(x.s + e.dur, 1440)) : ""}${going(e) ? ` · ${esc(going(e))}` : ""}</span><span class="wev-n">${esc(e.title)}</span>${e.s ? `<span class="wev-s">${esc(e.s.name)}</span>` : ""}${can ? `<span class="wev-r" data-resize aria-hidden="true"></span>` : ""}</div>`;
 }
 const allChip = e => `<button class="ev ${esc(evCls(e))} st-${esc(e.status || "planned")}" data-ev="${esc(evKey(e))}" data-act="ev-open" title="${esc(chipText(e))}">${esc(chipText(e))}</button>`;
@@ -1769,7 +1821,7 @@ function monthHTML() {
   const cells = Array.from({ length: total }, (_, i) => dstr(new Date(y, mo - 1, 1 - lead + i)));
   const by = {}; for (const e of calItems(cells[0], cells[total - 1])) (by[e.date] = by[e.date] || []).push(e);
   const sel = S.cal.day, dayEvs = by[sel] || [];
-  const chip = e => `<span class="ev ${esc(evCls(e))} st-${esc(e.status)}" title="${esc(chipText(e))}">${esc(chipText(e))}</span>`;
+  const chip = e => `<span class="ev ${esc(evCls(e))} st-${esc(e.status)}${canMove(e.m) ? " can" : ""}" data-ev="${esc(evKey(e))}" title="${esc(chipText(e))}">${esc(chipText(e))}</span>`;
   const grid = cells.map(d => { const l = by[d] || []; return `<button class="cal-cell${d.slice(0, 7) !== S.cal.ym ? " out" : ""}${d === t ? " now" : ""}${d === sel ? " sel" : ""}" id="cal-${d}" data-act="cal-day" data-d="${d}" aria-label="${esc(new Date(d + "T12:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" }))}${l.length ? `, событий: ${l.length}` : ""}">
       <span class="dn">${+d.slice(8)}</span>${l.slice(0, 3).map(chip).join("")}${l.length > 3 ? `<span class="ev-more">ещё ${l.length - 3}</span>` : ""}</button>`; }).join("");
   const dayTitle = dayLong(sel);
@@ -1816,13 +1868,19 @@ function evPop(key, anchor) {
   const e = CALMAP.get(key); if (!e || !anchor) return;
   const t = today(), m = e.m, when = `${dayLong(e.date)}${e.time ? `, ${e.time}${e.start !== null ? "–" + fromMin(Math.min(e.start + e.dur, 1440)) : ""}` : ", весь день"}`;
   const kindL = Object.fromEntries(MEET_KINDS)[e.ck] || "";
-  const who = e.s ? `<p><button class="link" data-act="open" data-id="${esc(e.s.id)}">${esc(e.s.name)}</button>${e.s.mentorId && teamName(e.s.mentorId) ? ` <span class="sub">· ментор ${esc(teamName(e.s.mentorId))}</span>` : ""}</p>` : "";
-  const body = `${who}${!e.s && m.cohortId ? `<p class="sub">${esc(cohortName(m.cohortId) || "Поток")} · вся группа</p>` : ""}${teamName(m.mentorId) ? `<p class="sub">Проводит ${esc(teamName(m.mentorId))}</p>` : ""}
+  const g = mg(m), solo = g.students.length === 1 && !g.cohorts.length && e.s, hidden = g.students.filter(id => !stu(id)).length;
+  const guests = g.mentors.filter(id => id !== m.mentorId).map(teamName).filter(Boolean);
+  const who = solo ? `<p><button class="link" data-act="open" data-id="${esc(e.s.id)}">${esc(e.s.name)}</button>${e.s.mentorId && teamName(e.s.mentorId) ? ` <span class="sub">· ментор ${esc(teamName(e.s.mentorId))}</span>` : ""}</p>` : "";
+  // Перенос прямо из карточки: дата и время; встреча без времени остаётся на весь день
+  const mv = canMove(m) && (m.status || "planned") === "planned" ? `<div class="pop-move" id="pop-move"><input type="date" id="pm-date" value="${esc(e.date)}" aria-label="Дата">${e.start !== null
+    ? `<input type="time" id="pm-from" value="${fromMin(e.start)}" aria-label="Начало"><span>–</span><input type="time" id="pm-to" value="${fromMin(Math.min(e.start + e.dur, 1439))}" aria-label="Конец">` : ""}<button type="button" class="btn small" data-act="ev-move" data-id="${esc(m.id)}">Перенести</button></div>` : "";
+  const body = `${mv}${who}${g.cohorts.map(c => `<p class="sub">${esc(cohortName(c) || "Поток")} · вся группа</p>`).join("")}${teamName(m.mentorId) ? `<p class="sub">Проводит ${esc(teamName(m.mentorId))}</p>` : ""}
+      ${guests.length ? `<p class="sub">Также ${guests.length > 1 ? "менторы" : "ментор"}: ${esc(guests.join(", "))}</p>` : ""}${hidden ? `<p class="sub">И ещё ${hidden} ${plural(hidden, "студент", "студента", "студентов")} других менторов</p>` : ""}
       ${meetLink(m) ? `<p><a href="${esc(meetLink(m))}" target="_blank" rel="noopener">Ссылка на встречу</a></p>` : ""}${peopleHTML(m)}${m.notes ? `<p class="pre sub">${esc(m.notes)}</p>` : ""}
       ${(m.status || "planned") !== "planned" ? `<p><span class="tag${m.status === "done" ? " ok" : ""}">${esc((MEETL[m.status] || m.status).toLowerCase())}</span></p>` : ""}
       ${canMove(m) ? swatchesHTML(e.color, "ev-color", m.id) : ""}`;
   const acts = `${canMove(m) ? `<button class="btn small ghost danger-text" data-act="ev-del" data-id="${esc(m.id)}">Удалить</button>` : ""}<span class="sp"></span>
-      ${(m.status || "planned") === "planned" && e.date <= t && canMark(m) ? `<button class="btn small" data-act="meet-mark" data-id="${esc(m.id)}" data-st="done">Состоялась</button>` : ""}<button class="btn small primary" data-act="meet-edit" data-id="${esc(m.id)}">Изменить</button>`;
+      ${(m.status || "planned") === "planned" && e.date <= t && canMark(m) ? `<button class="btn small" data-act="meet-mark" data-id="${esc(m.id)}" data-st="done">Состоялась</button>` : ""}${canMove(m) ? `<button class="btn small primary" data-act="meet-edit" data-id="${esc(m.id)}">Изменить</button>` : ""}`;
   popShow(`<header><span class="pop-dot ${esc(evCls(e))}" id="pop-dot"></span><div><h3>${esc(e.title)}</h3><p class="sub">${esc(when)}${kindL ? " · " + esc(kindL.toLowerCase()) : ""}</p></div><button class="x" data-act="pop-close" aria-label="Закрыть">×</button></header>
     <div class="pop-body">${body}</div><footer>${acts}</footer>`, anchor.getBoundingClientRect());
 }
@@ -1858,14 +1916,16 @@ function qSave() {
 // Перенос и новая длительность — одной записью; «Отменить» возвращает прежнее
 async function moveMeet(id, date, start, dur) {
   const m = meetById(id); if (!m) return render();
-  const patch = {}, time = fromMin(start);
+  const patch = {}, time = start === null ? "" : fromMin(start);
   if (m.date !== date) patch.date = date;
   if ((m.time || "") !== time) patch.time = time;
   if (dur !== undefined && Math.round(nnum(m.duration)) !== dur) patch.duration = dur;
   if (!Object.keys(patch).length) return render();
   const was = Object.fromEntries(Object.keys(patch).map(k => [k, m[k] ?? (k === "duration" ? null : "")]));
-  const ok = await save(() => updDoc("meetings", id, patch));
-  if (ok) { S.cal = { ...S.cal, day: date, ym: date.slice(0, 7) }; toast(`${m.title || "Встреча"}: ${dayLong(date)}, ${time}–${fromMin(Math.min(start + (dur ?? (nnum(m.duration) || 60)), 1440))}`, () => save(() => updDoc("meetings", id, was), "Возвращено")); }
+  const o = await askNotify(m, { ...m, ...patch }); if (o === null) return render();   // «Отмена» — встреча остаётся на месте
+  const ok = await save(() => updDoc("meetings", id, patch, o));
+  // «Отменить» сообщает участникам так же, как сам перенос: если о переносе написали, напишут и о возврате
+  if (ok) { S.cal = { ...S.cal, day: date, ym: date.slice(0, 7) }; toast(`${m.title || "Встреча"}: ${dayLong(date)}${start === null ? "" : `, ${time}–${fromMin(Math.min(start + (dur ?? (nnum(m.duration) || 60)), 1440))}`}`, () => save(() => updDoc("meetings", id, was, o), "Возвращено")); }
   render();
 }
 
@@ -2223,7 +2283,7 @@ function moneySummary(s, link) {
   const inner = `<span class="msum-top"><strong>${money(paid)}</strong><span class="muted">${price > 0 ? `оплачено из ${money(price)}` : "оплачено"}</span>${d ? `<span class="right warn-text">осталось ${money(d)}</span>` : price > 0 && paid >= price ? `<span class="right ok-text">оплачено полностью</span>` : ""}</span>
       ${price > 0 ? `<span class="msum-bar"><span style="width:${pctPaid}%"></span></span>` : ""}
       <span class="msum-foot"><span>Следующий платёж: ${nextText}</span><span>Договор: ${contract}</span></span>`;
-  return link ? `<button class="msum click" data-act="card-tab" data-v="money" title="Открыть «Деньги и договор»">${inner}</button>` : `<div class="msum">${inner}</div>`;
+  return link ? `<button class="msum click" data-act="card-tab" data-v="money" title="Открыть «Договор и оплаты»">${inner}</button>` : `<div class="msum">${inner}</div>`;
 }
 function appSection(s) {
   const apps = sortBy(s.apps || [], a => a.date || "").reverse();
@@ -2240,7 +2300,7 @@ function progSection(s) {
     <div class="box"><ul class="mods">${mods.map((m, i) => { const done = s.progress && s.progress[m.id]; return `<li class="${done ? "done" : ""}"><label><input type="checkbox" id="mod-${esc(s.id)}-${esc(m.id)}" data-mod="${esc(m.id)}" data-sid="${esc(s.id)}"${done ? " checked" : ""}><span class="t">${i + 1}. ${esc(m.title)}</span>${done ? `<span class="sub">${fShort(String(done))}</span>` : ""}</label></li>`; }).join("")}</ul></div></section>`;
 }
 function meetSection(s) {
-  const list = sortBy(D().meetings.filter(m => m.studentId === s.id), m => m.date + (m.time || "")).reverse();
+  const list = sortBy(D().meetings.filter(m => mg(m).students.includes(s.id)), m => m.date + (m.time || "")).reverse();
   return `<section class="sec"><header><h3>Встречи</h3><span class="sub">${list.length || ""}</span><span class="right"></span><button class="btn small" data-act="meet-new" data-sid="${esc(s.id)}">+ Встреча</button></header>
     ${list.length ? `<div class="box"><div class="table-wrap"><table class="compact"><tbody>
       ${list.map(m => { const st = m.status || "planned", late = st === "planned" && m.date < today(); return `<tr><td>${fShort(m.date)}${m.time ? `<div class="sub">${esc(m.time)}</div>` : ""}</td><td>${esc(m.title)}${teamName(m.mentorId) ? `<div class="sub">${esc(teamName(m.mentorId))}</div>` : ""}</td>
@@ -2358,7 +2418,7 @@ async function advance(id, to, v) {
     if (made && ask === "call") {
       const mid = newId("meetings");
       // Этап уже сменён: сбой встречи не должен лишать человека кнопки «Отменить»
-      try { await setDoc("meetings", mid, { title: "Созвон-знакомство", date: v.mdate, time: v.mtime || "", kind: "call", duration: 30, studentId: id, cohortId: null,
+      try { await setDoc("meetings", mid, { title: "Созвон-знакомство", date: v.mdate, time: v.mtime || "", kind: "call", duration: 30, studentId: null, studentIds: [id], cohortId: null,
         mentorId: (teamName(s.mentorId) ? s.mentorId : myTeam()?.id) || null, link: "", notes: "", status: "planned", createdAt: new Date().toISOString(), by: S.myId }); made.meet = mid; }
       catch (e) { meetFailed = true; }
     }
@@ -2394,7 +2454,7 @@ function aboutForm(s) {
     },
   });
 }
-const CARD_TABS = [["main", "Главное"], ["money", "Деньги<span class=\"long\"> и договор</span>"], ["study", "Обучение"], ["job", "Работа"], ["hist", "История"]];
+const CARD_TABS = [["main", "Главное"], ["money", "<span class=\"long\">Договор и о</span><span class=\"sh\">О</span>платы"], ["study", "Обучение"], ["job", "Работа"], ["hist", "История"]];
 function drawerHTML(s) {
   const p = partnerById(s.partnerId), late = stepLate(s), tab = CARD_TABS.some(x => x[0] === S.cardTab) ? S.cardTab : "main";
   const dd = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
@@ -3098,8 +3158,9 @@ async function resolveNames() {
 const queues = {};
 function enqueue(key, fn) { const p = (queues[key] || Promise.resolve()).catch(() => { }).then(fn); queues[key] = p; return p; }
 const ref = (col, id) => S.db.collection(col).doc(id);
-const setDoc = (col, id, data) => enqueue(col + "/" + id, () => ref(col, id).set(clean(data)));
-const updDoc = (col, id, patch) => enqueue(col + "/" + id, () => ref(col, id).update(clean(patch)));
+// opts: { notify: true } — сервер сообщит участникам встречи в Telegram (без сервера ничего не делает)
+const setDoc = (col, id, data, opts) => enqueue(col + "/" + id, () => ref(col, id).set(clean(data), opts));
+const updDoc = (col, id, patch, opts) => enqueue(col + "/" + id, () => ref(col, id).update(clean(patch), opts));
 // Правка студента: патч считается от актуальной записи в момент выполнения, а не в момент клика
 function patchStudent(id, fn) {
   return enqueue("students/" + id, async () => {
@@ -3114,7 +3175,7 @@ function patchStudent(id, fn) {
     Object.assign(cur, local);
   });
 }
-const delDoc = (col, id) => enqueue(col + "/" + id, () => ref(col, id).delete());
+const delDoc = (col, id, opts) => enqueue(col + "/" + id, () => ref(col, id).delete(opts));
 const newId = col => S.db.collection(col).doc().id;
 function clean(o) { return JSON.parse(JSON.stringify(o)); } // поля со значением undefined не записываются
 async function save(fn, okMsg) {
@@ -3222,6 +3283,8 @@ function fieldsHTML(spec, vals) {
     let ctl;
     if (f.type === "select") ctl = `<select id="${id}" name="${name}">${f.options.map(([ov, ol]) => opt(ov, ol, String(v ?? ""))).join("")}</select>`;
     else if (f.type === "textarea") ctl = `<textarea id="${id}" name="${name}" rows="${f.rows || 3}"${f.ph ? ` placeholder="${esc(f.ph)}"` : ""}>${esc(v)}</textarea>`;
+    else if (f.type === "people") { out += `<div class="field span2 ppl-field"><span id="m-ppl-l">${esc(f.label)}</span><div class="ppl" id="m-ppl" aria-labelledby="m-ppl-l"></div>
+      <div class="ppl-add"><input id="m-pq" type="search" autocomplete="off" placeholder="Найти ментора, студента или поток" aria-label="Добавить участника" role="combobox" aria-expanded="false" aria-controls="m-pl" aria-autocomplete="list"><ul id="m-pl" class="ppl-list" role="listbox" hidden></ul></div>${f.help ? `<small>${esc(f.help)}</small>` : ""}</div>`; continue; }
     else if (f.type === "checkbox") { out += `<label class="field checkbox"><input type="checkbox" id="${id}" name="${name}"${v ? " checked" : ""}><span>${esc(f.label)}</span></label>`; continue; }
     else ctl = `<input id="${id}" name="${name}" type="${f.type || "text"}" value="${esc(v)}"${f.type === "number" ? ' step="any" min="0" inputmode="decimal"' : ""}${f.auto ? ` autocomplete="${esc(f.auto)}"` : ""}${req}${f.ph ? ` placeholder="${esc(f.ph)}"` : ""}${f.list ? ` list="${id}-list" autocomplete="off"` : ""}>${f.list ? `<datalist id="${id}-list">${f.list.map(x => `<option value="${esc(x)}">`).join("")}</datalist>` : ""}`;
     const quick = f.quick ? `<div class="chips">${[["Сегодня", 0], ["Завтра", 1], ["Через 3 дня", 3], ["Через неделю", 7]].map(([l, n]) => `<button type="button" class="chip" data-act="qdate" data-target="${id}" data-days="${n}">${l}</button>`).join("")}</div>` : "";
@@ -3245,8 +3308,9 @@ function collect() {
   const v = {};
   for (const f of MODAL.fields) {
     if (!f.k) continue;
-    const el = document.getElementById("m-" + f.k); if (!el) continue;
-    if (f.type === "checkbox") v[f.k] = el.checked;
+    const el = document.getElementById(f.type === "people" ? "m-ppl" : "m-" + f.k); if (!el) continue;
+    if (f.type === "people") v[f.k] = { mentors: [...MODAL.people.mentors], students: [...MODAL.people.students], cohorts: [...MODAL.people.cohorts] };
+    else if (f.type === "checkbox") v[f.k] = el.checked;
     else if (f.type === "number") v[f.k] = num(el.value);
     else if (f.type === "password" || f.raw) v[f.k] = el.value; // пароль не обрезаем: пробел в нём — тоже символ
     else v[f.k] = el.value.trim();
@@ -3465,8 +3529,13 @@ async function trashStudent(id) {
 function moveToTrash() { const gone = D().students.filter(x => x.deletedAt); if (gone.length) { S.trash = [...S.trash.filter(x => !gone.some(g => g.id === x.id)), ...gone]; D().students = D().students.filter(x => !x.deletedAt); } }
 const restoreStudent = id => S.trash.some(x => x.id === id) || stu(id) ? save(() => updDoc("students", id, { deletedAt: null, deletedBy: null }), "Студент возвращён") : toast("Этого студента уже удалили навсегда");
 async function purgeStudent(id) {
-  const meets = D().meetings.filter(m => m.studentId === id);
-  await save(async () => { for (const m of meets) await delDoc("meetings", m.id); await delDoc("students", id); }, "Удалено навсегда");
+  const meets = D().meetings.filter(m => mg(m).students.includes(id));
+  // Встреча только с ним удаляется; в общей встрече он просто убирается из участников
+  const alone = m => { const g = mg(m); return g.students.length === 1 && !g.cohorts.length; };
+  await save(async () => {
+    for (const m of meets) await (alone(m) ? delDoc("meetings", m.id) : updDoc("meetings", m.id, { studentId: null, studentIds: mg(m).students.filter(x => x !== id) }));
+    await delDoc("students", id);
+  }, "Удалено навсегда");
 }
 const blank = x => x === undefined || x === null || x === false ? "" : x;
 async function saveStudent(s, v, orig = {}) {
@@ -3571,48 +3640,127 @@ function paymentForm(s, p) {
   });
 }
 function meetingForm(m, prefill = {}) {
-  const vals = m ? { ...m, color: meetColor(m), studentId: m.studentId || "", cohortId: m.cohortId || "", mentorId: m.mentorId || "", status: m.status || "planned", remind: m.remind !== false }
-    : { kind: "call", color: "", date: S.view === "calendar" ? S.cal.day : today(), time: "12:00", duration: 60, studentId: "", cohortId: "", mentorId: myTeam()?.id || "", status: "planned", remind: true, ...prefill };
-  const students = sortBy(D().students.filter(s => isActive(s) || s.id === vals.studentId), s => String(s.name || "").toLowerCase());
+  const g = m ? mg(m) : { mentors: [], students: [], cohorts: [] };
+  const vals = m ? { ...m, color: meetColor(m), mentorId: m.mentorId || "", status: m.status || "planned", remind: m.remind !== false }
+    : { kind: "call", color: "", date: S.view === "calendar" ? S.cal.day : today(), time: "12:00", duration: 60, mentorId: myTeam()?.id || "", status: "planned", remind: true, ...prefill };
+  const people = m ? { mentors: g.mentors.filter(id => id !== m.mentorId), students: g.students, cohorts: g.cohorts }
+    : { mentors: [], students: prefill.studentId ? [prefill.studentId] : [], cohorts: prefill.cohortId ? [prefill.cohortId] : [] };
+  const one = g.students.length === 1 ? g.students[0] : null;
   openModal({
     title: m ? "Встреча" : "Новая встреча", wide: true, values: vals, submit: m ? "Сохранить" : "Добавить",
     fields: [{ k: "title", label: "Название", req: true, wide: true, ph: "Разбор домашки", list: meetHints() },
       { k: "date", label: "Дата", type: "date", req: true, quick: true }, { k: "time", label: "Время", type: "time", help: "Пусто — на весь день" },
       { k: "kind", label: "Тип", type: "select", options: MEET_KINDS }, { k: "duration", label: "Длительность, мин", type: "number" },
-      { k: "color", label: "Цвет в календаре", type: "select", options: [["", "По типу встречи"], ...MEET_COLORS] },
-      { k: "studentId", label: "Студент", type: "select", options: [["", "—"], ...students.map(s => [s.id, s.name])] },
-      { k: "cohortId", label: "Поток", type: "select", options: cohortOpts(), help: "Для занятия всей группы" },
+      { k: "people", label: "Участники", type: "people", help: "Менторы, студенты и потоки: на занятие потока приходят все, кто в нём учится" },
       ...(S.limited ? [] : [{ k: "mentorId", label: "Кто проводит", type: "select", options: teamOpts() }]),
+      { k: "color", label: "Цвет в календаре", type: "select", options: [["", "По типу встречи"], ...MEET_COLORS] },
       ...(m ? [{ k: "status", label: "Статус", type: "select", options: MEET_ST }] : []),
       { k: "link", label: "Ссылка на созвон", type: "url", wide: true, ph: "https://", help: "Для занятия группы можно не заполнять: возьмётся постоянная ссылка потока" },
-      ...(S.server ? [{ k: "remind", label: "Напоминать студентам в Telegram и спрашивать, придут ли", type: "checkbox", wide: true }] : []),
+      ...(S.server ? [{ k: "remind", label: "Сообщать студентам в Telegram: приглашение, перенос, напоминания и вопрос, придут ли", type: "checkbox", wide: true }] : []),
       { k: "notes", label: "Заметки", type: "textarea", wide: true, rows: 2 }],
-    link: m && m.studentId && stu(m.studentId) ? { label: "Карточка студента", go: () => openStudent(m.studentId) } : null,
-    onDelete: m ? () => save(() => delDoc("meetings", m.id), "Встреча удалена") : null,
+    link: one && stu(one) ? { label: "Карточка студента", go: () => openStudent(one) } : null,
+    onDelete: m ? async () => { const o = await askNotify(m, null); if (o === null) return false; return save(() => delDoc("meetings", m.id, o), "Встреча удалена"); } : null,
     extra: m ? "" : `<p class="hint">Отметить встречу состоявшейся можно в календаре, на экране «Сегодня» или в карточке студента.</p>`,
     onSubmit: async v => {
+      if (m && !canMove(m)) return "Менять эту встречу может только тот, кто её проводит, или администратор";
       if (v.link && !/^https?:\/\//i.test(v.link)) return "Ссылка должна начинаться с http:// или https://";
       if (!/^\d{4}-\d{2}-\d{2}$/.test(v.date)) return "Укажите дату";
       if (v.time && !/^\d{2}:\d{2}$/.test(v.time)) return "Время укажите в виде 15:30";
       if (v.duration !== null && !(v.duration > 0 && v.duration <= 1440)) return "Длительность — от 1 до 1440 минут";
-      const doc = { title: v.title, date: v.date, time: v.time || "", kind: v.kind, color: MEET_COLORS.some(x => x[0] === v.color) ? v.color : "", duration: v.duration, studentId: v.studentId || null, cohortId: v.cohortId || null, mentorId: (S.limited ? vals.mentorId : v.mentorId) || null, link: v.link, notes: v.notes, ...(S.server ? { remind: !!v.remind } : {}) };
-      // При правке пишем только изменённые поля: отметку «состоялась», поставленную другим человеком, форма не затрёт
-      const changed = m ? Object.fromEntries(Object.entries(doc).filter(([k, val]) => blank(val) !== blank(vals[k]))) : null;
+      const host = (S.limited ? vals.mentorId : v.mentorId) || null, pp = v.people;
+      const doc = { title: v.title, date: v.date, time: v.time || "", kind: v.kind, color: MEET_COLORS.some(x => x[0] === v.color) ? v.color : "", duration: v.duration,
+        studentId: null, cohortId: null, studentIds: pp.students, cohortIds: pp.cohorts, mentorIds: pp.mentors.filter(id => id !== host),
+        mentorId: host, link: v.link, notes: v.notes, ...(S.server ? { remind: !!v.remind } : {}) };
+      // При правке пишем только изменённые поля: отметку «состоялась», поставленную другим человеком, форма не затрёт.
+      // Участников сравниваем по смыслу: старая запись с одним студентом и та же запись списком — одно и то же
+      const before = m ? { ...vals, studentId: null, cohortId: null, studentIds: g.students, cohortIds: g.cohorts, mentorIds: people.mentors } : {};
+      const same = (k, val) => Array.isArray(val) ? JSON.stringify(val) === JSON.stringify(before[k] || []) : blank(val) === blank(before[k]);
+      const changed = m ? Object.fromEntries(Object.entries(doc).filter(([k, val]) => !same(k, val))) : null;
+      if (m && ["studentIds", "cohortIds"].some(k => k in changed)) { changed.studentId = null; changed.cohortId = null; changed.studentIds = doc.studentIds; changed.cohortIds = doc.cohortIds; }
       const toStatus = m && v.status !== vals.status ? v.status : null, any = !m || Object.keys(changed).length > 0;
       if (m && !meetById(m.id)) return "Эту встречу уже удалили";
-      const ok = !any ? true : await save(() => m ? updDoc("meetings", m.id, changed) : setDoc("meetings", newId("meetings"), { ...doc, status: "planned", createdAt: new Date().toISOString(), by: S.myId }), m ? "Сохранено" : `Встреча назначена на ${dueLabel(v.date)}${v.time ? ", " + v.time : ""}`);
+      const next = m ? { ...meetById(m.id), ...(changed || {}), ...(toStatus ? { status: toStatus } : {}) } : { ...doc, status: "planned" };
+      const o = await askNotify(m ? meetById(m.id) : null, next); if (o === null) return false;
+      const o1 = toStatus === "cancelled" ? undefined : o; // об отмене сообщит сама отметка, без второго сообщения
+      const ok = !any ? true : await save(() => m ? updDoc("meetings", m.id, changed, o1) : setDoc("meetings", newId("meetings"), { ...doc, status: "planned", createdAt: new Date().toISOString(), by: S.myId }, o), m ? "Сохранено" : `Встреча назначена на ${dueLabel(v.date)}${v.time ? ", " + v.time : ""}`);
       if (ok && S.view === "calendar") { S.cal = { ...S.cal, ym: v.date.slice(0, 7), day: v.date }; render(); }
-      if (ok && toStatus) meetMark(m.id, toStatus); // статус меняется тем же путём, что и кнопкой: с заметкой и отменой
+      if (ok && toStatus) meetMark(m.id, toStatus, toStatus === "cancelled" ? o : undefined); // статус меняется тем же путём, что и кнопкой: с заметкой и отменой
       return ok;
     },
+  });
+  if (MODAL) { MODAL.people = people; drawPeople(); }
+}
+// ----- Участники встречи в форме: плашки и поиск по менторам, студентам и потокам -----
+const PPL_KIND = { mentors: "ментор", students: "студент", cohorts: "поток" };
+const pplName = (k, id) => k === "mentors" ? teamName(id) : k === "cohorts" ? cohortName(id) : stu(id)?.name;
+function drawPeople() {
+  const box = $("#m-ppl"); if (!box || !MODAL?.people) return;
+  const P = MODAL.people, chips = Object.keys(PPL_KIND).flatMap(k => P[k].map(id => {
+    const name = pplName(k, id) || (k === "students" ? "Студент другого ментора" : "Удалён");
+    return `<span class="ppl-c ppl-${k}"><span class="sub">${PPL_KIND[k]}</span>${esc(name)}<button type="button" class="x" data-act="ppl-del" data-k="${k}" data-id="${esc(id)}" aria-label="Убрать: ${esc(name)}">×</button></span>`;
+  }));
+  box.innerHTML = chips.join("") || `<span class="sub">Пока никого. Найдите ментора, студента или поток ниже</span>`;
+}
+// Подсказки: менторы, потоки и студенты. Поток показывается блоком: сверху «весь поток» (придут все, кто в нём учится),
+// ниже его студенты — их можно позвать по одному. Пустое поле показывает все потоки
+function pplSuggest() {
+  const inp = $("#m-pq"), list = $("#m-pl"); if (!inp || !list || !MODAL?.people) return;
+  const q = inp.value.trim().toLowerCase(), P = MODAL.people, host = $("#m-mentorId")?.value || "", has = x => String(x || "").toLowerCase().includes(q);
+  const act = D().students.filter(isActive), inCohort = c => sortBy(act.filter(x => x.cohortId === c.id), x => String(x.name || "").toLowerCase());
+  const studying = c => act.filter(x => x.cohortId === c.id && MEET_STUDY.includes(x.stage)).length;
+  const rows = [], seen = new Set();
+  const student = (x, sub) => { if (!seen.has(x.id) && !P.students.includes(x.id)) { seen.add(x.id); rows.push(["students", x.id, x.name, sub, true]); } };
+  if (q) for (const t of D().team) if (t.id !== host && !P.mentors.includes(t.id) && has(t.name)) rows.push(["mentors", t.id, t.name, "ментор"]);
+  for (const c of sortBy(D().cohorts, c => c.start || "").reverse()) {
+    const people = inCohort(c), hit = has(c.name);
+    if (q && !hit) continue;
+    rows.push(["cohorts", c.id, `${c.name} — весь поток`, `придут все, кто учится: ${studying(c)}`, false, P.cohorts.includes(c.id), "head"]);
+    for (const x of people) student(x, stageLabel(x.stage));
+  }
+  if (q) for (const x of act) if (has(x.name)) student(x, ["студент", cohortName(x.cohortId), stageLabel(x.stage)].filter(Boolean).join(" · "));
+  const hits = rows.filter(r => !r[5]).slice(0, 60);
+  let n = 0;
+  list.innerHTML = hits.length ? hits.map(([k, id, name, sub, sub2, , head]) => { const i = n++; return `<li role="option" id="m-pl-${i}" aria-selected="${i === 0}" data-act="ppl-add" data-k="${k}" data-id="${esc(id)}" class="${head ? "ppl-head" : sub2 ? "ppl-sub" : ""}"><strong>${esc(name)}</strong><span class="sub">${esc(sub)}</span></li>`; }).join("")
+    : `<li class="sub" role="presentation">${q ? "Никого не нашли" : "Потоков пока нет"}</li>`;
+  list.hidden = false; inp.setAttribute("aria-expanded", "true"); inp.setAttribute("aria-activedescendant", hits.length ? "m-pl-0" : "");
+}
+function pplAdd(k, id) {
+  if (!MODAL?.people || !Object.hasOwn(PPL_KIND, k) || MODAL.people[k].includes(id)) return;
+  MODAL.people[k] = [...MODAL.people[k], id]; drawPeople();
+  const inp = $("#m-pq"); if (inp) { if (!matchMedia("(pointer: coarse)").matches) inp.focus(); pplSuggest(); }   // строка поиска остаётся: можно позвать ещё кого-то из того же потока
+}
+// ----- «Сообщить участникам?» — перед сохранением изменений встречи, как в почтовых календарях -----
+// Кому есть что сообщить: запланированная встреча не в прошлом, кроме самого автора (то же решает сервер, meetings.notices)
+function notifyCount(m) {
+  if (!m || (m.status || "planned") !== "planned" || (m.date || "") < today()) return 0;
+  const g = mg(m), me = S.me?.linkId, mentors = g.mentors.filter(id => id !== me).length;
+  return mentors + (m.remind === false ? 0 : meetPeople(m).length + g.students.filter(id => !stu(id)).length);
+}
+const meetKey = m => m ? JSON.stringify([m.date, m.time || "", nnum(m.duration) || 60, m.title || "", meetLink(m), m.status || "planned", mg(m)]) : "";
+function askNotify(old, next) {
+  // Отметка «состоялась / не было» участникам не сообщается — и спрашивать незачем
+  if (!S.server || (next && ["done", "missed"].includes(next.status)) || !(notifyCount(old) || notifyCount(next)) || meetKey(old) === meetKey(next)) return Promise.resolve(undefined);
+  const n = Math.max(notifyCount(old), notifyCount(next)), what = !next || (next.status || "planned") === "cancelled" ? "что встреча отменена" : !old ? "приглашение на встречу" : "что изменилось во встрече";
+  return new Promise(done => {
+    const box = document.createElement("div"); box.className = "overlay ask-over"; box.id = "asknote";
+    box.innerHTML = `<div class="modal ask" tabindex="-1" role="alertdialog" aria-modal="true" aria-labelledby="ask-h" aria-describedby="ask-p"><h2 id="ask-h">Сообщить участникам?</h2>
+      <p id="ask-p">Бот в Telegram напишет ${n} ${plural(n, "участнику", "участникам", "участникам")} ${esc(what)} «${esc((next || old).title || "Встреча")}». Сообщение получат те, кто подключён к боту.</p>
+      <footer><button type="button" class="btn ghost" data-a="cancel">Отмена</button><span class="sp"></span><button type="button" class="btn" data-a="no">Не сообщать</button><button type="button" class="btn primary" data-a="yes">Сообщить</button></footer></div>`;
+    const prev = document.activeElement, end = r => { box.remove(); if (prev?.isConnected) prev.focus({ preventScroll: true }); done(r); };
+    box.addEventListener("click", e => { const a = e.target.closest("[data-a]")?.dataset.a; if (a) end(a === "yes" ? { notify: true } : a === "no" ? undefined : null); else if (e.target === box) end(null); });
+    box.addEventListener("keydown", e => {
+      if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); end(null); }
+      if (e.key === "Tab") { const b = [...box.querySelectorAll("button")], i = b.indexOf(document.activeElement); e.preventDefault(); b[(i + (e.shiftKey ? -1 : 1) + b.length) % b.length].focus(); }   // фокус не уходит в форму под вопросом
+    });
+    document.body.appendChild(box); box.querySelector("[data-a=yes]").focus();
   });
 }
 // Отметка «состоялась / не состоялась». Состоявшаяся встреча со студентом попадает в его заметки
 const meetById = id => D().meetings.find(x => x.id === id);
-const canMark = m => !S.readOnly && (!S.limited || !!m.studentId || m.mentorId === S.me?.linkId);
-async function meetMark(id, status) {
+const canMark = m => canMove(m);
+async function meetMark(id, status, opts) {
   const m = meetById(id); if (!m || (m.status || "planned") === status) return;
-  const sid = m.studentId && stu(m.studentId) ? m.studentId : null, nid = "meet-" + id; // заметка одна на встречу: её id выводится из id встречи
+  const one = mg(m).students, sid = one.length === 1 && stu(one[0]) ? one[0] : null, nid = "meet-" + id; // заметка одна на встречу: её id выводится из id встречи
   const note = { id: nid, text: `Встреча: ${m.title}${m.notes ? "\n" + m.notes : ""}`, at: new Date().toISOString(), by: S.myId, kind: "meet" };
   const without = c => (c.notes || []).some(n => n.id === nid) ? { notes: c.notes.filter(n => n.id !== nid) } : null;
   let prev = null, removed = null;
@@ -3620,14 +3768,14 @@ async function meetMark(id, status) {
     const cur = meetById(id); if (!cur) throw { code: "gone-item" };
     if ((cur.status || "planned") === status) return; // уже отметили: второй клик или другой человек
     const was = cur.status || "planned";
-    await ref("meetings", id).update({ status }); cur.status = status; prev = was;
+    await ref("meetings", id).update({ status }, opts); cur.status = status; prev = was;
     if (!sid) return;
     if (status === "done") await patchStudent(sid, c => (c.notes || []).some(n => n.id === nid) ? null : { notes: [...(c.notes || []), note] });
     else if (was === "done") await patchStudent(sid, c => { removed = (c.notes || []).find(n => n.id === nid) || null; return without(c); });
   }));
   if (ok && prev) toast(`Встреча: ${(MEETL[status] || status).toLowerCase()}`, () => save(async () => {
     if (!meetById(id)) throw { code: "gone-item" };
-    await updDoc("meetings", id, { status: prev });
+    await updDoc("meetings", id, { status: prev }, opts);
     if (!sid || !stu(sid)) return;
     if (status === "done") await patchStudent(sid, without);
     else if (removed) await patchStudent(sid, c => (c.notes || []).some(n => n.id === nid) ? null : { notes: [...(c.notes || []), removed] });
@@ -3766,7 +3914,7 @@ function partnerDeleteForm(p) {
 // Удаление ментора: его студенты и встречи переходят другому, доля в направлениях с этого месяца — ему же или владельцу.
 // Прошлые начисления и выплаты остаются в расчёте с подписью «Ментор удалён»
 function mentorDeleteForm(m) {
-  const people = [...D().students, ...S.trash].filter(s => s.mentorId === m.id), meets = D().meetings.filter(x => x.mentorId === m.id);
+  const people = [...D().students, ...S.trash].filter(s => s.mentorId === m.id), meets = D().meetings.filter(x => mg(x).mentors.includes(m.id));
   const cur = today().slice(0, 7), dirs = D().directions.filter(d => termsFor(d, cur).some(x => x.kind === "mentor" && x.id === m.id));
   const acc = (S.accounts || []).find(a => a.role === "mentor" && a.linkId === m.id), others = D().team.filter(x => x.id !== m.id);
   const what = [people.length ? `${people.length} ${plural(people.length, "студента", "студентов", "студентов")}` : "", meets.length ? `${meets.length} ${plural(meets.length, "встречу", "встречи", "встреч")}` : ""].filter(Boolean).join(" и ");
@@ -3782,7 +3930,10 @@ function mentorDeleteForm(m) {
           if (S.trash.some(x => x.id === st.id)) await updDoc("students", st.id, { mentorId: to });
           else await patchStudent(st.id, c => c.mentorId === m.id ? { mentorId: to } : null);
         }
-        for (const x of meets) await updDoc("meetings", x.id, { mentorId: to });
+        for (const x of meets) {
+          const inv = idsOf(x.mentorIds).filter(id => id !== m.id && id !== to), host = x.mentorId === m.id ? to : x.mentorId || null;
+          await updDoc("meetings", x.id, { mentorId: host, mentorIds: x.mentorId !== m.id && to && to !== host ? [...inv, to] : inv });
+        }
         await moveShare("mentor", m.id, v.share !== "owner" ? to : null);
         // Учётная запись отключается до удаления: сервер сверяет её связь с записью в команде. Не удалилось — включаем обратно
         if (acc && SRV) await SRV.accounts.update(acc.id, { active: false });
@@ -4148,6 +4299,15 @@ const ACT = {
   "cal-mini": d => { const [y, m] = (S.cal.mini || S.cal.day.slice(0, 7)).split("-").map(Number), x = new Date(y, m - 1 + +d.n, 1); S.cal = { ...S.cal, mini: `${x.getFullYear()}-${pad(x.getMonth() + 1)}` }; render(); },
   "ev-open": (d, el) => evPop(el.dataset.ev, el),
   "pop-close": () => closePop(),
+  "ev-move": d => {
+    const m = meetById(d.id), date = $("#pm-date")?.value || "", from = $("#pm-from"), to = $("#pm-to"); if (!m) return;
+    if (!isDay(date)) return toast("Укажите дату");
+    if (!from) { closePop(); return moveMeet(d.id, date, null); }
+    const a = toMin(from.value), b = toMin(to?.value);
+    if (a === null || b === null) return toast("Укажите время начала и конца");
+    if (b <= a) return toast("Конец встречи должен быть позже начала");
+    closePop(); return moveMeet(d.id, date, a, from.value === from.defaultValue && to.value === to.defaultValue ? undefined : b - a);   // длительность — только если меняли время
+  },
   // Цвет выбирается в открытой карточке: она остаётся открытой, кружок и блок меняют цвет сразу
   "q-color": d => { if (!QDRAFT) return; QDRAFT.color = MEET_COLORS.some(x => x[0] === d.c) ? d.c : ""; markSwatch("q-color", QDRAFT.color, "k-call"); },
   "ev-color": d => {
@@ -4161,7 +4321,7 @@ const ACT = {
   "ev-del": (d, el) => {
     if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Точно удалить?"; return; }
     closePop(); const m = meetById(d.id); if (!m) return;
-    return save(() => delDoc("meetings", d.id)).then(ok => ok && toast(`Встреча «${m.title || ""}» удалена`, () => save(() => setDoc("meetings", d.id, { ...m, id: undefined }), "Встреча возвращена")));
+    return askNotify(m, null).then(o => o === null ? null : save(() => delDoc("meetings", d.id, o)).then(ok => ok && toast(`Встреча «${m.title || ""}» удалена`, () => save(() => setDoc("meetings", d.id, { ...m, id: undefined, rsvp: S.limited ? undefined : m.rsvp }, o), "Встреча возвращена"))));
   },
   "meet-new": d => meetingForm(null, { ...(d.date ? { date: d.date } : {}), ...(d.sid ? { studentId: d.sid, title: "Созвон", mentorId: stu(d.sid)?.mentorId || myTeam()?.id || "" } : {}) }),
   "meet-edit": d => { const m = meetById(d.id); if (m) meetingForm(m); },
@@ -4274,6 +4434,8 @@ const ACT = {
   "m-errgo-team": () => { closeModal(); teamForm(null); },
   "m-errgo": () => { const go = MODAL?.errGo; closeModal(); if (go) go(); },
   "m-link": () => { const l = MODAL?.link, v = collect(); closeModal(); l && l.go(v); },
+  "ppl-add": d => pplAdd(d.k, d.id),
+  "ppl-del": d => { if (MODAL?.people && Object.hasOwn(PPL_KIND, d.k)) { MODAL.people[d.k] = MODAL.people[d.k].filter(x => x !== d.id); drawPeople(); $("#m-pq")?.focus(); } },
   "m-delete": async (d, el) => {
     if (!el.dataset.armed) { el.dataset.armed = "1"; el.dataset.label = el.textContent; el.textContent = "Нажмите ещё раз"; return; }
     const r = await MODAL?.onDelete?.();
@@ -4292,13 +4454,14 @@ document.addEventListener("drop", e => {
   const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) uploadFile(z.dataset.id, z.dataset.drop, z.closest("[data-pid]")?.dataset.pid, f);
 });
 document.addEventListener("click", e => {
+  if (Date.now() - CALSKIP < 400 && e.target.closest?.(".cal-grid")) { e.preventDefault(); return; }
   if (S.navMore && !e.target.closest("#nav")) { S.navMore = false; render(); }
   if (!e.target.closest("#gsearch")) $("#gq-res").hidden = true;
   // Карточка события в календаре закрывается щелчком мимо неё (встречи и сетку обрабатывает перетаскивание)
   if (!e.target.closest("#calpop, .wk-col, [data-act=ev-open]") && Date.now() - CALKEEP > 300) closePop();
   const stop = e.target.closest("[data-stop]"); if (stop) return;
   const el = e.target.closest("[data-act]"); if (!el) return;
-  if (el.closest("#calpop") && !["ev-del", "pop-close", "q-more", "q-color", "ev-color"].includes(el.dataset.act)) closePop();   // действие из карточки события
+  if (el.closest("#calpop") && !["ev-del", "pop-close", "q-more", "q-color", "ev-color", "ev-move"].includes(el.dataset.act)) closePop();   // действие из карточки события
   if (el.dataset.act === "toggle-lost") return;
   const fn = ACT[el.dataset.act]; if (!fn) return;
   if (el.tagName === "BUTTON") e.preventDefault();
@@ -4326,6 +4489,7 @@ document.addEventListener("input", e => {
   if (e.target.dataset?.dirF === "share") return dirInput(e.target);
   if (e.target.id === "f-q") { S.f.q = e.target.value; clearTimeout(qT); qT = setTimeout(render, 180); }
   if (e.target.id === "gq") renderSearch();
+  if (e.target.id === "m-pq") pplSuggest();
   if (MODAL?.onInput && e.target.closest("#mform")) MODAL.onInput();
 });
 // Подсказка над столбцом графика
@@ -4337,9 +4501,30 @@ document.addEventListener("mousemove", e => {
   tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, e.clientY - tip.offsetHeight - 12) + "px";
 });
 window.addEventListener("crm-sync", e => { S.offline = !e.detail.online; renderSync(); });
-document.addEventListener("focusin", e => { if (e.target.id === "gq") renderSearch(); });
+document.addEventListener("focusin", e => { if (e.target.id === "gq") renderSearch(); if (e.target.id === "m-pq") pplSuggest(); });
+// Нажатие на строку списка не уводит фокус из поиска: иначе список закроется раньше, чем сработает щелчок
+document.addEventListener("mousedown", e => { if (e.target.closest?.("#m-pl")) e.preventDefault(); });
+// Список участников закрывается щелчком мимо него и когда фокус уходит из поиска
+document.addEventListener("focusout", e => { if (e.target.id === "m-pq" && !e.relatedTarget?.closest?.(".ppl-add")) { const l = $("#m-pl"); if (l) l.hidden = true; e.target.setAttribute("aria-expanded", "false"); } });
+document.addEventListener("pointerdown", e => { const l = $("#m-pl"); if (l && !l.hidden && !e.target.closest?.(".ppl-add")) { l.hidden = true; $("#m-pq")?.setAttribute("aria-expanded", "false"); } });
 document.addEventListener("submit", e => { if (e.target.id === "mform") { e.preventDefault(); submitModal(); } if (e.target.id === "qform") { e.preventDefault(); qSave(); } });
 document.addEventListener("keydown", e => {
+  if ($("#asknote")) { if (e.key === "Escape") { e.preventDefault(); $("#asknote [data-a=cancel]")?.click(); } return; }   // открыт вопрос «Сообщить участникам?»
+  // Поиск участника встречи: стрелки выбирают, Enter добавляет, Escape закрывает список
+  if (e.target.id === "m-pq" && ["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(e.key)) {
+    const list = $("#m-pl"), items = list && !list.hidden ? [...list.querySelectorAll("[data-act=ppl-add]")] : [];
+    if (list?.hidden && e.key !== "Escape") { if (e.key === "ArrowDown") { e.preventDefault(); pplSuggest(); } return; }   // Enter в закрытом списке — обычная отправка формы
+    if (e.key === "Escape") { if (list && !list.hidden) { list.hidden = true; e.target.setAttribute("aria-expanded", "false"); e.preventDefault(); return; } }
+    else {
+      e.preventDefault();
+      let i = items.findIndex(x => x.getAttribute("aria-selected") === "true");
+      if (e.key === "Enter") { if (items[i]) pplAdd(items[i].dataset.k, items[i].dataset.id); return; }
+      i = Math.max(0, Math.min(items.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+      items.forEach((x, j) => x.setAttribute("aria-selected", String(j === i))); if (items[i]) { e.target.setAttribute("aria-activedescendant", items[i].id); items[i].scrollIntoView({ block: "nearest" }); }
+      return;
+    }
+  }
+  if (e.key === "Enter" && e.target.closest?.("#pop-move")) { e.preventDefault(); $("#pop-move [data-act=ev-move]")?.click(); return; }
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
   if (e.key === "Escape" && CALDRAG) { calDrop(e, true); return; }
   if (e.key === "Escape" && $("#calpop") && !$("#calpop").hidden) { closePop(); return; }
@@ -4396,6 +4581,9 @@ const colAt = x => [...document.querySelectorAll(".wk-col")].find(c => { const r
 const minAt = (col, y) => (y - col.getBoundingClientRect().top) / HOUR_PX * 60;
 document.addEventListener("pointerdown", e => {
   if (e.button !== 0 || S.view !== "calendar") return;
+  // Месяц: встречу мышью переносят на другой день, время сохраняется
+  const mchip = e.pointerType !== "touch" && e.target.closest?.(".cal-grid .ev.can[data-ev]");
+  if (mchip) { const item = CALMAP.get(mchip.dataset.ev); if (item) { e.preventDefault(); CALDRAG = { kind: "mmove", el: mchip, key: mchip.dataset.ev, item, x0: e.clientX, y0: e.clientY, moved: false, armed: true }; } return; }
   const col = e.target.closest?.(".wk-col"); if (!col) return;
   const ev = e.target.closest(".wev"), item = ev && CALMAP.get(ev.dataset.ev);
   if (ev && !ev.classList.contains("can")) { CALDRAG = { kind: "click", el: ev, key: ev.dataset.ev, x0: e.clientX, y0: e.clientY, armed: true }; return; }
@@ -4413,7 +4601,11 @@ document.addEventListener("pointermove", e => {
   if (d.kind === "click" || (!d.moved && dist < 5)) return;
   if (!d.moved) { d.moved = true; closePop(); document.documentElement.classList.add("cal-dragging"); }
   e.preventDefault();
-  if (d.kind === "new") {
+  if (d.kind === "mmove") {
+    const cell = document.elementFromPoint(e.clientX, e.clientY)?.closest?.(".cal-cell");
+    document.querySelectorAll(".cal-cell.drop-to").forEach(x => x !== cell && x.classList.remove("drop-to"));
+    d.el.classList.add("dragging"); if (cell) { cell.classList.add("drop-to"); d.date = cell.dataset.d; }
+  } else if (d.kind === "new") {
     const cur = snapMin(minAt(d.col, e.clientY)), s0 = Math.min(d.at, cur), f0 = Math.max(d.at, cur) + SNAP_MIN;
     let box = d.col.querySelector(".wk-sel"); if (!box) { box = document.createElement("div"); box.className = "wk-sel"; d.col.appendChild(box); }
     box.style.top = s0 * HOUR_PX / 60 + "px"; box.style.height = (f0 - s0) * HOUR_PX / 60 + "px"; box.textContent = `${fromMin(s0)}–${fromMin(Math.min(f0, 1440))}`;
@@ -4431,10 +4623,18 @@ document.addEventListener("pointermove", e => {
     d.dur = dur;
   }
 });
-let CALKEEP = 0;   // щелчок сразу после протяжки не закрывает только что открытую карточку
+let CALKEEP = 0, CALSKIP = 0;   // щелчок сразу после протяжки не закрывает только что открытую карточку; после переноса в месяце — не открывает день
 function calDrop(e, cancel) {
   const d = CALDRAG; if (!d) return; CALDRAG = null; clearTimeout(d.timer);
   document.documentElement.classList.remove("cal-dragging"); d.el?.classList.remove("lifted"); d.col?.querySelector(".wk-sel")?.remove();
+  document.querySelectorAll(".cal-cell.drop-to").forEach(x => x.classList.remove("drop-to"));
+  if (d.kind === "mmove") {
+    d.el?.classList.remove("dragging");
+    if (CALRENDER) setTimeout(() => { if (!CALDRAG) render(); });   // пока тянули, пришли изменения
+    if (cancel || !d.moved) return;    // простое нажатие открывает день, как раньше
+    CALSKIP = Date.now();               // щелчок после переноса не открывает карточку дня
+    return d.date && d.date !== d.item.date ? moveMeet(d.item.m.id, d.date, d.item.start) : undefined;
+  }
   if (cancel) { if (d.moved || CALRENDER) render(); return; }
   CALKEEP = Date.now();
   if (CALRENDER) setTimeout(() => { if (!CALDRAG) render(); });
