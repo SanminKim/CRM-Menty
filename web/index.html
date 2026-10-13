@@ -38,6 +38,9 @@
   --g-study: #7446b8;  --g-study-soft: #ece4f7;
   --g-job: #1f7a4a;    --g-job-soft: #dcf1e5;
   --g-closed: #5b6472; --g-closed-soft: #e8eaee;
+  /* цвета встреч в календаре (выбираются у встречи) */
+  --mc-blue: #2952e3; --mc-violet: #7446b8; --mc-teal: #0b7a85; --mc-green: #1f7a4a; --mc-yellow: #a37a00;
+  --mc-orange: #c8601c; --mc-red: #c0362c; --mc-pink: #c2337a; --mc-gray: #5b6472;
   --c1: #2952e3;       /* график: получено */
   --c2: #c8741c;       /* график: ожидается */
   --c3: #7a879e;       /* график: третий ряд */
@@ -56,6 +59,8 @@
     --danger: #f0857b; --danger-soft: #3a2120; --warn: #e3b556; --warn-soft: #372d1a; --ok: #6fcb97; --ok-soft: #183224;
     --g-sales: #4fc0cb; --g-sales-soft: #12333a; --g-study: #b998ee; --g-study-soft: #2a2140;
     --g-job: #6fcb97; --g-job-soft: #183224; --g-closed: #959dab; --g-closed-soft: #262a32;
+    --mc-blue: #7d9bff; --mc-violet: #b998ee; --mc-teal: #4fc0cb; --mc-green: #6fcb97; --mc-yellow: #e3c25a;
+    --mc-orange: #f0a066; --mc-red: #f0857b; --mc-pink: #f08cc0; --mc-gray: #959dab;
     --c1: #5b82f5; --c2: #c97a2c; --c3: #8d99b0;
     --overlay: rgba(0, 0, 0, .6); --pop: 0 12px 36px rgba(0, 0, 0, .55);
     color-scheme: dark;
@@ -68,6 +73,8 @@
   --danger: #f0857b; --danger-soft: #3a2120; --warn: #e3b556; --warn-soft: #372d1a; --ok: #6fcb97; --ok-soft: #183224;
   --g-sales: #4fc0cb; --g-sales-soft: #12333a; --g-study: #b998ee; --g-study-soft: #2a2140;
   --g-job: #6fcb97; --g-job-soft: #183224; --g-closed: #959dab; --g-closed-soft: #262a32;
+  --mc-blue: #7d9bff; --mc-violet: #b998ee; --mc-teal: #4fc0cb; --mc-green: #6fcb97; --mc-yellow: #e3c25a;
+  --mc-orange: #f0a066; --mc-red: #f0857b; --mc-pink: #f08cc0; --mc-gray: #959dab;
   --c1: #5b82f5; --c2: #c97a2c; --c3: #8d99b0;
   --overlay: rgba(0, 0, 0, .6); --pop: 0 12px 36px rgba(0, 0, 0, .55);
   color-scheme: dark;
@@ -568,22 +575,24 @@ td.mxc { padding: 4px 2px; text-align: center; }
 .mini-d.in { background: var(--brand-soft); }
 .mini-d.now { color: var(--brand); font-weight: 700; }
 .mini-d:focus-visible { outline: 2px solid var(--brand); }
-.cal-kinds { display: flex; flex-direction: column; gap: 14px; font-size: 14px; }
-.cal-kg { display: flex; flex-direction: column; gap: 4px; }
-.cal-kg + .cal-kg, .cal-who { border-top: 1px solid var(--border); padding-top: 12px; }
-.cal-who { font-size: 14px; }
-.cal-kg b { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
-.cal-k { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 2px 0; }
-.cal-k input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.cal-k i { width: 14px; height: 14px; border-radius: 4px; border: 2px solid var(--kc); flex: none; }
-.cal-k input:checked + i { background: var(--kc); box-shadow: inset 0 0 0 2px var(--surface); }
-.cal-k input:focus-visible + i { outline: 2px solid var(--brand); outline-offset: 2px; }
+.cal-who { display: flex; flex-direction: column; gap: 6px; font-size: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+.cal-who b { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
 .cal-side select { width: 100%; }
 .cal-late .panel { margin: 0; }
 /* Цвета видов событий: и у галочек, и у событий */
 .k-call { --kc: var(--brand); --ks: var(--brand-soft); } .k-lesson { --kc: var(--g-study); --ks: var(--g-study-soft); } .k-consult { --kc: var(--g-sales); --ks: var(--g-sales-soft); }
-.k-other { --kc: var(--g-closed); --ks: var(--g-closed-soft); } .k-interview { --kc: var(--warn); --ks: var(--warn-soft); } .k-step { --kc: var(--ok); --ks: var(--ok-soft); } .k-pay { --kc: var(--danger); --ks: var(--danger-soft); }
-.tag.k-step, .tag.k-pay { background: var(--ks); color: var(--kc); }
+.k-other { --kc: var(--g-closed); --ks: var(--g-closed-soft); }
+/* Цвет, выбранный у встречи, важнее цвета по типу: фон — тот же цвет, разбавленный фоном карточки */
+.c-blue { --kc: var(--mc-blue); } .c-violet { --kc: var(--mc-violet); } .c-teal { --kc: var(--mc-teal); } .c-green { --kc: var(--mc-green); } .c-yellow { --kc: var(--mc-yellow); }
+.c-orange { --kc: var(--mc-orange); } .c-red { --kc: var(--mc-red); } .c-pink { --kc: var(--mc-pink); } .c-gray { --kc: var(--mc-gray); }
+.mc { --ks: color-mix(in srgb, var(--kc) 18%, var(--surface)); }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; border: 0; }
+.swatches legend { font-size: 12px; color: var(--muted); margin-bottom: 4px; padding: 0; }
+.sw { all: unset; box-sizing: border-box; width: 22px; height: 22px; border-radius: 50%; background: var(--kc); cursor: pointer; display: grid; place-items: center; color: var(--surface); font-size: 13px; line-height: 1; }
+.sw.auto { background: var(--surface-2); border: 1px dashed var(--muted); color: var(--muted); }
+.sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--kc, var(--muted)); }
+.sw:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+@media (hover: none), (pointer: coarse) { .sw { width: 32px; height: 32px; } }
 .cal-main { min-width: 0; }
 .cal-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
 .cal-bar h2 { margin: 0 6px; font-size: 18px; }
@@ -679,20 +688,12 @@ details + details { margin-top: 6px; }
   .cal-side { position: static; order: 2; }
   .cal-side .mini, .cal-create { display: none; }
   .cal-create-m { display: inline-flex; }
-  .cal-kg { flex-direction: row; flex-wrap: wrap; gap: 4px 12px; }
-  .cal-kg b { width: 100%; }
-  .cal-kg + .cal-kg, .cal-who { border-top: 0; padding-top: 0; }
+  .cal-who { border-top: 0; padding-top: 0; }
   .cal-bar h2 { order: -1; width: 100%; margin: 0 0 4px; }
   .wk-scroll { height: 62vh; }
   .wk-head, .wk-all, .wk-body { grid-template-columns: 40px repeat(var(--days), minmax(0, 1fr)); }
   .cal-cell { min-height: 58px; align-items: center; }
-  .cal-cell .ev { font-size: 0; line-height: 0; height: 5px; width: 70%; padding: 0; border: 0; border-radius: 3px; background: var(--brand); }
-  .cal-cell .ev.k-lesson { background: var(--g-study); }
-  .cal-cell .ev.k-consult { background: var(--g-sales); }
-  .cal-cell .ev.k-interview { background: var(--warn); }
-  .cal-cell .ev.k-other { background: var(--g-closed); }
-  .cal-cell .ev.k-step { background: var(--ok); }
-  .cal-cell .ev.k-pay { background: var(--danger); }
+  .cal-cell .ev { font-size: 0; line-height: 0; height: 5px; width: 70%; padding: 0; border: 0; border-radius: 3px; background: var(--kc, var(--brand)); }
   .cal-cell .ev-more { padding: 0; font-size: 11px; }
   .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; background: var(--bg); }
   .side { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 10px 16px; gap: 8px 12px; background: var(--side); }
@@ -963,12 +964,11 @@ function loadUi() {
   if (["funnel", "money"].includes(v.anTab)) S.anTab = v.anTab;
   if (SET_GROUPS.some(g => g[0] === v.setTab)) S.setTab = v.setTab;
   if (CAL_MODES.some(x => x[0] === v.calMode) && !S.cal.mode) S.cal.mode = v.calMode;   // вид из адреса важнее запомненного
-  if (Array.isArray(v.calHide)) S.calHide = v.calHide.filter(k => CAL_KINDS.some(x => x[0] === k));
   const ids = x => Array.isArray(x) ? x.filter(y => typeof y === "string" && y.length <= 64).slice(0, 200) : [];
   S.hiddenLanes = ids(v.hiddenLanes); S.foldedLanes = ids(v.foldedLanes); S.laneOrder = ids(v.laneOrder);   // скрытые и свёрнутые потоки на доске
   uiSaved = uiState();
 }
-function uiState() { const f = {}; for (const k of UI_FILTERS) if (S.f[k]) f[k] = S.f[k]; return JSON.stringify({ f, sorts: S.sorts, showLost: S.showLost, payTab: S.payTab, anTab: S.anTab, setTab: S.setTab || "", calMode: S.cal.mode || "", calHide: S.calHide || [], hiddenLanes: S.hiddenLanes || [], foldedLanes: S.foldedLanes || [], laneOrder: S.laneOrder || [] }); }
+function uiState() { const f = {}; for (const k of UI_FILTERS) if (S.f[k]) f[k] = S.f[k]; return JSON.stringify({ f, sorts: S.sorts, showLost: S.showLost, payTab: S.payTab, anTab: S.anTab, setTab: S.setTab || "", calMode: S.cal.mode || "", hiddenLanes: S.hiddenLanes || [], foldedLanes: S.foldedLanes || [], laneOrder: S.laneOrder || [] }); }
 function saveUi() { if (S.status !== "ready" || S.mode !== "staff") return; const now = uiState(); if (now !== uiSaved) { uiSaved = now; lsSet(UI_KEY(), now); } }
 // Запомненный отбор по записи, которой больше нет (или которая этой роли не видна), молча прятал бы людей: такие значения сбрасываются
 function dropStaleFilters() {
@@ -1690,15 +1690,9 @@ function peopleHTML(m) {
 }
 // Карточка дня: всё, что назначено на дату — встречи, шаги и платежи
 function dayHTML(d) {
-  const list = filtered(["mentor"]), evs = events(d, d), t = today();
-  const steps = list.filter(s => isActive(s) && hasStep(s) && s.next.date === d);
-  const pays = list.flatMap(s => (s.payments || []).filter(x => x.paid === d || (!isClosed(s.stage) && !x.paid && x.due === d)).map(x => ({ ...x, s }))); // пришедшие в этот день деньги видны и у выбывших
+  const evs = events(d, d).filter(e => e.type === "m"), t = today(); // календарь — только для встреч
   const title = new Date(d + "T12:00").toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const shift = n => { const x = new Date(d + "T12:00"); x.setDate(x.getDate() + n); return dstr(x); };
-  const sec = (name, n, body, empty) => `<section class="day-sec"><h3>${name}${n ? ` · ${n}` : ""}</h3>${n ? `<ul class="rows">${body}</ul>` : `<p class="hint">${empty}</p>`}</section>`;
-  const payRow = x => `<li class="click" data-act="open" data-id="${esc(x.s.id)}"><span class="who"><strong>${esc(x.s.name)}</strong><span>${esc(x.comment || "Платёж")}</span></span>
-    <span class="amt">${isPending(x) ? `${esc(pctText(x.percent))} от дохода` : money(x.amount)}</span>
-    ${isRefund(x) ? `<span class="tag warn">возврат</span>` : x.paid ? `<span class="tag ok">оплачен${x.paid !== x.due ? " " + fDay(x.paid) : ""}</span>` : isPending(x) || !canConfirm() ? `<span class="tag${x.due < t ? " danger" : ""}">${x.due < t ? "просрочен" : "ожидается"}</span>` : `${x.due < t ? `<span class="tag danger">просрочен</span>` : ""}<span class="acts"><button class="btn small" data-act="pay-done" data-id="${esc(x.s.id)}" data-pid="${esc(x.id)}">Оплачен</button></span>`}</li>`;
   return `<div class="scrim" data-act="d-close"></div>
   <aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <header class="d-head"><h2 id="day-title">${esc(title[0].toUpperCase() + title.slice(1))}${d === t ? ` <span class="tag ok">сегодня</span>` : ""}</h2>
@@ -1707,16 +1701,19 @@ function dayHTML(d) {
       <button class="x" id="d-x" data-act="d-close" aria-label="Закрыть">×</button></header>
     <div class="d-body" id="d-body">
       ${S.readOnly ? "" : `<div><button class="btn primary" data-act="meet-new" data-date="${esc(d)}">+ Встреча на этот день</button></div>`}
-      ${sec("Встречи", evs.length, evs.map(e => evRow(e)).join(""), "Встреч и собеседований нет.")}
-      ${sec("Шаги по студентам", steps.length, steps.map(stepRow).join(""), "На этот день шагов не назначено.")}
-      ${sec("Платежи студентов", pays.length, pays.map(payRow).join(""), "Платежей с этим сроком нет.")}
+      <section class="day-sec"><h3>Встречи${evs.length ? ` · ${evs.length}` : ""}</h3>${evs.length ? `<ul class="rows">${evs.map(e => evRow(e)).join("")}</ul>` : `<p class="hint">Встреч нет.</p>`}</section>
     </div></aside>`;
 }
-// ----- Календарь как в почтовых календарях: слева «+ Встреча», маленький месяц и галочки видов событий;
+// ----- Календарь встреч как в почтовых календарях: слева «+ Встреча», маленький месяц и выбор ментора;
 // справа неделя или день по часам, месяц или список. Встречу создают нажатием на свободное время или протяжкой,
 // переносят перетаскиванием, длительность меняют за нижний край. Права на изменение проверяет сервер
 const CAL_MODES = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"], ["list", "Список"]];
-const CAL_KINDS = [["call", "Созвоны"], ["lesson", "Занятия"], ["consult", "Консультации"], ["other", "Другое"], ["interview", "Собеседования"], ["step", "Шаги студентов"], ["pay", "Платежи"]];const HOUR_PX = 48, SNAP_MIN = 15;
+const HOUR_PX = 48, SNAP_MIN = 15;
+// Цвет блока встречи выбирают сами (поле color); без него цвет берётся по типу встречи. В разметку попадает только ключ из списка
+const MEET_COLORS = [["blue", "Синий"], ["violet", "Фиолетовый"], ["teal", "Бирюзовый"], ["green", "Зелёный"], ["yellow", "Жёлтый"], ["orange", "Оранжевый"], ["red", "Красный"], ["pink", "Розовый"], ["gray", "Серый"]];
+const meetColor = m => MEET_COLORS.some(x => x[0] === m?.color) ? m.color : "";
+const evCls = e => `k-${e.ck}${e.color ? ` c-${e.color} mc` : ""}`;
+const swatchesHTML = (cur, act, id = "") => `<fieldset class="swatches" id="${act}-colors"><legend>Цвет</legend><button type="button" class="sw auto" data-act="${act}" data-id="${esc(id)}" data-c="" aria-pressed="${!cur}" title="По типу встречи" aria-label="По типу встречи">✕</button>${MEET_COLORS.map(([k, l]) => `<button type="button" class="sw c-${k}" data-act="${act}" data-id="${esc(id)}" data-c="${k}" aria-pressed="${cur === k}" title="${l}" aria-label="${l}"></button>`).join("")}</fieldset>`;
 const calMode = () => CAL_MODES.some(x => x[0] === S.cal.mode) ? S.cal.mode : (typeof matchMedia === "function" && matchMedia("(max-width: 860px)").matches ? "day" : "week");
 const addDays = (d, n) => { const x = new Date(d + "T12:00"); x.setDate(x.getDate() + n); return dstr(x); };
 const weekStart = d => addDays(d, -((new Date(d + "T12:00").getDay() + 6) % 7));
@@ -1726,29 +1723,18 @@ const snapMin = n => Math.max(0, Math.min(1440 - SNAP_MIN, Math.round(n / SNAP_M
 const dayLong = d => { const s = new Date(d + "T12:00").toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "long" }); return s[0].toUpperCase() + s.slice(1); };
 // Можно ли переносить встречу: администратор — любую, ментор — свою (то же правило на сервере, Access.check_write)
 const canMove = m => !S.readOnly && (!S.limited || (!!S.me?.linkId && m.mentorId === S.me.linkId && (!m.studentId || !!stu(m.studentId))) || (!m.mentorId && !!m.studentId && !!stu(m.studentId)));
-const evKey = e => e.type === "m" ? "m:" + e.m.id : e.type === "i" ? `i:${e.s.id}:${e.a.id || e.date}` : e.type === "step" ? "s:" + e.s.id : `p:${e.s.id}:${e.p.id}`;
+const evKey = e => "m:" + e.m.id;
 let CALMAP = new Map(), CALDRAG = null, CALRENDER = false, QDRAFT = null;
-// Всё, что видно в календаре за период: встречи и собеседования (events), шаги и сроки платежей. Скрытые виды пропускаются
+// Всё, что видно в календаре за период: только встречи (собеседования, шаги и платежи — на экране «Сегодня» и в карточке студента)
 function calItems(from, to) {
-  const hide = new Set(S.calHide || []), out = [];
-  for (const e of events(from, to)) {
-    const ck = e.type === "i" ? "interview" : MEET_KINDS.some(x => x[0] === e.kind) ? e.kind : "other";
-    if (!hide.has(ck)) out.push({ ...e, ck, start: toMin(e.time), dur: e.type === "m" && nnum(e.m.duration) > 0 ? Math.min(Math.round(nnum(e.m.duration)), 1440) : 60 });
-  }
-  const list = filtered(["mentor"]);
-  if (!hide.has("step")) for (const s of list) if (isActive(s) && hasStep(s) && isDay(s.next.date) && s.next.date.slice(0, 10) >= from && s.next.date.slice(0, 10) <= to)
-    out.push({ type: "step", ck: "step", date: s.next.date.slice(0, 10), time: "", title: s.next.text, status: "planned", s, start: null });
-  if (!hide.has("pay")) for (const s of list) {
-    if (isClosed(s.stage)) continue;
-    for (const p of Array.isArray(s.payments) ? s.payments : []) if (isObj(p) && !p.paid && isDay(p.due) && p.due.slice(0, 10) >= from && p.due.slice(0, 10) <= to)
-      out.push({ type: "pay", ck: "pay", date: p.due.slice(0, 10), time: "", title: isPending(p) ? `${pctText(p.percent)} от дохода` : money(p.amount), status: "planned", s, p, start: null });
-  }
-  const sorted = sortBy(out, e => e.date + (e.time || "") + e.ck);
-  for (const e of sorted) CALMAP.set(evKey(e), e);
-  return sorted;
+  const out = [];
+  for (const e of events(from, to)) if (e.type === "m")
+    out.push({ ...e, ck: MEET_KINDS.some(x => x[0] === e.kind) ? e.kind : "other", color: meetColor(e.m), start: toMin(e.time), dur: nnum(e.m.duration) > 0 ? Math.min(Math.round(nnum(e.m.duration)), 1440) : 60 });
+  for (const e of out) CALMAP.set(evKey(e), e);
+  return out;
 }
 const going = e => { if (e.type !== "m") return ""; const p = meetPeople(e.m); return p.length > 1 ? `${p.filter(x => x.a === "yes").length}/${p.length}` : ""; };
-const chipText = e => `${e.time ? e.time + " " : ""}${going(e) ? going(e) + " " : ""}${e.title}${e.s && e.type !== "m" ? " · " + e.s.name : ""}`;
+const chipText = e => `${e.time ? e.time + " " : ""}${going(e) ? going(e) + " " : ""}${e.title}`;
 // Пересекающиеся по времени встречи встают рядом: каждой — своя колонка в группе пересечений
 function layoutDay(list) {
   const evs = sortBy(list, e => e.start).map(e => ({ e, s: e.start, f: Math.min(e.start + Math.max(e.dur, 20), 1440) })), out = [];
@@ -1760,11 +1746,11 @@ function layoutDay(list) {
 }
 function blockHTML(x) {
   const e = x.e, w = 100 / x.n, can = e.type === "m" && canMove(e.m), h = Math.max((x.f - x.s) * HOUR_PX / 60, 18);
-  return `<div class="wev k-${esc(e.ck)} st-${esc(e.status || "planned")}${can ? " can" : ""}${h < 30 ? " short" : h < 50 ? " mid" : ""}" data-ev="${esc(evKey(e))}" role="button" tabindex="0" title="${esc(chipText(e))}"
+  return `<div class="wev ${esc(evCls(e))} st-${esc(e.status || "planned")}${can ? " can" : ""}${h < 30 ? " short" : h < 50 ? " mid" : ""}" data-ev="${esc(evKey(e))}" role="button" tabindex="0" title="${esc(chipText(e))}"
     style="top:${x.s * HOUR_PX / 60}px;height:${h}px;left:calc(${x.c * w}% + 1px);width:calc(${w}% - 3px)">
     <span class="wev-t">${esc(e.time)}${e.type === "m" ? "–" + fromMin(Math.min(x.s + e.dur, 1440)) : ""}${going(e) ? ` · ${esc(going(e))}` : ""}</span><span class="wev-n">${esc(e.title)}</span>${e.s ? `<span class="wev-s">${esc(e.s.name)}</span>` : ""}${can ? `<span class="wev-r" data-resize aria-hidden="true"></span>` : ""}</div>`;
 }
-const allChip = e => `<button class="ev k-${esc(e.ck)} st-${esc(e.status || "planned")}" data-ev="${esc(evKey(e))}" data-act="ev-open" title="${esc(chipText(e))}">${esc(chipText(e))}</button>`;
+const allChip = e => `<button class="ev ${esc(evCls(e))} st-${esc(e.status || "planned")}" data-ev="${esc(evKey(e))}" data-act="ev-open" title="${esc(chipText(e))}">${esc(chipText(e))}</button>`;
 function weekHTML(days) {
   const t = today(), now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes(), items = calItems(days[0], days[days.length - 1]);
   const head = days.map(d => { const x = new Date(d + "T12:00"); return `<button class="wk-day${d === t ? " now" : ""}${d === S.cal.day ? " sel" : ""}" id="cal-${d}" data-act="cal-day" data-d="${d}" title="Открыть карточку дня"><span>${WD[(x.getDay() + 6) % 7]}</span><b>${x.getDate()}</b></button>`; }).join("");
@@ -1776,16 +1762,14 @@ function weekHTML(days) {
     <div class="wk-all"><span class="wk-g">весь день</span>${all}</div>
     <div class="wk-scroll" id="wk-scroll"><div class="wk-body"><div class="wk-hours" aria-hidden="true">${hours}</div>${cols}</div></div></div>`;
 }
-// Строка события в списках: встречи и собеседования — как раньше (evRow), шаги и платежи ведут в карточку студента
-const calRow = (e, withDate) => e.type === "m" || e.type === "i" ? evRow(e, withDate)
-  : `<li class="click" data-act="open" data-id="${esc(e.s.id)}"><span class="evt">${withDate ? esc(e.date === today() ? "Сегодня" : fShort(e.date)) : "весь день"}</span><span class="who"><strong>${esc(e.title)}</strong><span>${esc(e.s.name)}</span></span><span class="tag k-${esc(e.ck)}">${e.type === "step" ? "шаг" : "платёж"}</span></li>`;
+const calRow = (e, withDate) => evRow(e, withDate);
 function monthHTML() {
   const t = today(), [y, mo] = S.cal.ym.split("-").map(Number);
   const lead = (new Date(y, mo - 1, 1).getDay() + 6) % 7, total = Math.ceil((lead + new Date(y, mo, 0).getDate()) / 7) * 7;
   const cells = Array.from({ length: total }, (_, i) => dstr(new Date(y, mo - 1, 1 - lead + i)));
   const by = {}; for (const e of calItems(cells[0], cells[total - 1])) (by[e.date] = by[e.date] || []).push(e);
   const sel = S.cal.day, dayEvs = by[sel] || [];
-  const chip = e => `<span class="ev k-${esc(e.ck)} st-${esc(e.status)}" title="${esc(chipText(e))}">${esc(chipText(e))}</span>`;
+  const chip = e => `<span class="ev ${esc(evCls(e))} st-${esc(e.status)}" title="${esc(chipText(e))}">${esc(chipText(e))}</span>`;
   const grid = cells.map(d => { const l = by[d] || []; return `<button class="cal-cell${d.slice(0, 7) !== S.cal.ym ? " out" : ""}${d === t ? " now" : ""}${d === sel ? " sel" : ""}" id="cal-${d}" data-act="cal-day" data-d="${d}" aria-label="${esc(new Date(d + "T12:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" }))}${l.length ? `, событий: ${l.length}` : ""}">
       <span class="dn">${+d.slice(8)}</span>${l.slice(0, 3).map(chip).join("")}${l.length > 3 ? `<span class="ev-more">ещё ${l.length - 3}</span>` : ""}</button>`; }).join("");
   const dayTitle = dayLong(sel);
@@ -1808,7 +1792,7 @@ function miniHTML(sel, mode) {
     <div class="mini-grid">${WD.map(w => `<span class="mini-wd">${w[0]}</span>`).join("")}${cells.map(d => `<button class="mini-d${d.slice(0, 7) !== ym ? " out" : ""}${d === t ? " now" : ""}${inSel(d) ? " in" : ""}" data-act="cal-pick" data-d="${d}" aria-label="${esc(dayLong(d))}">${+d.slice(8)}</button>`).join("")}</div></div>`;
 }
 function calendarView() {
-  const mode = calMode(), sel = S.cal.day, late = unmarked(), hide = new Set(S.calHide || []);
+  const mode = calMode(), sel = S.cal.day, late = unmarked();
   const ws = weekStart(sel), days = mode === "week" ? Array.from({ length: 7 }, (_, i) => addDays(ws, i)) : [sel];
   const [y, mo] = S.cal.ym.split("-").map(Number), fmt = (d, o) => new Date(d + "T12:00").toLocaleDateString("ru-RU", o);
   const title = mode === "month" ? `${MONTHS[mo - 1]} ${y}` : mode === "week" ? (ws.slice(0, 7) === days[6].slice(0, 7) ? `${+ws.slice(8)} – ${fmt(days[6], { day: "numeric", month: "long", year: "numeric" })}` : `${fmt(ws, { day: "numeric", month: "long" })} – ${fmt(days[6], { day: "numeric", month: "long", year: "numeric" })}`)
@@ -1818,8 +1802,7 @@ function calendarView() {
   const side = `<aside class="cal-side" aria-label="Календарь">
       ${S.readOnly ? "" : `<button class="btn primary cal-create" data-act="meet-new" data-date="${esc(sel)}">+ Встреча</button>`}
       ${miniHTML(sel, mode)}
-      <div class="cal-kinds" id="cal-kinds"><div class="cal-kg" role="group" aria-label="Показывать"><b>Показывать</b>${CAL_KINDS.map(([k, l]) => `<label class="cal-k k-${k}"><input type="checkbox" data-calk="${k}"${hide.has(k) ? "" : " checked"}><i aria-hidden="true"></i>${l}</label>`).join("")}</div></div>
-      ${mentorSelect() ? `<div class="cal-kg cal-who"><b>Чьи события</b>${mentorSelect()}</div>` : ""}
+      ${mentorSelect() ? `<div class="cal-who"><b>Чьи встречи</b>${mentorSelect()}</div>` : ""}
       ${late.length ? `<div class="cal-late">${panel("Прошли и не отмечены", late.length, `<ul class="rows">${late.slice(0, 8).map(e => evRow(e, true)).join("")}</ul>`)}</div>` : ""}
     </aside>`;
   return headHTML("Календарь", "", "", "Нажмите на свободное время, чтобы назначить встречу, или протяните по часам. Встречу можно перетащить на другое время, а за нижний край — изменить длительность.") + `<div class="calx">${side}
@@ -1828,27 +1811,26 @@ function calendarView() {
       <div class="seg" id="cal-modes" role="group" aria-label="Вид календаря">${CAL_MODES.map(([k, l]) => `<button data-act="cal-mode" data-v="${k}" class="${k === mode ? "on" : ""}">${l}</button>`).join("")}</div></div>
       ${body}</section></div>`;
 }
-// Карточка события: всё о встрече и действия; у собеседования, шага и платежа — переход в карточку студента
+// Карточка встречи: всё о встрече, выбор цвета и действия
 function evPop(key, anchor) {
   const e = CALMAP.get(key); if (!e || !anchor) return;
-  const t = today(), m = e.m, when = `${dayLong(e.date)}${e.time ? `, ${e.time}${e.type === "m" && e.start !== null ? "–" + fromMin(Math.min(e.start + e.dur, 1440)) : ""}` : ", весь день"}`;
-  const kindL = Object.fromEntries(CAL_KINDS)[e.ck] || "";
+  const t = today(), m = e.m, when = `${dayLong(e.date)}${e.time ? `, ${e.time}${e.start !== null ? "–" + fromMin(Math.min(e.start + e.dur, 1440)) : ""}` : ", весь день"}`;
+  const kindL = Object.fromEntries(MEET_KINDS)[e.ck] || "";
   const who = e.s ? `<p><button class="link" data-act="open" data-id="${esc(e.s.id)}">${esc(e.s.name)}</button>${e.s.mentorId && teamName(e.s.mentorId) ? ` <span class="sub">· ментор ${esc(teamName(e.s.mentorId))}</span>` : ""}</p>` : "";
-  const body = e.type === "m" ? `${who}${!e.s && m.cohortId ? `<p class="sub">${esc(cohortName(m.cohortId) || "Поток")} · вся группа</p>` : ""}${teamName(m.mentorId) ? `<p class="sub">Проводит ${esc(teamName(m.mentorId))}</p>` : ""}
+  const body = `${who}${!e.s && m.cohortId ? `<p class="sub">${esc(cohortName(m.cohortId) || "Поток")} · вся группа</p>` : ""}${teamName(m.mentorId) ? `<p class="sub">Проводит ${esc(teamName(m.mentorId))}</p>` : ""}
       ${meetLink(m) ? `<p><a href="${esc(meetLink(m))}" target="_blank" rel="noopener">Ссылка на встречу</a></p>` : ""}${peopleHTML(m)}${m.notes ? `<p class="pre sub">${esc(m.notes)}</p>` : ""}
-      ${(m.status || "planned") !== "planned" ? `<p><span class="tag${m.status === "done" ? " ok" : ""}">${esc((MEETL[m.status] || m.status).toLowerCase())}</span></p>` : ""}`
-    : e.type === "i" ? `${who}<p class="sub">${esc(e.a.position || "")}</p>` : e.type === "step" ? `${who}<p class="sub">Следующий шаг студента</p>` : `${who}<p class="sub">Срок платежа${e.p.comment ? ` · ${esc(e.p.comment)}` : ""}</p>`;
-  const acts = e.type === "m" ? `${canMove(m) ? `<button class="btn small ghost danger-text" data-act="ev-del" data-id="${esc(m.id)}">Удалить</button>` : ""}<span class="sp"></span>
-      ${(m.status || "planned") === "planned" && e.date <= t && canMark(m) ? `<button class="btn small" data-act="meet-mark" data-id="${esc(m.id)}" data-st="done">Состоялась</button>` : ""}<button class="btn small primary" data-act="meet-edit" data-id="${esc(m.id)}">Изменить</button>`
-    : `<span class="sp"></span><button class="btn small primary" data-act="open" data-id="${esc(e.s.id)}">Карточка студента</button>`;
-  popShow(`<header><span class="pop-dot k-${esc(e.ck)}"></span><div><h3>${esc(e.type === "pay" ? "Платёж " + e.title : e.title)}</h3><p class="sub">${esc(when)}${kindL ? " · " + esc(kindL.toLowerCase()) : ""}</p></div><button class="x" data-act="pop-close" aria-label="Закрыть">×</button></header>
+      ${(m.status || "planned") !== "planned" ? `<p><span class="tag${m.status === "done" ? " ok" : ""}">${esc((MEETL[m.status] || m.status).toLowerCase())}</span></p>` : ""}
+      ${canMove(m) ? swatchesHTML(e.color, "ev-color", m.id) : ""}`;
+  const acts = `${canMove(m) ? `<button class="btn small ghost danger-text" data-act="ev-del" data-id="${esc(m.id)}">Удалить</button>` : ""}<span class="sp"></span>
+      ${(m.status || "planned") === "planned" && e.date <= t && canMark(m) ? `<button class="btn small" data-act="meet-mark" data-id="${esc(m.id)}" data-st="done">Состоялась</button>` : ""}<button class="btn small primary" data-act="meet-edit" data-id="${esc(m.id)}">Изменить</button>`;
+  popShow(`<header><span class="pop-dot ${esc(evCls(e))}" id="pop-dot"></span><div><h3>${esc(e.title)}</h3><p class="sub">${esc(when)}${kindL ? " · " + esc(kindL.toLowerCase()) : ""}</p></div><button class="x" data-act="pop-close" aria-label="Закрыть">×</button></header>
     <div class="pop-body">${body}</div><footer>${acts}</footer>`, anchor.getBoundingClientRect());
 }
 // Быстрое создание: название и время уже подставлены; «Подробнее» открывает полную форму
 function quickMeet(date, start, end, rect) {
-  QDRAFT = { date, start, end };
-  popShow(`<form id="qform"><header><span class="pop-dot k-call"></span><div><h3>Новая встреча</h3><p class="sub">${esc(dayLong(date))}, ${fromMin(start)}–${fromMin(end)}</p></div><button type="button" class="x" data-act="pop-close" aria-label="Закрыть">×</button></header>
-    <div class="pop-body"><input id="q-title" list="q-hints" placeholder="Название, например «Созвон-знакомство»" aria-label="Название встречи" autocomplete="off" maxlength="200"><datalist id="q-hints">${meetHints().map(h => `<option value="${esc(h)}">`).join("")}</datalist></div>
+  QDRAFT = { date, start, end, color: "" };
+  popShow(`<form id="qform"><header><span class="pop-dot k-call" id="pop-dot"></span><div><h3>Новая встреча</h3><p class="sub">${esc(dayLong(date))}, ${fromMin(start)}–${fromMin(end)}</p></div><button type="button" class="x" data-act="pop-close" aria-label="Закрыть">×</button></header>
+    <div class="pop-body"><input id="q-title" list="q-hints" placeholder="Название, например «Созвон-знакомство»" aria-label="Название встречи" autocomplete="off" maxlength="200"><datalist id="q-hints">${meetHints().map(h => `<option value="${esc(h)}">`).join("")}</datalist>${swatchesHTML("", "q-color")}</div>
     <footer><button type="button" class="btn small ghost" data-act="q-more">Подробнее</button><span class="sp"></span><button type="submit" class="btn small primary">Сохранить</button></footer></form>`, rect);
   $("#q-title")?.focus();
 }
@@ -1861,12 +1843,16 @@ function popShow(html, rect) {
   let top = Math.min(Math.max(8, rect.top), vh - h - 8); if (left === rect.left || left < rect.right && left + w > rect.left) top = Math.min(rect.bottom + 6, vh - h - 8);
   box.style.left = left + "px"; box.style.top = Math.max(8, top) + "px";
 }
+function markSwatch(act, c, base) {
+  for (const b of document.querySelectorAll(`#${act}-colors .sw`)) b.setAttribute("aria-pressed", String(b.dataset.c === c));
+  const dot = $("#pop-dot"); if (dot) dot.className = `pop-dot ${base}${c ? ` c-${c} mc` : ""}`;
+}
 function closePop() { const b = $("#calpop"); if (b && !b.hidden) { b.hidden = true; b.innerHTML = ""; } QDRAFT = null; }
 function qSave() {
   const q = QDRAFT, title = String($("#q-title")?.value || "").trim().slice(0, 200); if (!q) return;
   if (!title) { $("#q-title")?.focus(); return toast("Напишите название встречи"); }
   closePop();
-  return save(() => setDoc("meetings", newId("meetings"), { title, date: q.date, time: fromMin(q.start), kind: "call", duration: q.end - q.start, studentId: null, cohortId: null,
+  return save(() => setDoc("meetings", newId("meetings"), { title, date: q.date, time: fromMin(q.start), kind: "call", ...(q.color ? { color: q.color } : {}), duration: q.end - q.start, studentId: null, cohortId: null,
     mentorId: myTeam()?.id || null, link: "", notes: "", ...(S.server ? { remind: true } : {}), status: "planned", createdAt: new Date().toISOString(), by: S.myId }), `Встреча «${title}»: ${dayLong(q.date)}, ${fromMin(q.start)}`);
 }
 // Перенос и новая длительность — одной записью; «Отменить» возвращает прежнее
@@ -3585,14 +3571,15 @@ function paymentForm(s, p) {
   });
 }
 function meetingForm(m, prefill = {}) {
-  const vals = m ? { ...m, studentId: m.studentId || "", cohortId: m.cohortId || "", mentorId: m.mentorId || "", status: m.status || "planned", remind: m.remind !== false }
-    : { kind: "call", date: S.view === "calendar" ? S.cal.day : today(), time: "12:00", duration: 60, studentId: "", cohortId: "", mentorId: myTeam()?.id || "", status: "planned", remind: true, ...prefill };
+  const vals = m ? { ...m, color: meetColor(m), studentId: m.studentId || "", cohortId: m.cohortId || "", mentorId: m.mentorId || "", status: m.status || "planned", remind: m.remind !== false }
+    : { kind: "call", color: "", date: S.view === "calendar" ? S.cal.day : today(), time: "12:00", duration: 60, studentId: "", cohortId: "", mentorId: myTeam()?.id || "", status: "planned", remind: true, ...prefill };
   const students = sortBy(D().students.filter(s => isActive(s) || s.id === vals.studentId), s => String(s.name || "").toLowerCase());
   openModal({
     title: m ? "Встреча" : "Новая встреча", wide: true, values: vals, submit: m ? "Сохранить" : "Добавить",
     fields: [{ k: "title", label: "Название", req: true, wide: true, ph: "Разбор домашки", list: meetHints() },
       { k: "date", label: "Дата", type: "date", req: true, quick: true }, { k: "time", label: "Время", type: "time", help: "Пусто — на весь день" },
       { k: "kind", label: "Тип", type: "select", options: MEET_KINDS }, { k: "duration", label: "Длительность, мин", type: "number" },
+      { k: "color", label: "Цвет в календаре", type: "select", options: [["", "По типу встречи"], ...MEET_COLORS] },
       { k: "studentId", label: "Студент", type: "select", options: [["", "—"], ...students.map(s => [s.id, s.name])] },
       { k: "cohortId", label: "Поток", type: "select", options: cohortOpts(), help: "Для занятия всей группы" },
       ...(S.limited ? [] : [{ k: "mentorId", label: "Кто проводит", type: "select", options: teamOpts() }]),
@@ -3608,7 +3595,7 @@ function meetingForm(m, prefill = {}) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(v.date)) return "Укажите дату";
       if (v.time && !/^\d{2}:\d{2}$/.test(v.time)) return "Время укажите в виде 15:30";
       if (v.duration !== null && !(v.duration > 0 && v.duration <= 1440)) return "Длительность — от 1 до 1440 минут";
-      const doc = { title: v.title, date: v.date, time: v.time || "", kind: v.kind, duration: v.duration, studentId: v.studentId || null, cohortId: v.cohortId || null, mentorId: (S.limited ? vals.mentorId : v.mentorId) || null, link: v.link, notes: v.notes, ...(S.server ? { remind: !!v.remind } : {}) };
+      const doc = { title: v.title, date: v.date, time: v.time || "", kind: v.kind, color: MEET_COLORS.some(x => x[0] === v.color) ? v.color : "", duration: v.duration, studentId: v.studentId || null, cohortId: v.cohortId || null, mentorId: (S.limited ? vals.mentorId : v.mentorId) || null, link: v.link, notes: v.notes, ...(S.server ? { remind: !!v.remind } : {}) };
       // При правке пишем только изменённые поля: отметку «состоялась», поставленную другим человеком, форма не затрёт
       const changed = m ? Object.fromEntries(Object.entries(doc).filter(([k, val]) => blank(val) !== blank(vals[k]))) : null;
       const toStatus = m && v.status !== vals.status ? v.status : null, any = !m || Object.keys(changed).length > 0;
@@ -4161,7 +4148,16 @@ const ACT = {
   "cal-mini": d => { const [y, m] = (S.cal.mini || S.cal.day.slice(0, 7)).split("-").map(Number), x = new Date(y, m - 1 + +d.n, 1); S.cal = { ...S.cal, mini: `${x.getFullYear()}-${pad(x.getMonth() + 1)}` }; render(); },
   "ev-open": (d, el) => evPop(el.dataset.ev, el),
   "pop-close": () => closePop(),
-  "q-more": () => { const q = QDRAFT, title = String($("#q-title")?.value || "").trim(); closePop(); if (q) meetingForm(null, { date: q.date, time: fromMin(q.start), duration: q.end - q.start, ...(title ? { title } : {}) }); },
+  // Цвет выбирается в открытой карточке: она остаётся открытой, кружок и блок меняют цвет сразу
+  "q-color": d => { if (!QDRAFT) return; QDRAFT.color = MEET_COLORS.some(x => x[0] === d.c) ? d.c : ""; markSwatch("q-color", QDRAFT.color, "k-call"); },
+  "ev-color": d => {
+    const m = meetById(d.id); if (!m || !canMove(m)) return;
+    const c = MEET_COLORS.some(x => x[0] === d.c) ? d.c : "";
+    if (c === meetColor(m)) return;
+    markSwatch("ev-color", c, `k-${MEET_KINDS.some(x => x[0] === m.kind) ? m.kind : "other"}`);
+    return save(() => updDoc("meetings", d.id, { color: c }));
+  },
+  "q-more": () => { const q = QDRAFT, title = String($("#q-title")?.value || "").trim(); closePop(); if (q) meetingForm(null, { date: q.date, time: fromMin(q.start), duration: q.end - q.start, color: q.color || "", ...(title ? { title } : {}) }); },
   "ev-del": (d, el) => {
     if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Точно удалить?"; return; }
     closePop(); const m = meetById(d.id); if (!m) return;
@@ -4302,7 +4298,7 @@ document.addEventListener("click", e => {
   if (!e.target.closest("#calpop, .wk-col, [data-act=ev-open]") && Date.now() - CALKEEP > 300) closePop();
   const stop = e.target.closest("[data-stop]"); if (stop) return;
   const el = e.target.closest("[data-act]"); if (!el) return;
-  if (el.closest("#calpop") && !["ev-del", "pop-close", "q-more"].includes(el.dataset.act)) closePop();   // действие из карточки события
+  if (el.closest("#calpop") && !["ev-del", "pop-close", "q-more", "q-color", "ev-color"].includes(el.dataset.act)) closePop();   // действие из карточки события
   if (el.dataset.act === "toggle-lost") return;
   const fn = ACT[el.dataset.act]; if (!fn) return;
   if (el.tagName === "BUTTON") e.preventDefault();
@@ -4311,7 +4307,6 @@ document.addEventListener("click", e => {
 document.addEventListener("change", e => {
   const el = e.target;
   if (el.dataset.dirF === "key") return dirInput(el);   // участник направления выбран
-  if (el.dataset.calk) { const h = new Set(S.calHide || []); el.checked ? h.delete(el.dataset.calk) : h.add(el.dataset.calk); S.calHide = [...h]; closePop(); return render(); }
   if (el.dataset.filter) { S.f[el.dataset.filter] = el.value; S.rows = 0; render(); }
   if (el.dataset.fcheck) { S.f[el.dataset.fcheck] = el.checked ? "1" : ""; S.rows = 0; render(); }
   if (el.id === "pay-month") { S.payMonth = el.value; render(); }
