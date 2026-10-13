@@ -667,7 +667,12 @@ td.mxc { padding: 4px 2px; text-align: center; }
 .ask-over { z-index: 35; place-items: center; }
 .modal.ask { max-width: 440px; padding: 18px 20px 14px; }
 .modal.ask h2 { margin: 0 0 8px; font-size: 18px; }
-.modal.ask p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+.modal.ask p { margin: 0 0 10px; font-size: 14px; }
+.ask-diff { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 12px; font-size: 14px; }
+.ask-diff dt { color: var(--muted); }
+.ask-diff dd { margin: 0; overflow-wrap: anywhere; }
+.ask-tg { margin: 4px 0 14px; }
+.ask-tg small { display: block; color: var(--muted); font-size: 12px; }
 .modal.ask footer { padding: 0; }
 .wk-sel { position: absolute; left: 2px; right: 2px; background: var(--brand-soft); border: 1px dashed var(--brand); border-radius: 6px; font-size: 12px; padding: 2px 6px; color: var(--brand); z-index: 4; pointer-events: none; }
 .cal-dragging, .cal-dragging * { user-select: none; }
@@ -1872,8 +1877,8 @@ function evPop(key, anchor) {
   const guests = g.mentors.filter(id => id !== m.mentorId).map(teamName).filter(Boolean);
   const who = solo ? `<p><button class="link" data-act="open" data-id="${esc(e.s.id)}">${esc(e.s.name)}</button>${e.s.mentorId && teamName(e.s.mentorId) ? ` <span class="sub">· ментор ${esc(teamName(e.s.mentorId))}</span>` : ""}</p>` : "";
   // Перенос прямо из карточки: дата и время; встреча без времени остаётся на весь день
-  const mv = canMove(m) && (m.status || "planned") === "planned" ? `<div class="pop-move" id="pop-move"><input type="date" id="pm-date" value="${esc(e.date)}" aria-label="Дата">${e.start !== null
-    ? `<input type="time" id="pm-from" value="${fromMin(e.start)}" aria-label="Начало"><span>–</span><input type="time" id="pm-to" value="${fromMin(Math.min(e.start + e.dur, 1439))}" aria-label="Конец">` : ""}<button type="button" class="btn small" data-act="ev-move" data-id="${esc(m.id)}">Перенести</button></div>` : "";
+  const mv = canMove(m) && (m.status || "planned") === "planned" ? `<div class="pop-move" id="pop-move" data-id="${esc(m.id)}"><input type="date" id="pm-date" value="${esc(e.date)}" aria-label="Дата">${e.start !== null
+    ? `<input type="time" id="pm-from" value="${fromMin(e.start)}" aria-label="Начало"><span>–</span><input type="time" id="pm-to" value="${fromMin(Math.min(e.start + e.dur, 1439))}" aria-label="Конец">` : ""}</div>` : "";
   const body = `${mv}${who}${g.cohorts.map(c => `<p class="sub">${esc(cohortName(c) || "Поток")} · вся группа</p>`).join("")}${teamName(m.mentorId) ? `<p class="sub">Проводит ${esc(teamName(m.mentorId))}</p>` : ""}
       ${guests.length ? `<p class="sub">Также ${guests.length > 1 ? "менторы" : "ментор"}: ${esc(guests.join(", "))}</p>` : ""}${hidden ? `<p class="sub">И ещё ${hidden} ${plural(hidden, "студент", "студента", "студентов")} других менторов</p>` : ""}
       ${meetLink(m) ? `<p><a href="${esc(meetLink(m))}" target="_blank" rel="noopener">Ссылка на встречу</a></p>` : ""}${peopleHTML(m)}${m.notes ? `<p class="pre sub">${esc(m.notes)}</p>` : ""}
@@ -1892,7 +1897,27 @@ function quickMeet(date, start, end, rect) {
     <footer><button type="button" class="btn small ghost" data-act="q-more">Подробнее</button><span class="sp"></span><button type="submit" class="btn small primary">Сохранить</button></footer></form>`, rect);
   $("#q-title")?.focus();
 }
+// Дата и время, изменённые в карточке встречи, сохраняются, когда карточку закрывают: с подтверждением «Сохранить изменения?»
+function takeMove() {
+  const box = $("#pop-move"); if (!box) return null;
+  const f = ["pm-date", "pm-from", "pm-to"].map(id => $("#" + id));
+  if (!f.some(x => x && x.value !== x.defaultValue)) return null;
+  return { id: box.dataset.id, date: f[0].value, from: f[1]?.value ?? null, to: f[2]?.value ?? null, timed: !!f[1], dur: !!f[1] && (f[1].value !== f[1].defaultValue || f[2].value !== f[2].defaultValue) };
+}
+function moveProblem(p) {
+  if (!isDay(p.date)) return "Укажите дату полностью";
+  if (!p.timed) return "";
+  const a = toMin(p.from), b = toMin(p.to);
+  return a === null || b === null ? "Укажите время начала и конца" : b <= a ? "Конец встречи должен быть позже начала" : "";
+}
+function commitMove(p) {
+  if (!meetById(p.id) || moveProblem(p)) return;
+  if (!p.timed) return moveMeet(p.id, p.date, null);
+  const a = toMin(p.from), b = toMin(p.to);
+  return moveMeet(p.id, p.date, a, p.dur ? b - a : undefined);   // длительность — только если меняли время
+}
 function popShow(html, rect) {
+  const pend = takeMove(); if (pend && !moveProblem(pend)) setTimeout(() => commitMove(pend));   // открыли другую встречу — как щелчок мимо карточки
   let box = $("#calpop");
   if (!box) { box = document.createElement("div"); box.id = "calpop"; box.className = "calpop"; box.setAttribute("role", "dialog"); document.body.appendChild(box); }
   box.innerHTML = html; box.hidden = false;
@@ -1905,7 +1930,14 @@ function markSwatch(act, c, base) {
   for (const b of document.querySelectorAll(`#${act}-colors .sw`)) b.setAttribute("aria-pressed", String(b.dataset.c === c));
   const dot = $("#pop-dot"); if (dot) dot.className = `pop-dot ${base}${c ? ` c-${c} mc` : ""}`;
 }
-function closePop() { const b = $("#calpop"); if (b && !b.hidden) { b.hidden = true; b.innerHTML = ""; } QDRAFT = null; }
+// save — закрытие самим человеком (×, щелчок мимо, Enter, Esc): изменённые дата и время сохраняются с подтверждением.
+// Остальные закрытия (переход по календарю, прокрутка, другое действие из карточки, удаление) несохранённое просто забывают
+function closePop(save = false) {
+  const pend = save ? takeMove() : null;
+  if (pend && moveProblem(pend)) { toast(moveProblem(pend)); $("#pm-from")?.focus(); return; }   // ошибку можно исправить: карточка остаётся открытой
+  const b = $("#calpop"); if (b && !b.hidden) { b.hidden = true; b.innerHTML = ""; } QDRAFT = null;
+  if (pend) setTimeout(() => commitMove(pend));
+}
 function qSave() {
   const q = QDRAFT, title = String($("#q-title")?.value || "").trim().slice(0, 200); if (!q) return;
   if (!title) { $("#q-title")?.focus(); return toast("Напишите название встречи"); }
@@ -1922,7 +1954,7 @@ async function moveMeet(id, date, start, dur) {
   if (dur !== undefined && Math.round(nnum(m.duration)) !== dur) patch.duration = dur;
   if (!Object.keys(patch).length) return render();
   const was = Object.fromEntries(Object.keys(patch).map(k => [k, m[k] ?? (k === "duration" ? null : "")]));
-  const o = await askNotify(m, { ...m, ...patch }); if (o === null) return render();   // «Отмена» — встреча остаётся на месте
+  const o = await confirmMeet(m, { ...m, ...patch }, true); if (o === null) return render();   // «Отмена» — встреча остаётся на месте
   const ok = await save(() => updDoc("meetings", id, patch, o));
   // «Отменить» сообщает участникам так же, как сам перенос: если о переносе написали, напишут и о возврате
   if (ok) { S.cal = { ...S.cal, day: date, ym: date.slice(0, 7) }; toast(`${m.title || "Встреча"}: ${dayLong(date)}${start === null ? "" : `, ${time}–${fromMin(Math.min(start + (dur ?? (nnum(m.duration) || 60)), 1440))}`}`, () => save(() => updDoc("meetings", id, was, o), "Возвращено")); }
@@ -3659,7 +3691,7 @@ function meetingForm(m, prefill = {}) {
       ...(S.server ? [{ k: "remind", label: "Сообщать студентам в Telegram: приглашение, перенос, напоминания и вопрос, придут ли", type: "checkbox", wide: true }] : []),
       { k: "notes", label: "Заметки", type: "textarea", wide: true, rows: 2 }],
     link: one && stu(one) ? { label: "Карточка студента", go: () => openStudent(one) } : null,
-    onDelete: m ? async () => { const o = await askNotify(m, null); if (o === null) return false; return save(() => delDoc("meetings", m.id, o), "Встреча удалена"); } : null,
+    onDelete: m ? async () => { const o = await confirmMeet(m, null); if (o === null) return false; return save(() => delDoc("meetings", m.id, o), "Встреча удалена"); } : null,
     extra: m ? "" : `<p class="hint">Отметить встречу состоявшейся можно в календаре, на экране «Сегодня» или в карточке студента.</p>`,
     onSubmit: async v => {
       if (m && !canMove(m)) return "Менять эту встречу может только тот, кто её проводит, или администратор";
@@ -3680,7 +3712,7 @@ function meetingForm(m, prefill = {}) {
       const toStatus = m && v.status !== vals.status ? v.status : null, any = !m || Object.keys(changed).length > 0;
       if (m && !meetById(m.id)) return "Эту встречу уже удалили";
       const next = m ? { ...meetById(m.id), ...(changed || {}), ...(toStatus ? { status: toStatus } : {}) } : { ...doc, status: "planned" };
-      const o = await askNotify(m ? meetById(m.id) : null, next); if (o === null) return false;
+      const o = await confirmMeet(m ? meetById(m.id) : null, next); if (o === null) return false;
       const o1 = toStatus === "cancelled" ? undefined : o; // об отмене сообщит сама отметка, без второго сообщения
       const ok = !any ? true : await save(() => m ? updDoc("meetings", m.id, changed, o1) : setDoc("meetings", newId("meetings"), { ...doc, status: "planned", createdAt: new Date().toISOString(), by: S.myId }, o), m ? "Сохранено" : `Встреча назначена на ${dueLabel(v.date)}${v.time ? ", " + v.time : ""}`);
       if (ok && S.view === "calendar") { S.cal = { ...S.cal, ym: v.date.slice(0, 7), day: v.date }; render(); }
@@ -3729,7 +3761,7 @@ function pplAdd(k, id) {
   MODAL.people[k] = [...MODAL.people[k], id]; drawPeople();
   const inp = $("#m-pq"); if (inp) { if (!matchMedia("(pointer: coarse)").matches) inp.focus(); pplSuggest(); }   // строка поиска остаётся: можно позвать ещё кого-то из того же потока
 }
-// ----- «Сообщить участникам?» — перед сохранением изменений встречи, как в почтовых календарях -----
+// ----- «Сохранить изменения?» — подтверждение изменения встречи, как в почтовых календарях -----
 // Кому есть что сообщить: запланированная встреча не в прошлом, кроме самого автора (то же решает сервер, meetings.notices)
 function notifyCount(m) {
   if (!m || (m.status || "planned") !== "planned" || (m.date || "") < today()) return 0;
@@ -3737,20 +3769,35 @@ function notifyCount(m) {
   return mentors + (m.remind === false ? 0 : meetPeople(m).length + g.students.filter(id => !stu(id)).length);
 }
 const meetKey = m => m ? JSON.stringify([m.date, m.time || "", nnum(m.duration) || 60, m.title || "", meetLink(m), m.status || "planned", mg(m)]) : "";
-function askNotify(old, next) {
-  // Отметка «состоялась / не было» участникам не сообщается — и спрашивать незачем
-  if (!S.server || (next && ["done", "missed"].includes(next.status)) || !(notifyCount(old) || notifyCount(next)) || meetKey(old) === meetKey(next)) return Promise.resolve(undefined);
-  const n = Math.max(notifyCount(old), notifyCount(next)), what = !next || (next.status || "planned") === "cancelled" ? "что встреча отменена" : !old ? "приглашение на встречу" : "что изменилось во встрече";
+const meetWhen = m => { const st = toMin(m.time), d = nnum(m.duration) > 0 ? Math.min(Math.round(nnum(m.duration)), 1440) : 60; return isDay(m.date) ? `${dayLong(m.date)}, ${st === null ? "весь день" : `${fromMin(st)}–${fromMin(Math.min(st + d, 1440))}`}` : "без даты"; };
+// Что меняется — строками «Было → Стало»
+function meetDiff(old, next) {
+  if (!old || !next) return `<p class="ask-what"><strong>${esc((next || old).title || "Встреча")}</strong><br>${esc(meetWhen(next || old))}</p>`;
+  const rows = [];
+  if (meetWhen(old) !== meetWhen(next)) rows.push(["Было", meetWhen(old)], ["Стало", meetWhen(next)]);
+  if ((old.title || "") !== (next.title || "")) rows.push(["Название", next.title || "Встреча"]);
+  if (JSON.stringify(mg(old)) !== JSON.stringify(mg(next))) rows.push(["Участники", meetWho(next) || "никого"]);
+  if (meetLink(old) !== meetLink(next)) rows.push(["Ссылка", meetLink(next) || "убрана"]);
+  if ((next.status || "planned") === "cancelled" && (old.status || "planned") !== "cancelled") rows.push(["Статус", "отменена"]);
+  return `<p class="ask-what"><strong>${esc(next.title || "Встреча")}</strong></p>${rows.length ? `<dl class="ask-diff">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}`;
+}
+// Возвращает null — «Отмена», иначе undefined или { notify: true } (галочка «Сообщить участникам»).
+// always — спрашивать и без участников (перенос в календаре); иначе только когда есть кому сообщить
+function confirmMeet(old, next, always = false) {
+  if (next && ["done", "missed"].includes(next.status)) return Promise.resolve(undefined);   // отметка «состоялась / не было» — без вопросов
+  const n = S.server && meetKey(old) !== meetKey(next) ? Math.max(notifyCount(old), notifyCount(next)) : 0;
+  if (!n && !always) return Promise.resolve(undefined);
+  const del = !next, add = !old, head = del ? "Удалить встречу?" : add ? "Добавить встречу?" : "Сохранить изменения?", ok = del ? "Удалить" : add ? "Добавить" : "Сохранить";
   return new Promise(done => {
     const box = document.createElement("div"); box.className = "overlay ask-over"; box.id = "asknote";
-    box.innerHTML = `<div class="modal ask" tabindex="-1" role="alertdialog" aria-modal="true" aria-labelledby="ask-h" aria-describedby="ask-p"><h2 id="ask-h">Сообщить участникам?</h2>
-      <p id="ask-p">Бот в Telegram напишет ${n} ${plural(n, "участнику", "участникам", "участникам")} ${esc(what)} «${esc((next || old).title || "Встреча")}». Сообщение получат те, кто подключён к боту.</p>
-      <footer><button type="button" class="btn ghost" data-a="cancel">Отмена</button><span class="sp"></span><button type="button" class="btn" data-a="no">Не сообщать</button><button type="button" class="btn primary" data-a="yes">Сообщить</button></footer></div>`;
+    box.innerHTML = `<div class="modal ask" tabindex="-1" role="alertdialog" aria-modal="true" aria-labelledby="ask-h"><h2 id="ask-h">${head}</h2>${meetDiff(old, next)}
+      ${n ? `<label class="field checkbox ask-tg"><input type="checkbox" id="ask-notify" checked><span>Сообщить участникам в Telegram (${n})<small>Сообщение получат те, кто подключён к боту</small></span></label>` : ""}
+      <footer><span class="sp"></span><button type="button" class="btn ghost" data-a="cancel">Отмена</button><button type="button" class="btn ${del ? "danger" : "primary"}" data-a="yes">${ok}</button></footer></div>`;
     const prev = document.activeElement, end = r => { box.remove(); if (prev?.isConnected) prev.focus({ preventScroll: true }); done(r); };
-    box.addEventListener("click", e => { const a = e.target.closest("[data-a]")?.dataset.a; if (a) end(a === "yes" ? { notify: true } : a === "no" ? undefined : null); else if (e.target === box) end(null); });
+    box.addEventListener("click", e => { const a = e.target.closest("[data-a]")?.dataset.a; if (a) end(a === "yes" ? ($("#ask-notify")?.checked ? { notify: true } : undefined) : null); else if (e.target === box) end(null); });
     box.addEventListener("keydown", e => {
       if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); end(null); }
-      if (e.key === "Tab") { const b = [...box.querySelectorAll("button")], i = b.indexOf(document.activeElement); e.preventDefault(); b[(i + (e.shiftKey ? -1 : 1) + b.length) % b.length].focus(); }   // фокус не уходит в форму под вопросом
+      if (e.key === "Tab") { const b = [...box.querySelectorAll("button, input")], i = b.indexOf(document.activeElement); e.preventDefault(); b[(i + (e.shiftKey ? -1 : 1) + b.length) % b.length].focus(); }   // фокус не уходит в форму под вопросом
     });
     document.body.appendChild(box); box.querySelector("[data-a=yes]").focus();
   });
@@ -4298,16 +4345,7 @@ const ACT = {
   "cal-pick": d => { if (isDay(d.d)) { S.cal = { ...S.cal, day: d.d, ym: d.d.slice(0, 7), mini: d.d.slice(0, 7) }; closePop(); render(); } },
   "cal-mini": d => { const [y, m] = (S.cal.mini || S.cal.day.slice(0, 7)).split("-").map(Number), x = new Date(y, m - 1 + +d.n, 1); S.cal = { ...S.cal, mini: `${x.getFullYear()}-${pad(x.getMonth() + 1)}` }; render(); },
   "ev-open": (d, el) => evPop(el.dataset.ev, el),
-  "pop-close": () => closePop(),
-  "ev-move": d => {
-    const m = meetById(d.id), date = $("#pm-date")?.value || "", from = $("#pm-from"), to = $("#pm-to"); if (!m) return;
-    if (!isDay(date)) return toast("Укажите дату");
-    if (!from) { closePop(); return moveMeet(d.id, date, null); }
-    const a = toMin(from.value), b = toMin(to?.value);
-    if (a === null || b === null) return toast("Укажите время начала и конца");
-    if (b <= a) return toast("Конец встречи должен быть позже начала");
-    closePop(); return moveMeet(d.id, date, a, from.value === from.defaultValue && to.value === to.defaultValue ? undefined : b - a);   // длительность — только если меняли время
-  },
+  "pop-close": () => closePop(true),
   // Цвет выбирается в открытой карточке: она остаётся открытой, кружок и блок меняют цвет сразу
   "q-color": d => { if (!QDRAFT) return; QDRAFT.color = MEET_COLORS.some(x => x[0] === d.c) ? d.c : ""; markSwatch("q-color", QDRAFT.color, "k-call"); },
   "ev-color": d => {
@@ -4321,7 +4359,7 @@ const ACT = {
   "ev-del": (d, el) => {
     if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Точно удалить?"; return; }
     closePop(); const m = meetById(d.id); if (!m) return;
-    return askNotify(m, null).then(o => o === null ? null : save(() => delDoc("meetings", d.id, o)).then(ok => ok && toast(`Встреча «${m.title || ""}» удалена`, () => save(() => setDoc("meetings", d.id, { ...m, id: undefined, rsvp: S.limited ? undefined : m.rsvp }, o), "Встреча возвращена"))));
+    return confirmMeet(m, null).then(o => o === null ? null : save(() => delDoc("meetings", d.id, o)).then(ok => ok && toast(`Встреча «${m.title || ""}» удалена`, () => save(() => setDoc("meetings", d.id, { ...m, id: undefined, rsvp: S.limited ? undefined : m.rsvp }, o), "Встреча возвращена"))));
   },
   "meet-new": d => meetingForm(null, { ...(d.date ? { date: d.date } : {}), ...(d.sid ? { studentId: d.sid, title: "Созвон", mentorId: stu(d.sid)?.mentorId || myTeam()?.id || "" } : {}) }),
   "meet-edit": d => { const m = meetById(d.id); if (m) meetingForm(m); },
@@ -4458,10 +4496,10 @@ document.addEventListener("click", e => {
   if (S.navMore && !e.target.closest("#nav")) { S.navMore = false; render(); }
   if (!e.target.closest("#gsearch")) $("#gq-res").hidden = true;
   // Карточка события в календаре закрывается щелчком мимо неё (встречи и сетку обрабатывает перетаскивание)
-  if (!e.target.closest("#calpop, .wk-col, [data-act=ev-open]") && Date.now() - CALKEEP > 300) closePop();
+  if (!e.target.closest("#calpop, .wk-col, [data-act=ev-open], #asknote") && Date.now() - CALKEEP > 300) closePop(true);
   const stop = e.target.closest("[data-stop]"); if (stop) return;
   const el = e.target.closest("[data-act]"); if (!el) return;
-  if (el.closest("#calpop") && !["ev-del", "pop-close", "q-more", "q-color", "ev-color", "ev-move"].includes(el.dataset.act)) closePop();   // действие из карточки события
+  if (el.closest("#calpop") && !["ev-del", "pop-close", "q-more", "q-color", "ev-color"].includes(el.dataset.act)) closePop();   // действие из карточки события
   if (el.dataset.act === "toggle-lost") return;
   const fn = ACT[el.dataset.act]; if (!fn) return;
   if (el.tagName === "BUTTON") e.preventDefault();
@@ -4490,6 +4528,8 @@ document.addEventListener("input", e => {
   if (e.target.id === "f-q") { S.f.q = e.target.value; clearTimeout(qT); qT = setTimeout(render, 180); }
   if (e.target.id === "gq") renderSearch();
   if (e.target.id === "m-pq") pplSuggest();
+  // В карточке встречи конец сдвигается вместе с началом: длительность остаётся прежней
+  if (e.target.id === "pm-from") { const to = $("#pm-to"), a = toMin(e.target.value), a0 = toMin(e.target.dataset.was || e.target.defaultValue), b0 = toMin(to?.value); if (to && a !== null && a0 !== null && b0 !== null) to.value = fromMin(Math.min(a + Math.max(b0 - a0, SNAP_MIN), 1439)); if (a !== null) e.target.dataset.was = e.target.value; }
   if (MODAL?.onInput && e.target.closest("#mform")) MODAL.onInput();
 });
 // Подсказка над столбцом графика
@@ -4524,10 +4564,10 @@ document.addEventListener("keydown", e => {
       return;
     }
   }
-  if (e.key === "Enter" && e.target.closest?.("#pop-move")) { e.preventDefault(); $("#pop-move [data-act=ev-move]")?.click(); return; }
+  if (e.key === "Enter" && e.target.closest?.("#pop-move")) { e.preventDefault(); closePop(true); return; }   // Enter — закрыть карточку и сохранить перенос
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
   if (e.key === "Escape" && CALDRAG) { calDrop(e, true); return; }
-  if (e.key === "Escape" && $("#calpop") && !$("#calpop").hidden) { closePop(); return; }
+  if (e.key === "Escape" && $("#calpop") && !$("#calpop").hidden) { closePop(true); return; }
   if (e.key === "Enter" && e.target.classList?.contains("wev")) { e.preventDefault(); return evPop(e.target.dataset.ev, e.target); }
   if (e.key === "Escape") {
     if (S.navMore) { S.navMore = false; render(); $("#nav .more")?.focus(); return; }

@@ -58,10 +58,12 @@ def tab(page, v):
     """Вкладка карточки студента: main, money, study, job, hist."""
     page.click(f".drawer [data-act=card-tab][data-v={v}]"); page.wait_for_selector(f".drawer #d-tab-{v}")
 def ask(page, choice="yes", wait=1500):
-    """Отвечает на «Сообщить участникам?», если вопрос появился. Возвращает, был ли вопрос."""
+    """Отвечает на «Сохранить изменения?», если вопрос появился: yes — сохранить и сообщить участникам,
+    no — сохранить без сообщения, cancel — отменить. Возвращает, был ли вопрос."""
     try: page.wait_for_selector("#asknote", timeout=wait)
     except Exception: return False
-    page.click(f"#asknote [data-a={choice}]"); page.wait_for_timeout(300); return True
+    if choice == "no" and page.locator("#ask-notify").count(): page.uncheck("#ask-notify")
+    page.click("#asknote [data-a=%s]" % ("cancel" if choice == "cancel" else "yes")); page.wait_for_timeout(300); return True
 def shot(page, name, **kw): page.screenshot(path=str(SHOTS / name), **kw)
 def tg(update):
     req = urllib.request.Request(URL + "api/telegram/", data=json.dumps(update).encode(), headers={"Content-Type": "application/json", "X-Telegram-Bot-Api-Secret-Token": TG_SECRET})
@@ -334,7 +336,7 @@ try:
       check("participant picked from search", pg.evaluate("MODAL.people.students") == [msid] and pg.locator("#m-ppl .ppl-students").count() == 1)
       pg.click("#m-submit")
       pg.wait_for_selector("#asknote", timeout=3000)
-      check("saving asks whether to tell the participants", "1 участнику" in pg.inner_text("#asknote"), pg.inner_text("#asknote"))
+      check("saving asks to confirm and offers to tell the participants", "Добавить встречу?" in pg.inner_text("#asknote") and "(1)" in pg.inner_text("#asknote") and pg.is_checked("#ask-notify"), pg.inner_text("#asknote"))
       pg.click("#asknote [data-a=cancel]"); pg.wait_for_timeout(200)
       check("cancel in the question keeps the form and saves nothing", pg.locator("#mform").count() == 1 and not any(v["title"] == "Тестовая встреча" for v in meets().values()))
       pg.click("#m-submit"); ask(pg, "yes"); pg.wait_for_timeout(300)
@@ -390,21 +392,30 @@ try:
       check("calendar shows only meetings", pg.locator(".wev.c-green", has_text="Встреча из сетки").count() == 1
             and pg.evaluate("[...document.querySelectorAll('#cal-week [data-ev]')].every(x => x.dataset.ev.startsWith('m:'))") and pg.locator("#cal-kinds").count() == 0)
       ev = pg.locator(".wev", has_text="Встреча из сетки"); bb = ev.bounding_box()
-      pg.mouse.move(bb["x"] + 10, bb["y"] + 8); pg.mouse.down(); pg.mouse.move(bb["x"] + 10, bb["y"] + 8 + 48 * 2, steps=8); pg.mouse.up(); pg.wait_for_timeout(500)
+      pg.mouse.move(bb["x"] + 10, bb["y"] + 8); pg.mouse.down(); pg.mouse.move(bb["x"] + 10, bb["y"] + 8 + 48 * 2, steps=8); pg.mouse.up()
+      pg.wait_for_selector("#asknote")
+      check("dragging asks to confirm the change with before and after", "Сохранить изменения?" in pg.inner_text("#asknote") and "09:00–10:00" in pg.inner_text("#asknote") and "11:00–12:00" in pg.inner_text("#asknote")
+            and pg.locator("#ask-notify").count() == 0, pg.inner_text("#asknote"))
+      ask(pg, "cancel"); pg.wait_for_timeout(200)
+      check("cancel leaves the meeting where it was", next(v for v in meets().values() if v["title"] == "Встреча из сетки")["time"] == "09:00")
+      ev = pg.locator(".wev", has_text="Встреча из сетки"); bb = ev.bounding_box()
+      pg.mouse.move(bb["x"] + 10, bb["y"] + 8); pg.mouse.down(); pg.mouse.move(bb["x"] + 10, bb["y"] + 8 + 48 * 2, steps=8); pg.mouse.up(); ask(pg); pg.wait_for_timeout(300)
       qm = next(v for v in meets().values() if v["title"] == "Встреча из сетки")
       check("a meeting is moved by dragging", qm["time"] == "11:00" and qm["date"] == today, qm)
       pg.click("#toast button"); pg.wait_for_timeout(400); check("moving can be undone", next(v for v in meets().values() if v["title"] == "Встреча из сетки")["time"] == "09:00")
       ev = pg.locator(".wev", has_text="Встреча из сетки"); bb = ev.bounding_box()
-      pg.mouse.move(bb["x"] + 10, bb["y"] + bb["height"] - 2); pg.mouse.down(); pg.mouse.move(bb["x"] + 10, bb["y"] + bb["height"] - 2 + 24, steps=6); pg.mouse.up(); pg.wait_for_timeout(500)
+      pg.mouse.move(bb["x"] + 10, bb["y"] + bb["height"] - 2); pg.mouse.down(); pg.mouse.move(bb["x"] + 10, bb["y"] + bb["height"] - 2 + 24, steps=6); pg.mouse.up(); ask(pg); pg.wait_for_timeout(300)
       check("bottom edge changes the duration", next(v for v in meets().values() if v["title"] == "Встреча из сетки")["duration"] == 90)
       pg.locator(".wev", has_text="Встреча из сетки").click(); pg.wait_for_selector("#calpop [data-act=meet-edit]")
       check("click on a meeting shows its card", "Встреча из сетки" in pg.inner_text("#calpop") and "09:00–10:30" in pg.inner_text("#calpop"), pg.inner_text("#calpop"))
       pg.click("#ev-color-colors [data-c=red]"); pg.wait_for_timeout(400)
       check("colour changed from the meeting card", next(v for v in meets().values() if v["title"] == "Встреча из сетки").get("color") == "red"
             and pg.locator(".wev.c-red", has_text="Встреча из сетки").count() == 1 and pg.locator("#calpop [data-act=ev-del]").count() == 1)
-      pg.fill("#pm-from", "14:00"); pg.fill("#pm-to", "15:30"); pg.click("#pop-move [data-act=ev-move]"); pg.wait_for_timeout(500)
+      check("no apply button in the card", pg.locator("#pop-move button").count() == 0)
+      pg.fill("#pm-from", "14:00"); pg.fill("#pm-to", "15:30"); pg.click("#calpop [data-act=pop-close]")
+      pg.wait_for_selector("#asknote"); ask(pg); pg.wait_for_timeout(300)
       qm = next(v for v in meets().values() if v["title"] == "Встреча из сетки")
-      check("meeting moved from its card without a question when nobody else is invited", (qm["time"], qm["duration"]) == ("14:00", 90) and pg.locator("#asknote").count() == 0, qm)
+      check("time changed in the card is saved on close after confirmation", (qm["time"], qm["duration"]) == ("14:00", 90), qm)
       pg.locator(".wev", has_text="Встреча из сетки").click(); pg.wait_for_selector("#calpop [data-act=ev-del]")
       pg.click("#calpop [data-act=ev-del]"); pg.click("#calpop [data-act=ev-del]"); pg.wait_for_timeout(400)
       check("meeting deleted from its card", not any(v["title"] == "Встреча из сетки" for v in meets().values()))
