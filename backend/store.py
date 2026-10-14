@@ -426,7 +426,7 @@ def write(access, collection, doc_id, data, partial, notify=False):
             _tell_mentor(new["mentorId"], str(new.get("name") or "")[:100], access.user, doc_id)
     if collection == "meetings" and notify:
         from . import meetings
-        meetings.tell(doc_id, old, new, access.user, series=notify == "series")  # автор попросил сообщить участникам
+        meetings.tell(doc_id, old, new, access.user)  # автор попросил сообщить участникам
     _refresh_reports(collection, rev, old, new)
     visible = access.visible(doc)
     return rev, present(doc, visible, _team_links()) if visible is not None else None
@@ -454,7 +454,7 @@ def delete(access, collection, doc_id, notify=False):
         files.forget_student(doc_id)
     if collection == "meetings" and notify:
         from . import meetings
-        meetings.tell(doc_id, old, None, access.user, series=notify == "series")
+        meetings.tell(doc_id, old, None, access.user)
     _refresh_reports(collection, rev, old, None)
     return rev
 

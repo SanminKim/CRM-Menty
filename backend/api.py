@@ -156,8 +156,6 @@ def sync(request, access):
 def doc(request, access, collection, doc_id):
     # ?notify=1 — автор встречи просит сообщить участникам в Telegram об изменении
     notify = collection == "meetings" and request.GET.get("notify") == "1"
-    if notify and request.GET.get("series") == "1":
-        notify = "series"   # изменение касается этой встречи и всех следующих в серии: одно сообщение обо всех
     if request.method == "DELETE":
         return JsonResponse({"rev": store.delete(access, collection, doc_id, notify=notify)})
     rev, data = store.write(access, collection, doc_id, body(request), partial=request.method == "PATCH", notify=notify)

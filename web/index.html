@@ -3867,12 +3867,12 @@ function repeatProblem(date, r) {
   if (r.until > addDays(date, 366)) return "Повторять можно не больше чем на год вперёд";
   return seriesDates(date, r).length > SERIES_MAX ? `Слишком много встреч (больше ${SERIES_MAX}): сократите срок` : "";
 }
-// Создаёт серию по порядку; участникам — одно сообщение обо всей серии (с первой встречей)
+// Создаёт серию по порядку. Участникам — одно сообщение, о ближайшей предстоящей встрече; о следующих напомнит бот в их день
 async function createSeries(doc, rule, o) {
-  const dates = seriesDates(doc.date, rule), sid = newId("meetings");
+  const dates = seriesDates(doc.date, rule), sid = newId("meetings"), first = dates.findIndex(d => d >= today());
   return save(async () => {
     for (let i = 0; i < dates.length; i++) {
-      await setDoc("meetings", newId("meetings"), seriesDoc(doc, dates[i], sid, rule), i === 0 && o?.notify ? { notify: true, series: true } : undefined);
+      await setDoc("meetings", newId("meetings"), seriesDoc(doc, dates[i], sid, rule), i === first && o?.notify ? { notify: true } : undefined);
       if (dates.length > 4 && i % 4 === 3) toast(`Создаём встречи: ${i + 1} из ${dates.length}`);
     }
   }, `Создано встреч: ${dates.length} — ${repeatText(rule)}`);
@@ -3893,7 +3893,7 @@ async function applyFollowing(m, patch, newRule, o) {
   const mPatch = { ...patch, ...(ruleChanged ? { repeat: newRule, seriesId: newRule ? sid : null } : {}) };
   let added = 0, removed = 0, noAdd = false;
   const ok = await save(async () => {
-    if (Object.keys(mPatch).length) await updDoc("meetings", m.id, mPatch, o?.notify ? { notify: true, series: true } : undefined);
+    if (Object.keys(mPatch).length) await updDoc("meetings", m.id, mPatch, o?.notify ? { notify: true } : undefined);   // сообщение — только об этой, ближайшей
     const kept = [base.date];
     for (const x of rest) {
       const d = shift ? addDays(x.date, shift) : x.date;
@@ -3922,10 +3922,11 @@ async function applyFollowing(m, patch, newRule, o) {
 }
 async function deleteFollowing(m, o) {
   const all = seriesAfter(m), rest = all.filter(canMove);
-  // Сначала удаляются следующие, последней — эта: сообщение «отменены все следующие» уходит, только когда всё удалено
+  // Сообщение «встреча отменена» — только о ближайшей предстоящей из удаляемых; она удаляется последней, когда остальные уже удалены
+  const all2 = [m, ...rest], near = all2.find(x => x.date >= today()) || m;
   return save(async () => {
-    for (const x of rest) await delDoc("meetings", x.id);
-    await delDoc("meetings", m.id, o?.notify ? { notify: true, series: true } : undefined);
+    for (const x of all2) if (x !== near) await delDoc("meetings", x.id);
+    await delDoc("meetings", near.id, o?.notify ? { notify: true } : undefined);
   }, `Удалено встреч: ${rest.length + 1}${all.length > rest.length ? `; чужие не тронуты: ${all.length - rest.length}` : ""}`);
 }
 // ----- «Сохранить изменения?» — подтверждение изменения встречи, как в почтовых календарях -----
@@ -3960,7 +3961,8 @@ function confirmMeet(old, next, always = false, series = null) {
   return new Promise(done => {
     const box = document.createElement("div"); box.className = "overlay ask-over"; box.id = "asknote";
     box.innerHTML = `<div class="modal ask" tabindex="-1" role="alertdialog" aria-modal="true" aria-labelledby="ask-h"><h2 id="ask-h">${head}</h2>${meetDiff(old, next)}
-      ${series?.count ? `<p class="ask-rule">↻ Повторяется ${esc(repeatText(series.rule))} · ${series.count} ${plural(series.count, "встреча", "встречи", "встреч")}</p>` : ""}
+      ${series?.count ? `<p class="ask-rule">↻ Повторяется ${esc(repeatText(series.rule))} · ${series.count} ${plural(series.count, "встреча", "встречи", "встреч")}</p>
+        <p class="ask-rule">${S.server && !meetRemind().on ? "⚠ Напоминания студентам в день встречи выключены: включите их в Настройках → «Встречи и Telegram»" : "Участникам придёт сообщение о ближайшей встрече, а о каждой следующей бот напомнит в её день"}</p>` : ""}
       ${after ? `<fieldset class="ask-scope"><legend>Это встреча из серии</legend><label><input type="radio" name="ask-scope" value="one" checked> Только эта</label><label><input type="radio" name="ask-scope" value="following"> Эта и все следующие (ещё ${after})</label></fieldset>` : ""}
       ${n ? `<label class="field checkbox ask-tg"><input type="checkbox" id="ask-notify" checked><span>Сообщить участникам в Telegram (${n})<small>Сообщение получат те, кто подключён к боту</small></span></label>` : ""}
       <footer><span class="sp"></span><button type="button" class="btn ghost" data-a="cancel">Отмена</button><button type="button" class="btn ${del ? "danger" : "primary"}" data-a="yes">${ok}</button></footer></div>`;

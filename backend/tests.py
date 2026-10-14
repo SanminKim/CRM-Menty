@@ -2347,19 +2347,11 @@ class MeetingSeriesTests(BaseCase):
         self.login("blogger")
         self.assertEqual(self.send("put", "meetings", "s3", self.series()).status_code, 403)
 
-    def test_one_message_about_the_whole_series(self):
+    def test_series_message_is_about_the_nearest_meeting_only(self):
         self.login("mentor")
         with self.captureOnCommitCallbacks(execute=True):
-            self.client.put("/api/db/meetings/s1/?notify=1&series=1", data=json.dumps(self.series()), content_type="application/json")
+            self.client.put("/api/db/meetings/s1/?notify=1", data=json.dumps(self.series()), content_type="application/json")
         self.assertEqual(len(self.to(501)), 1)
-        self.assertIn("каждую неделю", self.to(501)[0])
-        self.assertIn("по 4 июня", self.to(501)[0])
-        self.sent.clear()
-        with self.captureOnCommitCallbacks(execute=True):
-            self.client.patch("/api/db/meetings/s1/?notify=1&series=1", data=json.dumps({"time": "12:00"}), content_type="application/json")
-        self.assertIn("и все следующие", self.to(501)[0])
-        self.sent.clear()
-        with self.captureOnCommitCallbacks(execute=True):
-            self.client.delete("/api/db/meetings/s1/?notify=1&series=1")
-        self.assertIn("все следующие", self.to(501)[0])
-        self.assertIn("отменены", self.to(501)[0].lower())
+        self.assertIn("вт, 14 мая, 10:00", self.to(501)[0])
+        self.assertNotIn("Повторяется", self.to(501)[0])
+        self.assertNotIn("следующ", self.to(501)[0])
