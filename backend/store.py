@@ -143,6 +143,8 @@ class Access:
             from . import meetings
             if new is not None and (old or {}).get("rsvp") != new.get("rsvp"):
                 raise Denied  # ответы студентов «буду / не буду» записывает только бот
+            if new is not None and not set(meetings.guests(new).cohorts) <= set(meetings.guests(old).cohorts):
+                raise Denied  # весь поток зовёт только администратор: в потоке бывают чужие студенты
             for data in (old, new):
                 if data is None:
                     continue
@@ -391,8 +393,9 @@ def write(access, collection, doc_id, data, partial, notify=False):
     _validate(collection, doc_id, new)
     if collection == "meetings":
         from . import meetings  # позднее подключение: meetings пользуется этим модулем
-        if meetings.guests_problem(new):
-            raise Invalid(meetings.guests_problem(new))
+        problem = meetings.guests_problem(new) or meetings.series_problem(new)
+        if problem:
+            raise Invalid(problem)
     access.check_write(collection, old, new)
     if collection == "directions" and new is not None and reports.terms_problem(new):
         raise Invalid(reports.terms_problem(new))
@@ -423,7 +426,7 @@ def write(access, collection, doc_id, data, partial, notify=False):
             _tell_mentor(new["mentorId"], str(new.get("name") or "")[:100], access.user, doc_id)
     if collection == "meetings" and notify:
         from . import meetings
-        meetings.tell(doc_id, old, new, access.user)  # автор попросил сообщить участникам
+        meetings.tell(doc_id, old, new, access.user, series=notify == "series")  # автор попросил сообщить участникам
     _refresh_reports(collection, rev, old, new)
     visible = access.visible(doc)
     return rev, present(doc, visible, _team_links()) if visible is not None else None
@@ -451,7 +454,7 @@ def delete(access, collection, doc_id, notify=False):
         files.forget_student(doc_id)
     if collection == "meetings" and notify:
         from . import meetings
-        meetings.tell(doc_id, old, None, access.user)
+        meetings.tell(doc_id, old, None, access.user, series=notify == "series")
     _refresh_reports(collection, rev, old, None)
     return rev
 

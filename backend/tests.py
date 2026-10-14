@@ -2190,10 +2190,17 @@ class MeetingGuestTests(BaseCase):
         self.assertEqual(self.sync()["docs"].get("meetings", []), [])
         self.assertEqual(self.send("put", "meetings", "x3", self.meeting()).status_code, 403)
 
-    def test_mentor_invites_own_students_any_mentor_and_cohort_but_not_foreign_students(self):
+    def test_mentor_invites_own_students_and_mentors_but_not_foreign_students_or_cohorts(self):
         self.login("mentor")
-        ok = self.meeting(studentIds=["g1", "g3"], mentorIds=["t2"], cohortIds=["c1"])
+        ok = self.meeting(studentIds=["g1", "g3"], mentorIds=["t2"])
         self.assertEqual(self.send("put", "meetings", "y1", ok).status_code, 200)
+        # весь поток зовёт только администратор: в потоке бывают чужие студенты
+        self.assertEqual(self.send("put", "meetings", "y5", self.meeting(cohortIds=["c1"])).status_code, 403)
+        self.assertEqual(self.send("patch", "meetings", "y1", {"cohortIds": ["c1"]}).status_code, 403)
+        self.assertEqual(self.send("patch", "meetings", "y1", {"cohortId": "c1"}).status_code, 403)   # и старым полем тоже
+        store.system_write("meetings", "y6", self.meeting(cohortIds=["c1"]))   # занятие потока назначил администратор
+        self.assertEqual(self.send("patch", "meetings", "y6", {"time": "18:00"}).status_code, 200)   # ведущий его переносит
+        self.assertEqual(self.send("patch", "meetings", "y6", {"cohortIds": []}).status_code, 200)    # и может убрать поток
         self.assertEqual(self.send("put", "meetings", "y2", self.meeting(studentIds=["g1", "g2"])).status_code, 403)
         self.assertEqual(self.send("patch", "meetings", "y1", {"studentIds": ["g2"]}).status_code, 403)
         self.assertEqual(self.send("put", "meetings", "y3", self.meeting(mentorId="t2", mentorIds=["t1"])).status_code, 403)
@@ -2219,21 +2226,24 @@ class MeetingGuestTests(BaseCase):
         self.assertIn("z1", later["removed"].get("meetings", []))
 
     def test_new_meeting_invites_everyone_but_the_author(self):
-        self.login("mentor")
+        self.login("admin")
         res = self.act("put", "n1", self.meeting(title="Разбор +7 900 123-45-67", studentIds=["g3"], mentorIds=["t2"], cohortIds=["c1"]))
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(self.to(801), [])                                  # автору не пишем
+        self.assertEqual(len(self.to(801)), 1)                              # ведущему — да
+        self.login("mentor")
+        self.act("put", "n2", self.meeting(studentIds=["g1"]))
+        self.assertEqual(len(self.to(801)), 1)                              # автору не пишем
         self.assertEqual(len(self.to(802)), 1)
         self.assertIn("пригласили", self.to(802)[0])
         self.assertIn("#/calendar/day-2030-05-14", self.to(802)[0])
-        for chat in (501, 502, 503):
+        for chat in (502, 503):
             self.assertEqual(len(self.to(chat)), 1, chat)
             self.assertIn("10:00", self.to(chat)[0])
             self.assertNotIn("123-45", self.to(chat)[0])                    # телефон из названия не уходит
-        student_msg = next(kw for c, text, kw in self.sent if c == 501)
+        student_msg = next(kw for c, text, kw in self.sent if c == 502)
         self.assertIn("reply_markup", student_msg)                            # кнопки «Буду / Не буду»
-        self.assertIn("telemost", self.to(501)[0])
-        self.assertEqual(self.to(800), [])                                  # администратор не участник
+        self.assertIn("telemost", self.to(502)[0])
+        self.assertEqual(self.to(800), [])                                  # администратор-автор не участник
 
     def test_nothing_is_sent_without_the_flag_or_for_past_meetings(self):
         self.login("mentor")
@@ -2244,13 +2254,14 @@ class MeetingGuestTests(BaseCase):
 
     def test_move_tells_who_stays_invites_added_and_releases_removed(self):
         store.system_write("meetings", "v1", self.meeting(studentIds=["g1", "g3"], mentorIds=["t2"]))
-        self.login("mentor")
+        self.login("admin")
         self.act("patch", "v1", {"date": "2030-05-15", "time": "12:30", "studentIds": ["g1"], "mentorIds": [], "cohortIds": ["c1"]})
         self.assertIn("перенесена", self.to(501)[0])
         self.assertIn("10:00", self.to(501)[0])
         self.assertIn("12:30", self.to(501)[0])
         self.assertIn("больше не участвуете", self.to(503)[0])
         self.assertIn("больше не участвуете", self.to(802)[0])
+        self.assertIn("перенесена", self.to(801)[0])                       # ведущему тоже
         self.assertIn("пригласили", self.to(502)[0])                       # пришёл вместе с потоком
         self.sent.clear()
         self.act("patch", "v1", {"duration": 60})                           # ничего не изменилось — ничего не пишем
@@ -2317,3 +2328,38 @@ class MeetingGuestTests(BaseCase):
         scheduler._reminders(timezone.make_aware(datetime.datetime(2026, 10, 6, 14, 50)))
         self.assertEqual(len(self.to(801)), 1)
         self.assertEqual(len(self.to(802)), 1)
+
+
+class MeetingSeriesTests(BaseCase):
+    """Повторяющиеся встречи: каждая — отдельная запись со знаком серии; о серии — одно сообщение."""
+    setUp, meeting, to = MeetingGuestTests.setUp, MeetingGuestTests.meeting, MeetingGuestTests.to
+
+    def series(self, **extra):
+        return self.meeting(seriesId="ser1", repeat={"every": "week", "until": "2030-06-04"}, studentIds=["g1"], **extra)
+
+    def test_series_rule_is_checked(self):
+        self.login("mentor")
+        self.assertEqual(self.send("put", "meetings", "s1", self.series()).status_code, 200)
+        for bad in ({"repeat": {"every": "year", "until": "2030-06-04"}}, {"repeat": {"every": "week", "until": "скоро"}},
+                    {"repeat": "week"}, {"seriesId": "a b"}, {"seriesId": 5}, {"repeat": {"every": [], "until": "2030-06-04"}},
+                    {"repeat": {"every": "week", "until": "2030-06-04<b>"}}, {"repeat": {"every": "week", "until": "2030-02-31"}}):
+            self.assertEqual(self.send("put", "meetings", "s2", {**self.series(), **bad}).status_code, 400, bad)
+        self.login("blogger")
+        self.assertEqual(self.send("put", "meetings", "s3", self.series()).status_code, 403)
+
+    def test_one_message_about_the_whole_series(self):
+        self.login("mentor")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.put("/api/db/meetings/s1/?notify=1&series=1", data=json.dumps(self.series()), content_type="application/json")
+        self.assertEqual(len(self.to(501)), 1)
+        self.assertIn("каждую неделю", self.to(501)[0])
+        self.assertIn("по 4 июня", self.to(501)[0])
+        self.sent.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.patch("/api/db/meetings/s1/?notify=1&series=1", data=json.dumps({"time": "12:00"}), content_type="application/json")
+        self.assertIn("и все следующие", self.to(501)[0])
+        self.sent.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.delete("/api/db/meetings/s1/?notify=1&series=1")
+        self.assertIn("все следующие", self.to(501)[0])
+        self.assertIn("отменены", self.to(501)[0].lower())

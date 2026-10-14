@@ -57,12 +57,13 @@ def setgo(page, g):
 def tab(page, v):
     """Вкладка карточки студента: main, money, study, job, hist."""
     page.click(f".drawer [data-act=card-tab][data-v={v}]"); page.wait_for_selector(f".drawer #d-tab-{v}")
-def ask(page, choice="yes", wait=1500):
+def ask(page, choice="yes", wait=1500, scope=None):
     """Отвечает на «Сохранить изменения?», если вопрос появился: yes — сохранить и сообщить участникам,
     no — сохранить без сообщения, cancel — отменить. Возвращает, был ли вопрос."""
     try: page.wait_for_selector("#asknote", timeout=wait)
     except Exception: return False
     if choice == "no" and page.locator("#ask-notify").count(): page.uncheck("#ask-notify")
+    if scope: page.check(f"[name=ask-scope][value={scope}]")
     page.click("#asknote [data-a=%s]" % ("cancel" if choice == "cancel" else "yes")); page.wait_for_timeout(300); return True
 def shot(page, name, **kw): page.screenshot(path=str(SHOTS / name), **kw)
 def tg(update):
@@ -443,6 +444,30 @@ try:
       asked = ask(pg, "no"); pg.wait_for_timeout(400)
       check("meeting dragged to another day in the month view", asked and meets()[gm_key]["date"] == tomorrow and meets()[gm_key]["time"] == "18:00" and pg.locator(".drawer").count() == 0, meets()[gm_key])
       pg.click("[data-act=cal-mode][data-v=week]"); pg.wait_for_selector("#cal-week")
+      # повторяющиеся встречи: серия, «эта и все следующие», удаление хвоста, продление
+      ser = lambda: sorted((v for v in meets().values() if v.get("title") == "Серия занятий"), key=lambda v: v["date"])
+      pg.click(".cal-side [data-act=meet-new]"); pg.wait_for_selector("#mform"); pg.fill("#m-title", "Серия занятий"); pg.fill("#m-date", today); pg.fill("#m-time", "18:00")
+      pg.select_option("#m-repeat", "week"); pg.fill("#m-until", pg.evaluate(f"addDays({json.dumps(today)}, 21)")); pg.click("#m-submit")
+      pg.wait_for_selector("#asknote"); check("series creation shows how many meetings", "4 встречи" in pg.inner_text("#asknote") and "каждую неделю" in pg.inner_text("#asknote"), pg.inner_text("#asknote"))
+      ask(pg); pg.wait_for_timeout(1200)
+      sr = ser(); check("series is four meetings with one series mark", len(sr) == 4 and len({v["seriesId"] for v in sr}) == 1 and [v["date"] for v in sr] == [pg.evaluate(f"addDays({json.dumps(today)}, {7 * i})") for i in range(4)], sr)
+      check("series meetings show the repeat mark", pg.locator(".wev", has_text="Серия занятий").locator(".rep").count() >= 1)
+      second = next(k.split("/")[1] for k, v in meets().items() if v.get("title") == "Серия занятий" and v["date"] == sr[1]["date"])
+      pg.evaluate(f"meetingForm(meetById({json.dumps(second)}))"); pg.wait_for_selector("#mform"); pg.fill("#m-time", "19:00"); pg.click("#m-submit")
+      pg.wait_for_selector("#asknote"); check("series meeting asks: only this or all following", pg.locator("[name=ask-scope]").count() == 2 and "ещё 2" in pg.inner_text("#asknote"))
+      ask(pg, scope="following"); pg.wait_for_timeout(1200)
+      check("this and all following changed, earlier stay", [v["time"] for v in ser()] == ["18:00", "19:00", "19:00", "19:00"], [v["time"] for v in ser()])
+      third = next(k.split("/")[1] for k, v in meets().items() if v.get("title") == "Серия занятий" and v["date"] == sr[2]["date"])
+      pg.evaluate(f"meetingForm(meetById({json.dumps(third)}))"); pg.wait_for_selector("#mform"); pg.click("[data-act=m-delete]"); pg.click("[data-act=m-delete]")
+      ask(pg, scope="following"); pg.wait_for_timeout(1200)
+      check("delete this and all following", len(ser()) == 2, [v["date"] for v in ser()])
+      pg.evaluate(f"meetingForm(meetById({json.dumps(second)}))"); pg.wait_for_selector("#mform"); pg.fill("#m-until", pg.evaluate(f"addDays({json.dumps(today)}, 28)")); pg.click("#m-submit")
+      ask(pg); pg.wait_for_timeout(1500)
+      check("series extended from the last meeting", len(ser()) == 5 and ser()[-1]["date"] == pg.evaluate(f"addDays({json.dumps(today)}, 28)") and ser()[-1]["time"] == "19:00", [(v["date"], v["time"]) for v in ser()])
+      first = next(k.split("/")[1] for k, v in meets().items() if v.get("title") == "Серия занятий" and v["date"] == today)
+      pg.evaluate(f"meetingForm(meetById({json.dumps(first)}))"); pg.wait_for_selector("#mform"); pg.click("[data-act=m-delete]"); pg.click("[data-act=m-delete]")
+      ask(pg, scope="following"); pg.wait_for_timeout(1500)
+      check("whole series deleted from its first meeting", len(ser()) == 0)
       pg.set_viewport_size({"width": 1440, "height": 900}); shot(pg, "s35_calendar_week.png")
       pg.click(".nav >> text=Сегодня"); pg.wait_for_timeout(200)
       pg.click("#today-kpis [data-v=meets]"); pg.wait_for_timeout(150)
@@ -492,7 +517,7 @@ try:
       check("backup keeps trashed students", sum(1 for x in bk2["data"]["students"] if x.get("deletedAt")) == 2)
       pg.locator(f"[data-act=trash-restore][data-id='{lid}']").click(); pg.wait_for_timeout(300)
       check("restore from settings", not store()["students/" + lid].get("deletedAt") and pg.evaluate("S.trash.length") == 1)
-      btn = pg.locator(f"[data-act=trash-purge][data-id='{msid}']"); btn.click(); pg.wait_for_timeout(100); pg.locator(f"[data-act=trash-purge][data-id='{msid}']").click(); pg.wait_for_timeout(400)
+      btn = pg.locator(f"[data-act=trash-purge][data-id='{msid}']"); btn.click(); pg.wait_for_timeout(100); pg.locator(f"[data-act=trash-purge][data-id='{msid}']").click(); [pg.wait_for_timeout(200) for _ in range(25) if ("students/" + msid) in store()]; pg.wait_for_timeout(300)   # удаление — несколько записей подряд
       check("purge removes student and personal meetings", ("students/" + msid) not in store() and not any(v.get("studentId") == msid or msid in (v.get("studentIds") or []) for v in meets().values()) and pg.locator(".panel", has_text="Корзина").count() == 0)
       # --- сортировка таблицы ---
       pg.click(".nav >> text=Студенты"); pg.wait_for_timeout(200)

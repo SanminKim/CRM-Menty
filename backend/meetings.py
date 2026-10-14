@@ -68,6 +68,30 @@ def guests(meeting):
                   _ids(m.get("cohortId"), m.get("cohortIds")))
 
 
+REPEATS = {"day": "каждый день", "week": "каждую неделю", "2weeks": "каждые две недели"}
+
+
+def series_problem(meeting):
+    """Причина отказа для серии повторяющихся встреч: знак серии и правило повтора {every, until}."""
+    sid, rule = meeting.get("seriesId"), meeting.get("repeat")
+    if sid is not None and not (isinstance(sid, str) and store.ID_RE.fullmatch(sid)):
+        return "Серия встреч записана неверно"
+    if rule is not None and not (isinstance(rule, dict) and set(rule) <= {"every", "until"} and isinstance(rule.get("every"), str)
+                                 and rule["every"] in REPEATS and isinstance(rule.get("until"), str) and len(rule["until"]) == 10
+                                 and _date({"date": rule["until"]}) is not None):
+        return "Правило повтора записано неверно"
+    return None
+
+
+def repeat_text(meeting):
+    """«каждую неделю по 4 июня» или пустая строка."""
+    rule = meeting.get("repeat") if isinstance(meeting, dict) else None
+    if not isinstance(rule, dict) or not isinstance(rule.get("every"), str) or rule["every"] not in REPEATS:
+        return ""
+    until = _date({"date": rule.get("until")})
+    return REPEATS[rule["every"]] + (f" по {until.day} {MONTHS[until.month - 1]}" if until else "")
+
+
 def guests_problem(meeting):
     """Причина отказа для списков участников, которые прислала страница, или None."""
     for key in ("mentorIds", "studentIds", "cohortIds"):
@@ -271,8 +295,9 @@ def _changes(old, new, cohorts):
     return lines
 
 
-def notices(meeting_id, old, new, author=None, today=None):
-    """Сообщения участникам об изменении встречи: [(чат, текст, доп. поля)]. Автору изменения не пишем."""
+def notices(meeting_id, old, new, author=None, today=None, series=False):
+    """Сообщения участникам об изменении встречи: [(чат, текст, доп. поля)]. Автору изменения не пишем.
+    series — изменение касается этой встречи и всех следующих в серии: текст говорит обо всех сразу."""
     today = today or timezone.localdate().isoformat()
     if not _live(old, today) and not _live(new, today):
         return []   # прошедшая или отменённая встреча: сообщать не о чем, базу не читаем
@@ -307,7 +332,8 @@ def notices(meeting_id, old, new, author=None, today=None):
         extra = {}
         if person in after and person not in before:
             name = first_name((students.get(pid) or {}).get("name")) if kind == "s" else ""
-            text = f"📅 {name + ', в' if name else 'В'}ас пригласили на встречу: {head}\n{when(new)}" + (f"\nСсылка: {link}" if link else "")
+            rule = repeat_text(new) if series else ""
+            text = f"📅 {name + ', в' if name else 'В'}ас пригласили на встречу: {head}\n{when(new)}" + (f"\nПовторяется {rule}" if rule else "") + (f"\nСсылка: {link}" if link else "")
             if kind == "s":
                 markup = buttons(meeting_id, answer_of(new, pid))
                 extra = {"reply_markup": markup} if markup else {}
@@ -317,14 +343,18 @@ def notices(meeting_id, old, new, author=None, today=None):
             gone = new is None or (new.get("status") or "planned") != "planned" or not _live(new, today)
             if gone and new is not None and (new.get("status") or "planned") != "cancelled":
                 continue  # отметили прошедшей или перенесли в прошлое: это не отмена, сообщать не о чем
-            text = (f"❌ Встреча отменена: {head}\n{when(old)}" if gone
-                    else f"Вы больше не участвуете во встрече: {head}\n{when(old)}")
+            if series:
+                text = (f"❌ Отменены эта и все следующие встречи: {head}\nНачиная с {when(old)}" if gone
+                        else f"Вы больше не участвуете во встречах: {head}\nНачиная с {when(old)}")
+            else:
+                text = (f"❌ Встреча отменена: {head}\n{when(old)}" if gone
+                        else f"Вы больше не участвуете во встрече: {head}\n{when(old)}")
         else:
             lines = _changes(old, new, cohorts)
             if not lines:
                 continue
             verb = "перенесена" if when(old) != when(new) else "изменена"
-            text = f"🔁 Встреча {verb}: {safe_title(old)}\n" + "\n".join(lines)
+            text = f"🔁 Встреча {verb}{' (и все следующие)' if series else ''}: {safe_title(old)}\n" + "\n".join(lines)
         for chat_id in chats(person):
             out.append((chat_id, text + crm, extra))
     return out
@@ -356,13 +386,13 @@ def dispatch(messages):
         threading.Thread(target=_send_all, args=(messages,), daemon=True).start()
 
 
-def tell(meeting_id, old, new, author):
+def tell(meeting_id, old, new, author, series=False):
     """Готовит сообщения сейчас (внутри записи), отправляет после её фиксации."""
     from . import telegram
     if not telegram.enabled():
         return
     try:
-        messages = notices(meeting_id, old, new, author)
+        messages = notices(meeting_id, old, new, author, series=series)
     except Exception:  # сбой при подготовке сообщений не должен отменять саму запись
         log.exception("Сообщения о встрече не подготовлены")
         return

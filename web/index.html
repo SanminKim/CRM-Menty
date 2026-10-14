@@ -674,6 +674,12 @@ td.mxc { padding: 4px 2px; text-align: center; }
 .ask-diff dt { color: var(--muted); }
 .ask-diff dd { margin: 0; overflow-wrap: anywhere; }
 .ask-tg { margin: 4px 0 14px; }
+.ask-rule { color: var(--muted); }
+.ask-scope { border: 0; padding: 0; margin: 0 0 12px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.ask-scope legend { font-size: 12px; color: var(--muted); padding: 0; margin-bottom: 4px; }
+.ask-scope label { display: flex; gap: 8px; align-items: center; justify-content: flex-start; cursor: pointer; font-weight: 400; }
+.ask-scope input { width: auto; min-height: 0; height: auto; margin: 0; flex: none; accent-color: var(--brand); }
+.wev .rep { margin-right: 3px; opacity: .7; }
 .ask-tg small { display: block; color: var(--muted); font-size: 12px; }
 .modal.ask footer { padding: 0; }
 .wk-sel { position: absolute; left: 2px; right: 2px; background: var(--brand-soft); border: 1px dashed var(--brand); border-radius: 6px; font-size: 12px; padding: 2px 6px; color: var(--brand); z-index: 4; pointer-events: none; }
@@ -1792,7 +1798,7 @@ function calItems(from, to) {
   return out;
 }
 const going = e => { if (e.type !== "m") return ""; const p = meetPeople(e.m); return p.length > 1 ? `${p.filter(x => x.a === "yes").length}/${p.length}` : ""; };
-const chipText = e => `${e.time ? e.time + " " : ""}${going(e) ? going(e) + " " : ""}${e.title}`;
+const chipText = e => `${e.time ? e.time + " " : ""}${going(e) ? going(e) + " " : ""}${e.m?.seriesId ? "↻ " : ""}${e.title}`;
 // Пересекающиеся по времени встречи встают рядом: каждой — своя колонка в группе пересечений
 function layoutDay(list) {
   const evs = sortBy(list, e => e.start).map(e => ({ e, s: e.start, f: Math.min(e.start + Math.max(e.dur, 20), 1440) })), out = [];
@@ -1808,7 +1814,7 @@ function blockHTML(x) {
   const e = x.e, w = 100 / x.n, can = e.type === "m" && canMove(e.m), h = Math.max((x.f - x.s) * HOUR_PX / 60, 18), narrow = x.n > 1 && x.w / x.n <= .5;
   return `<div class="wev ${esc(evCls(e))} st-${esc(e.status || "planned")}${can ? " can" : ""}${h < 30 ? " short" : h < 50 ? " mid" : ""}${narrow ? " narrow" : ""}" data-ev="${esc(evKey(e))}" role="button" tabindex="0" title="${esc(chipText(e))}"
     style="top:${x.s * HOUR_PX / 60}px;height:${h}px;left:calc(${x.c * w}% + 1px);width:calc(${x.w * w}% - 3px)">
-    <span class="wev-t">${esc(e.time)}${e.type === "m" ? "–" + fromMin(Math.min(x.s + e.dur, 1440)) : ""}${going(e) ? ` · ${esc(going(e))}` : ""}</span><span class="wev-n">${esc(e.title)}</span>${e.s ? `<span class="wev-s">${esc(e.s.name)}</span>` : ""}${can ? `<span class="wev-r" data-resize aria-hidden="true"></span>` : ""}</div>`;
+    <span class="wev-t">${esc(e.time)}${e.type === "m" ? "–" + fromMin(Math.min(x.s + e.dur, 1440)) : ""}${going(e) ? ` · ${esc(going(e))}` : ""}</span><span class="wev-n">${e.m?.seriesId ? `<span class="rep" title="Повторяется">↻</span>` : ""}${esc(e.title)}</span>${e.s ? `<span class="wev-s">${esc(e.s.name)}</span>` : ""}${can ? `<span class="wev-r" data-resize aria-hidden="true"></span>` : ""}</div>`;
 }
 const allChip = e => `<button class="ev ${esc(evCls(e))} st-${esc(e.status || "planned")}" data-ev="${esc(evKey(e))}" data-act="ev-open" title="${esc(chipText(e))}">${esc(chipText(e))}</button>`;
 function weekHTML(days) {
@@ -1889,7 +1895,7 @@ function evPop(key, anchor) {
       ${canMove(m) ? swatchesHTML(e.color, "ev-color", m.id) : ""}`;
   const acts = `${canMove(m) ? `<button class="btn small ghost danger-text" data-act="ev-del" data-id="${esc(m.id)}">Удалить</button>` : ""}<span class="sp"></span>
       ${(m.status || "planned") === "planned" && e.date <= t && canMark(m) ? `<button class="btn small" data-act="meet-mark" data-id="${esc(m.id)}" data-st="done">Состоялась</button>` : ""}${canMove(m) ? `<button class="btn small primary" data-act="meet-edit" data-id="${esc(m.id)}">Изменить</button>` : ""}`;
-  popShow(`<header><span class="pop-dot ${esc(evCls(e))}" id="pop-dot"></span><div><h3>${esc(e.title)}</h3><p class="sub">${esc(when)}${kindL ? " · " + esc(kindL.toLowerCase()) : ""}</p></div><button class="x" data-act="pop-close" aria-label="Закрыть">×</button></header>
+  popShow(`<header><span class="pop-dot ${esc(evCls(e))}" id="pop-dot"></span><div><h3>${esc(e.title)}</h3><p class="sub">${esc(when)}${kindL ? " · " + esc(kindL.toLowerCase()) : ""}${repeatOf(m) ? ` · ↻ ${esc(repeatText(repeatOf(m)))}` : ""}</p></div><button class="x" data-act="pop-close" aria-label="Закрыть">×</button></header>
     <div class="pop-body">${body}</div><footer>${acts}</footer>`, anchor.getBoundingClientRect());
 }
 // Предпросмотр в сетке: пока встречу создают или меняют её время в карточке, она уже видна на своём месте и своего размера
@@ -2007,6 +2013,7 @@ async function moveMeet(id, date, start, dur) {
   if (!Object.keys(patch).length) return render();
   const was = Object.fromEntries(Object.keys(patch).map(k => [k, m[k] ?? (k === "duration" ? null : "")]));
   const o = await confirmMeet(m, { ...m, ...patch }, true); if (o === null) return render();   // «Отмена» — встреча остаётся на месте
+  if (o.following) { await applyFollowing(m, patch, repeatOf(m), o); S.cal = { ...S.cal, day: date, ym: date.slice(0, 7) }; return render(); }
   const ok = await save(() => updDoc("meetings", id, patch, o));
   // «Отменить» сообщает участникам так же, как сам перенос: если о переносе написали, напишут и о возврате
   if (ok) { S.cal = { ...S.cal, day: date, ym: date.slice(0, 7) }; toast(`${m.title || "Встреча"}: ${dayLong(date)}${start === null ? "" : `, ${time}–${fromMin(Math.min(start + (dur ?? (nnum(m.duration) || 60)), 1440))}`}`, () => save(() => updDoc("meetings", id, was, o), "Возвращено")); }
@@ -3725,17 +3732,20 @@ function paymentForm(s, p) {
 }
 function meetingForm(m, prefill = {}) {
   const g = m ? mg(m) : { mentors: [], students: [], cohorts: [] };
-  const vals = m ? { ...m, color: meetColor(m), mentorId: m.mentorId || "", status: m.status || "planned", remind: m.remind !== false }
-    : { kind: "call", color: "", date: S.view === "calendar" ? S.cal.day : today(), time: "12:00", duration: 60, mentorId: myTeam()?.id || "", status: "planned", remind: true, ...prefill };
+  const r0 = m ? repeatOf(m) : null;
+  const vals = m ? { ...m, color: meetColor(m), mentorId: m.mentorId || "", status: m.status || "planned", remind: m.remind !== false, repeat: r0?.every || "", until: r0?.until || addDays(m.date, 56) }
+    : { kind: "call", color: "", date: S.view === "calendar" ? S.cal.day : today(), time: "12:00", duration: 60, mentorId: myTeam()?.id || "", status: "planned", remind: true, repeat: "", ...prefill };
+  if (!m) vals.until = addDays(vals.date, 56);
   const people = m ? { mentors: g.mentors.filter(id => id !== m.mentorId), students: g.students, cohorts: g.cohorts }
-    : { mentors: [], students: prefill.studentId ? [prefill.studentId] : [], cohorts: prefill.cohortId ? [prefill.cohortId] : [] };
+    : { mentors: [], students: prefill.studentId ? [prefill.studentId] : [], cohorts: prefill.cohortId && !S.limited ? [prefill.cohortId] : [] };
   const one = g.students.length === 1 ? g.students[0] : null;
   openModal({
     title: m ? "Встреча" : "Новая встреча", wide: true, values: vals, submit: m ? "Сохранить" : "Добавить",
     fields: [{ k: "title", label: "Название", req: true, wide: true, ph: "Разбор домашки", list: meetHints() },
       { k: "date", label: "Дата", type: "date", req: true, quick: true }, { k: "time", label: "Время", type: "time", help: "Пусто — на весь день" },
       { k: "kind", label: "Тип", type: "select", options: MEET_KINDS }, { k: "duration", label: "Длительность, мин", type: "number", help: " " },
-      { k: "people", label: "Участники", type: "people", help: "Менторы, студенты и потоки: на занятие потока приходят все, кто в нём учится" },
+      { k: "repeat", label: "Повторять", type: "select", options: MEET_REPEAT }, { k: "until", label: "До", type: "date", help: "Последний день, когда может быть встреча серии" },
+      { k: "people", label: "Участники", type: "people", help: S.limited ? "Менторы и ваши студенты. Весь поток зовёт администратор" : "Менторы, студенты и потоки: на занятие потока приходят все, кто в нём учится" },
       ...(S.limited ? [] : [{ k: "mentorId", label: "Кто проводит", type: "select", options: teamOpts() }]),
       { k: "color", label: "Цвет в календаре", type: "select", options: [["", "По типу встречи"], ...MEET_COLORS] },
       ...(m ? [{ k: "status", label: "Статус", type: "select", options: MEET_ST }] : []),
@@ -3743,7 +3753,7 @@ function meetingForm(m, prefill = {}) {
       ...(S.server ? [{ k: "remind", label: "Сообщать студентам в Telegram: приглашение, перенос, напоминания и вопрос, придут ли", type: "checkbox", wide: true }] : []),
       { k: "notes", label: "Заметки", type: "textarea", wide: true, rows: 2 }],
     link: one && stu(one) ? { label: "Карточка студента", go: () => openStudent(one) } : null,
-    onDelete: m ? async () => { const o = await confirmMeet(m, null); if (o === null) return false; return save(() => delDoc("meetings", m.id, o), "Встреча удалена"); } : null,
+    onDelete: m ? async () => { const o = await confirmMeet(m, null); if (o === null) return false; return o.following ? deleteFollowing(m, o) : save(() => delDoc("meetings", m.id, o), "Встреча удалена"); } : null,
     extra: m ? "" : `<p class="hint">Отметить встречу состоявшейся можно в календаре, на экране «Сегодня» или в карточке студента.</p>`,
     onSubmit: async v => {
       if (m && !canMove(m)) return "Менять эту встречу может только тот, кто её проводит, или администратор";
@@ -3751,6 +3761,9 @@ function meetingForm(m, prefill = {}) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(v.date)) return "Укажите дату";
       if (v.time && !/^\d{2}:\d{2}$/.test(v.time)) return "Время укажите в виде 15:30";
       if (v.duration !== null && !(v.duration > 0 && v.duration <= 1440)) return "Длительность — от 1 до 1440 минут";
+      const rule = Object.hasOwn(REPEAT_STEP, v.repeat) ? { every: v.repeat, until: v.until } : null;
+      const ruleTouched = !m || JSON.stringify(rule) !== JSON.stringify(repeatOf(m));
+      if (ruleTouched && repeatProblem(v.date, rule)) return repeatProblem(v.date, rule);   // правило проверяем, только когда его меняют
       const host = (S.limited ? vals.mentorId : v.mentorId) || null, pp = v.people;
       const doc = { title: v.title, date: v.date, time: v.time || "", kind: v.kind, color: MEET_COLORS.some(x => x[0] === v.color) ? v.color : "", duration: v.duration,
         studentId: null, cohortId: null, studentIds: pp.students, cohortIds: pp.cohorts, mentorIds: pp.mentors.filter(id => id !== host),
@@ -3764,7 +3777,18 @@ function meetingForm(m, prefill = {}) {
       const toStatus = m && v.status !== vals.status ? v.status : null, any = !m || Object.keys(changed).length > 0;
       if (m && !meetById(m.id)) return "Эту встречу уже удалили";
       const next = m ? { ...meetById(m.id), ...(changed || {}), ...(toStatus ? { status: toStatus } : {}) } : { ...doc, status: "planned" };
-      const o = await confirmMeet(m ? meetById(m.id) : null, next); if (o === null) return false;
+      // Новая серия и встреча, которая становится серией, создаются по правилу; у встречи из серии — «только эта» или «и все следующие»
+      const startsSeries = rule && (!m || !m.seriesId), cnt = startsSeries ? seriesDates(v.date, rule).length : 0;
+      const o = await confirmMeet(m ? meetById(m.id) : null, next, !!startsSeries, startsSeries ? { count: cnt, rule } : null); if (o === null) return false;
+      if (!m && rule) { const ok = await createSeries({ ...doc }, rule, o); if (ok && S.view === "calendar") { S.cal = { ...S.cal, ym: v.date.slice(0, 7), day: v.date }; render(); } return ok; }
+      const ruleChanged = m && JSON.stringify(rule) !== JSON.stringify(repeatOf(m));
+      if (ruleChanged && m.seriesId && seriesAfter(m).length && !o.following) return "Повтор меняется для этой и всех следующих встреч: выберите «Эта и все следующие»";
+      if (m && (startsSeries || o.following || (m.seriesId && ruleChanged && !seriesAfter(m).length))) {   // правило у последней встречи серии меняется без вопроса «только эта»
+        const p = { ...(changed || {}), ...(toStatus === "cancelled" ? { status: "cancelled" } : {}) };
+        const ok = await applyFollowing(meetById(m.id), p, rule, o);
+        if (ok && S.view === "calendar") { S.cal = { ...S.cal, ym: v.date.slice(0, 7), day: v.date }; render(); }
+        return ok;
+      }
       const o1 = toStatus === "cancelled" ? undefined : o; // об отмене сообщит сама отметка, без второго сообщения
       const ok = !any ? true : await save(() => m ? updDoc("meetings", m.id, changed, o1) : setDoc("meetings", newId("meetings"), { ...doc, status: "planned", createdAt: new Date().toISOString(), by: S.myId }, o), m ? "Сохранено" : `Встреча назначена на ${dueLabel(v.date)}${v.time ? ", " + v.time : ""}`);
       if (ok && S.view === "calendar") { S.cal = { ...S.cal, ym: v.date.slice(0, 7), day: v.date }; render(); }
@@ -3804,7 +3828,8 @@ function pplSuggest() {
   for (const c of sortBy(D().cohorts, c => c.start || "").reverse()) {
     const people = inCohort(c), hit = has(c.name);
     if (q && !hit) continue;
-    rows.push(["cohorts", c.id, `${c.name} — весь поток`, `придут все, кто учится: ${studying(c)}`, false, P.cohorts.includes(c.id), "head"]);
+    if (S.limited) { if (people.length) rows.push(["cstud", c.id, `${c.name} — все мои студенты`, `${people.length} ${plural(people.length, "студент", "студента", "студентов")}`, false, people.every(x => P.students.includes(x.id)), "head"]); }   // весь поток зовёт администратор
+    else rows.push(["cohorts", c.id, `${c.name} — весь поток`, `придут все, кто учится: ${studying(c)}`, false, P.cohorts.includes(c.id), "head"]);
     for (const x of people) student(x, stageLabel(x.stage));
   }
   if (q) for (const x of act) if (has(x.name)) student(x, ["студент", cohortName(x.cohortId), stageLabel(x.stage)].filter(Boolean).join(" · "));
@@ -3815,9 +3840,93 @@ function pplSuggest() {
   list.hidden = false; inp.setAttribute("aria-expanded", "true"); inp.setAttribute("aria-activedescendant", hits.length ? "m-pl-0" : "");
 }
 function pplAdd(k, id) {
+  if (k === "cstud" && MODAL?.people) {   // все свои студенты потока — по одному
+    const add = D().students.filter(x => isActive(x) && x.cohortId === id && !MODAL.people.students.includes(x.id)).map(x => x.id);
+    MODAL.people.students = [...MODAL.people.students, ...add]; drawPeople(); const inp = $("#m-pq"); if (inp) { if (!matchMedia("(pointer: coarse)").matches) inp.focus(); pplSuggest(); } return;
+  }
   if (!MODAL?.people || !Object.hasOwn(PPL_KIND, k) || MODAL.people[k].includes(id)) return;
   MODAL.people[k] = [...MODAL.people[k], id]; drawPeople();
   const inp = $("#m-pq"); if (inp) { if (!matchMedia("(pointer: coarse)").matches) inp.focus(); pplSuggest(); }   // строка поиска остаётся: можно позвать ещё кого-то из того же потока
+}
+// ----- Повторяющиеся встречи: каждая — отдельная запись со знаком серии (seriesId) и правилом (repeat: { every, until }) -----
+const MEET_REPEAT = [["", "Не повторять"], ["day", "Каждый день"], ["week", "Каждую неделю"], ["2weeks", "Каждые 2 недели"]];
+const REPEAT_STEP = { day: 1, week: 7, "2weeks": 14 }, REPEAT_WORD = { day: "каждый день", week: "каждую неделю", "2weeks": "каждые 2 недели" }, SERIES_MAX = 120;
+const repeatOf = m => isObj(m?.repeat) && Object.hasOwn(REPEAT_STEP, m.repeat.every) && isDay(m.repeat.until) ? { every: m.repeat.every, until: m.repeat.until.slice(0, 10) } : null;
+const repeatText = r => r ? `${REPEAT_WORD[r.every]} по ${fShort(r.until)}` : "";
+const dayDiff = (a, b) => Math.round((new Date(b + "T12:00") - new Date(a + "T12:00")) / 864e5);
+function seriesDates(from, r) { const out = []; for (let d = from; d <= r.until && out.length <= SERIES_MAX; d = addDays(d, REPEAT_STEP[r.every])) out.push(d); return out; }
+// Следующие встречи той же серии (из тех, что видны)
+const seriesAfter = m => m?.seriesId ? sortBy(D().meetings.filter(x => x.seriesId === m.seriesId && x.id !== m.id && x.date >= m.date), x => x.date + (x.time || "")) : [];
+// Новая встреча серии по образцу: те же поля, своя дата, без ответов и отметок
+const seriesDoc = (base, date, sid, rule) => ({ title: base.title, date, time: base.time || "", kind: base.kind, color: base.color || "", duration: base.duration ?? null,
+  studentId: null, cohortId: null, studentIds: mg(base).students, cohortIds: mg(base).cohorts, mentorIds: mg(base).mentors.filter(id => id !== base.mentorId), mentorId: base.mentorId || null,
+  link: base.link || "", notes: base.notes || "", ...(base.remind === undefined ? {} : { remind: base.remind }), seriesId: sid, repeat: rule, status: "planned", createdAt: new Date().toISOString(), by: S.myId });
+function repeatProblem(date, r) {
+  if (!r) return "";
+  if (!isDay(r.until) || r.until < date) return "Укажите, до какого дня повторять: не раньше первой встречи";
+  if (r.until > addDays(date, 366)) return "Повторять можно не больше чем на год вперёд";
+  return seriesDates(date, r).length > SERIES_MAX ? `Слишком много встреч (больше ${SERIES_MAX}): сократите срок` : "";
+}
+// Создаёт серию по порядку; участникам — одно сообщение обо всей серии (с первой встречей)
+async function createSeries(doc, rule, o) {
+  const dates = seriesDates(doc.date, rule), sid = newId("meetings");
+  return save(async () => {
+    for (let i = 0; i < dates.length; i++) {
+      await setDoc("meetings", newId("meetings"), seriesDoc(doc, dates[i], sid, rule), i === 0 && o?.notify ? { notify: true, series: true } : undefined);
+      if (dates.length > 4 && i % 4 === 3) toast(`Создаём встречи: ${i + 1} из ${dates.length}`);
+    }
+  }, `Создано встреч: ${dates.length} — ${repeatText(rule)}`);
+}
+// «Эта и все следующие»: дата сдвигается на столько же дней, остальные изменения — как у этой встречи.
+// Новое правило: другая частота — следующие создаются заново; другой срок — лишние удаляются, недостающие добавляются
+async function applyFollowing(m, patch, newRule, o) {
+  // Следующие встречи, которые этот человек может менять: остальные (например, где он только приглашён) не трогаем
+  const all = seriesAfter(m), rest = all.filter(canMove), skipped = all.length - rest.length;
+  const shift = patch.date ? dayDiff(m.date, patch.date) : 0, base = { ...meetById(m.id), ...patch };
+  if (shift && newRule && JSON.stringify(newRule) === JSON.stringify(repeatOf(m))) newRule = { ...newRule, until: addDays(newRule.until, shift) };   // серию сдвинули целиком: срок сдвигается вместе с ней
+  const oldRule = repeatOf(m), ruleChanged = JSON.stringify(newRule) !== JSON.stringify(oldRule), sid = m.seriesId || newId("meetings");
+  const regen = !newRule || (oldRule && newRule.every !== oldRule.every);
+  // Ментор не создаёт встречи с потоком (весь поток зовёт администратор): продлить такую серию может только администратор
+  const canAdd = !(S.limited && mg(base).cohorts.length);
+  const common = Object.fromEntries(Object.entries(patch).filter(([k]) => k !== "date"));
+  if (ruleChanged) common.repeat = newRule;
+  const mPatch = { ...patch, ...(ruleChanged ? { repeat: newRule, seriesId: newRule ? sid : null } : {}) };
+  let added = 0, removed = 0, noAdd = false;
+  const ok = await save(async () => {
+    if (Object.keys(mPatch).length) await updDoc("meetings", m.id, mPatch, o?.notify ? { notify: true, series: true } : undefined);
+    const kept = [base.date];
+    for (const x of rest) {
+      const d = shift ? addDays(x.date, shift) : x.date;
+      if (regen || d > newRule.until) { await delDoc("meetings", x.id); removed++; continue; }
+      const p = { ...common, ...(shift ? { date: d } : {}) };
+      if (Object.keys(p).length) await updDoc("meetings", x.id, p);
+      kept.push(d);
+    }
+    if (newRule) {
+      // Недостающие — от последней оставшейся встречи с тем же шагом, чтобы не сбиться с ритма серии
+      const have = new Set([...kept, ...all.filter(x => !canMove(x)).map(x => x.date)]), last = [...have].sort().pop();
+      const tail = seriesDates(addDays(last, REPEAT_STEP[newRule.every]), newRule).filter(d => !have.has(d));
+      if (tail.length && !canAdd) noAdd = true;
+      else for (const d of tail) { await setDoc("meetings", newId("meetings"), seriesDoc({ ...base, mentorIds: mg(base).mentors }, d, sid, newRule)); added++; }
+    }
+    // Срок серии одинаковый у всех её встреч: прежние тоже узнают новое правило
+    if (ruleChanged && m.seriesId) {
+      const before = D().meetings.filter(x => x.seriesId === m.seriesId && x.id !== m.id && x.date < m.date && canMove(x));
+      const lastBefore = sortBy(before, x => x.date).map(x => x.date).pop();
+      const r = newRule && !regen ? newRule : oldRule && lastBefore ? { every: oldRule.every, until: lastBefore } : null;   // перестали повторять или сменили частоту — прежняя часть серии заканчивается на своей последней встрече
+      for (const x of before) if (r && JSON.stringify(repeatOf(x)) !== JSON.stringify(r)) await updDoc("meetings", x.id, { repeat: r });
+    }
+  });
+  if (ok) toast(`Изменены эта и следующие встречи${added ? `, добавлено: ${added}` : ""}${removed ? `, удалено: ${removed}` : ""}${skipped ? `; не изменены чужие: ${skipped}` : ""}${noAdd ? "; продлить занятие потока может администратор" : ""}`);
+  return ok;
+}
+async function deleteFollowing(m, o) {
+  const all = seriesAfter(m), rest = all.filter(canMove);
+  // Сначала удаляются следующие, последней — эта: сообщение «отменены все следующие» уходит, только когда всё удалено
+  return save(async () => {
+    for (const x of rest) await delDoc("meetings", x.id);
+    await delDoc("meetings", m.id, o?.notify ? { notify: true, series: true } : undefined);
+  }, `Удалено встреч: ${rest.length + 1}${all.length > rest.length ? `; чужие не тронуты: ${all.length - rest.length}` : ""}`);
 }
 // ----- «Сохранить изменения?» — подтверждение изменения встречи, как в почтовых календарях -----
 // Кому есть что сообщить: запланированная встреча не в прошлом, кроме самого автора (то же решает сервер, meetings.notices)
@@ -3839,23 +3948,27 @@ function meetDiff(old, next) {
   if ((next.status || "planned") === "cancelled" && (old.status || "planned") !== "cancelled") rows.push(["Статус", "отменена"]);
   return `<p class="ask-what"><strong>${esc(next.title || "Встреча")}</strong></p>${rows.length ? `<dl class="ask-diff">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : ""}`;
 }
-// Возвращает null — «Отмена», иначе undefined или { notify: true } (галочка «Сообщить участникам»).
-// always — спрашивать и без участников (перенос в календаре); иначе только когда есть кому сообщить
-function confirmMeet(old, next, always = false) {
-  if (next && ["done", "missed"].includes(next.status)) return Promise.resolve(undefined);   // отметка «состоялась / не было» — без вопросов
-  const n = S.server && meetKey(old) !== meetKey(next) ? Math.max(notifyCount(old), notifyCount(next)) : 0;
-  if (!n && !always) return Promise.resolve(undefined);
+// Возвращает null — «Отмена», иначе { notify, following }: галочка «Сообщить участникам» и выбор «эта и все следующие».
+// always — спрашивать и без участников (перенос в календаре); иначе только когда есть кому сообщить.
+// series: { count, rule } — создаётся серия; у встречи из серии спрашиваем, менять только её или и следующие
+function confirmMeet(old, next, always = false, series = null) {
+  if (next && ["done", "missed"].includes(next.status)) return Promise.resolve({});   // отметка «состоялась / не было» — без вопросов
+  const after = old?.seriesId ? seriesAfter(old).length : 0;
+  const n = S.server && (meetKey(old) !== meetKey(next) || series) ? Math.max(notifyCount(old), notifyCount(next)) : 0;
+  if (!n && !always && !after && !series) return Promise.resolve({});
   const del = !next, add = !old, head = del ? "Удалить встречу?" : add ? "Добавить встречу?" : "Сохранить изменения?", ok = del ? "Удалить" : add ? "Добавить" : "Сохранить";
   return new Promise(done => {
     const box = document.createElement("div"); box.className = "overlay ask-over"; box.id = "asknote";
     box.innerHTML = `<div class="modal ask" tabindex="-1" role="alertdialog" aria-modal="true" aria-labelledby="ask-h"><h2 id="ask-h">${head}</h2>${meetDiff(old, next)}
+      ${series?.count ? `<p class="ask-rule">↻ Повторяется ${esc(repeatText(series.rule))} · ${series.count} ${plural(series.count, "встреча", "встречи", "встреч")}</p>` : ""}
+      ${after ? `<fieldset class="ask-scope"><legend>Это встреча из серии</legend><label><input type="radio" name="ask-scope" value="one" checked> Только эта</label><label><input type="radio" name="ask-scope" value="following"> Эта и все следующие (ещё ${after})</label></fieldset>` : ""}
       ${n ? `<label class="field checkbox ask-tg"><input type="checkbox" id="ask-notify" checked><span>Сообщить участникам в Telegram (${n})<small>Сообщение получат те, кто подключён к боту</small></span></label>` : ""}
       <footer><span class="sp"></span><button type="button" class="btn ghost" data-a="cancel">Отмена</button><button type="button" class="btn ${del ? "danger" : "primary"}" data-a="yes">${ok}</button></footer></div>`;
     const prev = document.activeElement, end = r => { box.remove(); if (prev?.isConnected) prev.focus({ preventScroll: true }); done(r); };
-    box.addEventListener("click", e => { const a = e.target.closest("[data-a]")?.dataset.a; if (a) end(a === "yes" ? ($("#ask-notify")?.checked ? { notify: true } : undefined) : null); else if (e.target === box) end(null); });
+    box.addEventListener("click", e => { const a = e.target.closest("[data-a]")?.dataset.a; if (a) end(a === "yes" ? { notify: !!$("#ask-notify")?.checked, following: $("[name=ask-scope]:checked")?.value === "following" } : null); else if (e.target === box) end(null); });
     box.addEventListener("keydown", e => {
       if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); end(null); }
-      if (e.key === "Tab") { const b = [...box.querySelectorAll("button, input")], i = b.indexOf(document.activeElement); e.preventDefault(); b[(i + (e.shiftKey ? -1 : 1) + b.length) % b.length].focus(); }   // фокус не уходит в форму под вопросом
+      if (e.key === "Tab") { const b = [...box.querySelectorAll("button, input:not([type=radio]), input[type=radio]:checked")], i = b.indexOf(document.activeElement); e.preventDefault(); b[(i + (e.shiftKey ? -1 : 1) + b.length) % b.length].focus(); }   // фокус не уходит в форму под вопросом
     });
     document.body.appendChild(box); box.querySelector("[data-a=yes]").focus();
   });
@@ -4417,7 +4530,7 @@ const ACT = {
   "ev-del": (d, el) => {
     if (!el.dataset.armed) { el.dataset.armed = "1"; el.textContent = "Точно удалить?"; return; }
     closePop(); const m = meetById(d.id); if (!m) return;
-    return confirmMeet(m, null).then(o => o === null ? null : save(() => delDoc("meetings", d.id, o)).then(ok => ok && toast(`Встреча «${m.title || ""}» удалена`, () => save(() => setDoc("meetings", d.id, { ...m, id: undefined, rsvp: S.limited ? undefined : m.rsvp }, o), "Встреча возвращена"))));
+    return confirmMeet(m, null).then(o => o === null ? null : o.following ? deleteFollowing(m, o) : save(() => delDoc("meetings", d.id, o)).then(ok => ok && toast(`Встреча «${m.title || ""}» удалена`, () => save(() => setDoc("meetings", d.id, { ...m, id: undefined, rsvp: S.limited ? undefined : m.rsvp }, o), "Встреча возвращена"))));
   },
   "meet-new": d => meetingForm(null, { ...(d.date ? { date: d.date } : {}), ...(d.sid ? { studentId: d.sid, title: "Созвон", mentorId: stu(d.sid)?.mentorId || myTeam()?.id || "" } : {}) }),
   "meet-edit": d => { const m = meetById(d.id); if (m) meetingForm(m); },

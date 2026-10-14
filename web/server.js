@@ -90,7 +90,7 @@
   }
   const newId = () => { const a = new Uint8Array(15); crypto.getRandomValues(a); return Array.from(a, b => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"[b % 62]).join(""); };
   const url = (c, id) => `/api/db/${encodeURIComponent(c)}/${encodeURIComponent(id)}/`;
-  const q = o => o && o.notify ? "?notify=1" : "";
+  const q = o => o && o.notify ? "?notify=1" + (o.series ? "&series=1" : "") : "";   // series — сообщение обо всей серии
   const snapDoc = (c, id) => { const cur = col(c).get(id); return { id, exists: !!cur, data: () => cur ? clone(cur.data) : undefined }; };
   const docRef = (c, id) => ({
     id, path: c + "/" + id,
