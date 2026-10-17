@@ -60,6 +60,12 @@ services:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+      # Настройки других сайтов этого сервера (платформа курсов пишет сюда свой адрес)
+      - /opt/caddy-sites:/etc/caddy/sites:ro
+    networks:
+      - default
+      # Общая сеть, через которую Caddy достаёт до других сайтов этого сервера
+      - web-edge
     depends_on:
       - web
 
@@ -78,6 +84,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+networks:
+  web-edge:
+    name: web-edge
 
 volumes:
   pgdata:
