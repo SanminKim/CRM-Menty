@@ -1700,6 +1700,27 @@ class SchedulerTests(BaseCase):
         self.assertEqual((self.sent, self.files), ([], []))
 
 
+    @override_settings(PLATFORM_URL="https://platform.test")
+    def test_admin_hears_when_platform_is_down_and_back(self):
+        import datetime
+        from unittest import mock
+        from django.utils import timezone
+        from backend import scheduler
+        start = timezone.make_aware(datetime.datetime(2026, 10, 6, 14, 0))
+        with mock.patch("urllib.request.urlopen", side_effect=OSError("down")):
+            scheduler._platform_watch(start)
+            self.assertEqual(self.sent, [])  # одна неудача — ещё не тревога
+            scheduler._platform_watch(start + datetime.timedelta(minutes=5))
+            scheduler._platform_watch(start + datetime.timedelta(minutes=10))
+        alarms = [t for c, t in self.sent if "не открывается" in t]
+        self.assertEqual([c for c, t in self.sent if "не открывается" in t], [100])
+        self.assertEqual(len(alarms), 1)
+        ok = mock.MagicMock(status=200)
+        ok.__enter__.return_value = ok
+        with mock.patch("urllib.request.urlopen", return_value=ok):
+            scheduler._platform_watch(start + datetime.timedelta(minutes=15))
+        self.assertTrue(any("снова открывается" in t for c, t in self.sent))
+
 class HealthTests(BaseCase):
     """Проверка работы: /health/ и сигнал Healthchecks.io из планировщика."""
 

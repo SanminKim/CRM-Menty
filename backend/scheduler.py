@@ -39,7 +39,7 @@ def run(now=None):
         log.exception("Планировщик: связка с платформой не выполнена")
     if not telegram.enabled():
         return
-    for job in (_reminders, _student_meetings, _digests, _pay_reminders, _backup):
+    for job in (_reminders, _student_meetings, _digests, _pay_reminders, _backup, _platform_watch):
         try:
             job(now)
         except Exception:  # одно сорвавшееся дело не должно останавливать остальные и сам планировщик
@@ -59,6 +59,35 @@ def _platform(now):
     platform.forget_deleted()
     if _once(f"sched:platform-pull:{now.strftime('%Y-%m-%dT%H')}:{now.minute // PLATFORM_PULL_MINUTES}"):
         platform.pull_progress()
+
+
+WATCH_EVERY_MINUTES = 5
+WATCH_FAILS_TO_ALERT = 2   # две проверки подряд — 10 минут: короткая перезагрузка при выкладке тревоги не поднимает
+
+
+def _platform_watch(now):
+    """Платформа курсов на том же сервере: если она не открывается 10 минут, администратору пишет бот CRM, а потом — что снова работает."""
+    url = getattr(settings, "PLATFORM_URL", "")
+    if not url or not _once(f"sched:platform-watch:{now.strftime('%Y-%m-%dT%H')}:{now.minute // WATCH_EVERY_MINUTES}"):
+        return
+    from urllib.request import urlopen
+    try:
+        with urlopen(f"{url}/auth", timeout=20) as response:
+            alive = response.status == 200
+    except Exception:
+        alive = False
+    fails = 0 if alive else (cache.get("platform-watch:fails") or 0) + 1
+    cache.set("platform-watch:fails", fails, KEEP_SECONDS)
+    alerted = cache.get("platform-watch:alerted")
+    admins = [chat for chat, role, _ in _staff() if role == Account.Role.ADMIN]
+    if fails >= WATCH_FAILS_TO_ALERT and not alerted:
+        cache.set("platform-watch:alerted", now.isoformat(), KEEP_SECONDS)
+        for chat in admins:
+            telegram.send(chat, f"⚠️ Платформа курсов не открывается уже {fails * WATCH_EVERY_MINUTES} минут: {url}\nCRM работает. Напишите разработчику.")
+    elif alive and alerted:
+        cache.delete("platform-watch:alerted")
+        for chat in admins:
+            telegram.send(chat, f"✅ Платформа курсов снова открывается: {url}")
 
 
 def _once(key):
