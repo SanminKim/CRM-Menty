@@ -320,6 +320,20 @@ def _clean(collection, data):
     return data
 
 
+SERVER_STUDENT_FIELDS = ("learning", "platformSync")
+
+
+def keep_server_fields(old, new):
+    """Поля, которые пишет только сервер (сводка обучения с платформы): правка со страницы их не меняет."""
+    if not isinstance(new, dict):
+        return
+    for field in SERVER_STUDENT_FIELDS:
+        if isinstance(old, dict) and field in old:
+            new[field] = old[field]
+        else:
+            new.pop(field, None)
+
+
 def _touch_meetings(student_id, rev):
     """Видимость встречи зависит от ментора студента: при его смене встречи должны «обновиться»."""
     from . import meetings
@@ -390,6 +404,7 @@ def write(access, collection, doc_id, data, partial, notify=False):
     new = merge(json.loads(json.dumps(old)), patch) if partial else patch
     if collection == "students":
         files.keep(old, new)  # договор и файлы платежей меняются только загрузкой и удалением файла
+        keep_server_fields(old, new)  # сводку обучения и состояние связки с платформой пишет только сервер
     _validate(collection, doc_id, new)
     if collection == "meetings":
         from . import meetings  # позднее подключение: meetings пользуется этим модулем

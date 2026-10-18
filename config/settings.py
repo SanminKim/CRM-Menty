@@ -107,6 +107,12 @@ BACKUP_PASSPHRASE = os.environ.get("BACKUP_PASSPHRASE", "").strip()
 HEALTHCHECK_PING_URL = os.environ.get("HEALTHCHECK_PING_URL", "").strip().rstrip("/")
 if HEALTHCHECK_PING_URL and not HEALTHCHECK_PING_URL.startswith("https://"):
     HEALTHCHECK_PING_URL = ""
+# Связка с платформой курсов (INTEGRATION.md): адрес платформы (только https) и общий ключ подписи запросов.
+# Без них связка выключена. На общем сервере их прописывает выкладка платформы
+PLATFORM_URL = os.environ.get("PLATFORM_URL", "").strip().rstrip("/")
+if PLATFORM_URL and not PLATFORM_URL.startswith("https://"):
+    PLATFORM_URL = ""
+MENTI_INTEGRATION_KEY = os.environ.get("MENTI_INTEGRATION_KEY", "").strip()
 # Адрес CRM снаружи: на него Telegram присылает сообщения, он же ставится в уведомления
 PUBLIC_URL = (os.environ.get("PUBLIC_URL")
               or (f"https://{ALLOWED_HOSTS[0]}" if not DEBUG and ALLOWED_HOSTS else "http://127.0.0.1:8000")).rstrip("/")

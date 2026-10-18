@@ -12,7 +12,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
-from . import backup, health, leads, meetings, reports, telegram
+from . import backup, health, leads, meetings, platform, reports, telegram
 from .models import Account, Doc, TgChat
 
 log = logging.getLogger(__name__)
@@ -33,6 +33,10 @@ def run(now=None):
         health.watch(now)
     except Exception:
         log.exception("Планировщик: проверка работы не выполнена")
+    try:
+        _platform(now)  # связка с платформой курсов не зависит от бота
+    except Exception:
+        log.exception("Планировщик: связка с платформой не выполнена")
     if not telegram.enabled():
         return
     for job in (_reminders, _student_meetings, _digests, _pay_reminders, _backup):
@@ -40,6 +44,21 @@ def run(now=None):
             job(now)
         except Exception:  # одно сорвавшееся дело не должно останавливать остальные и сам планировщик
             log.exception("Планировщик: %s не выполнено", job.__name__)
+
+
+PLATFORM_FULL_HOUR = 3
+PLATFORM_PULL_MINUTES = 10
+
+
+def _platform(now):
+    """Раз в минуту — изменившиеся студенты и удалённые насовсем; раз в 10 минут — сводки обучения; ночью — полная сверка."""
+    if not platform.enabled():
+        return
+    full = now.hour == PLATFORM_FULL_HOUR and _once(f"sched:platform-full:{now.date().isoformat()}")
+    platform.push_states(now, full=full)
+    platform.forget_deleted()
+    if _once(f"sched:platform-pull:{now.strftime('%Y-%m-%dT%H')}:{now.minute // PLATFORM_PULL_MINUTES}"):
+        platform.pull_progress()
 
 
 def _once(key):
@@ -109,6 +128,10 @@ def _digest(today, is_admin, link_id, students, meeting_list, team):
              and (is_admin or (link_id and link_id in meetings.guests(m).mentors)
                   or any(s in own_ids for s in meetings.guests(m).students))]
     orphans = [s for s in active if not (isinstance(s.get("mentorId"), str) and s["mentorId"] in team)] if is_admin else []
+    # Обучение на платформе: работы ждут проверки и студенты, которые неделю не занимаются
+    learners = [s for s in active if isinstance(s.get("stage"), str) and s["stage"] in stages.study]
+    reviews = int(sum(platform.open_reviews(s) for s in learners))
+    stuck = [s for s in learners if platform.stuck_in_learning(s, datetime.date.fromisoformat(today))]
     lines = []
     if due:
         lines.append(f"• шагов по студентам: {len(due)}" + (f" (просрочено {len(late)})" if late else ""))
@@ -122,6 +145,10 @@ def _digest(today, is_admin, link_id, students, meeting_list, team):
         lines.append(f"• встреч: {len(meets)}")
     if orphans:
         lines.append(f"• новых заявок без ментора: {len(orphans)}")
+    if reviews:
+        lines.append(f"• работ ждут проверки на платформе: {reviews}")
+    if stuck:
+        lines.append(f"• студентов не занимаются на платформе неделю: {len(stuck)}")
     return "☀️ Доброе утро! Сводка CRM на сегодня:\n" + "\n".join(lines) if lines else ""
 
 

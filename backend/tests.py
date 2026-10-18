@@ -2355,3 +2355,120 @@ class MeetingSeriesTests(BaseCase):
         self.assertIn("вт, 14 мая, 10:00", self.to(501)[0])
         self.assertNotIn("Повторяется", self.to(501)[0])
         self.assertNotIn("следующ", self.to(501)[0])
+
+
+@override_settings(PLATFORM_URL="https://platform.test", MENTI_INTEGRATION_KEY="k" * 40, PUBLIC_URL="https://crm.test")
+class PlatformLinkTests(BaseCase):
+    """Связка с платформой курсов (INTEGRATION.md): что уходит на платформу и что приходит обратно."""
+
+    def setUp(self):
+        from backend.models import TgChat
+        cache.clear()
+        store.system_write("cohorts", "c1", {"name": "Поток 2", "start": "2020-01-01", "active": True, "courses": ["vkat"]})
+        store.system_write("students", "s1", student("t1", stage="studying", cohortId="c1", phone="+7 900 000-00-00",
+                                                     email="petr@example.test", payments=[]))
+        TgChat.objects.create(chat_id=555001, student_id="s1")
+
+    def state(self, doc_id="s1"):
+        from backend import platform
+        from django.utils import timezone
+        doc = Doc.objects.get(collection="students", doc_id=doc_id)
+        cohorts = {d.doc_id: d.data for d in Doc.objects.filter(collection="cohorts")}
+        meets = [d.data for d in Doc.objects.filter(collection="meetings")]
+        from backend import reports
+        return platform.desired_state(doc_id, doc.data, cohorts, meets, reports.current_stages(), timezone.localtime())
+
+    def test_studying_student_goes_to_platform_without_contacts_or_money(self):
+        state = self.state()
+
+        self.assertEqual(state["telegramId"], 555001)
+        self.assertEqual(state["access"], "active")
+        self.assertEqual(state["courses"], ["vkat"])
+        self.assertEqual(state["name"], "Пётр И.")
+        dumped = json.dumps(state, ensure_ascii=False)
+        self.assertNotIn("900", dumped)
+        self.assertNotIn("example.test", dumped)
+
+    def test_only_bot_linked_students_of_study_and_later_stages_are_sent(self):
+        from backend.models import TgChat
+        store.system_write("students", "s1", {**Doc.objects.get(collection="students", doc_id="s1").data, "stage": "call"})
+        self.assertIsNone(self.state())
+        store.system_write("students", "s1", {**Doc.objects.get(collection="students", doc_id="s1").data, "stage": "lost"})
+        self.assertEqual(self.state()["access"], "paused")
+        store.system_write("students", "s1", {**Doc.objects.get(collection="students", doc_id="s1").data, "stage": "offer"})
+        self.assertEqual(self.state()["access"], "alumni")
+        TgChat.objects.all().delete()
+        self.assertIsNone(self.state())
+
+    def test_push_sends_once_and_records_link(self):
+        from unittest import mock
+        from backend import platform
+        with mock.patch.object(platform, "_call", return_value={"linked": True, "platformUserId": 7}) as call:
+            platform.push_states()
+            platform.push_states()
+
+        self.assertEqual(call.call_count, 1)
+        self.assertEqual(call.call_args.args[:2], ("PUT", "/students/s1/"))
+        self.assertEqual(Doc.objects.get(collection="students", doc_id="s1").data["platformSync"], {"state": "linked", "platformUserId": 7})
+
+    def test_conflicting_telegram_is_shown_in_card(self):
+        from unittest import mock
+        from backend import platform
+        with mock.patch.object(platform, "_call", side_effect=platform.PlatformError(409, "telegram_taken")):
+            platform.push_states()
+
+        self.assertEqual(Doc.objects.get(collection="students", doc_id="s1").data["platformSync"], {"state": "conflict"})
+
+    def test_progress_is_written_once_and_mentor_cannot_change_it(self):
+        from unittest import mock
+        from backend import platform
+        learning = {"updatedAt": "2026-10-18T10:00:00+03:00", "lastActivityAt": "2026-10-18T09:00:00+03:00",
+                    "courses": [{"slug": "vkat", "title": "Вкат", "lessonsDone": 3, "lessonsTotal": 33, "reviewsOpen": 1}]}
+        page = {"items": [{"crmId": "s1", "learning": learning}], "next": "2026-10-18T10:00:00+03:00"}
+        with mock.patch.object(platform, "_call", return_value=page):
+            self.assertEqual(platform.pull_progress(), 1)
+            later = {**page, "items": [{"crmId": "s1", "learning": {**learning, "updatedAt": "2026-10-18T10:10:00+03:00"}}]}
+        with mock.patch.object(platform, "_call", return_value=later):
+            self.assertEqual(platform.pull_progress(), 0)  # изменилось только время сводки — записи нет
+
+        self.login("mentor")
+        data = Doc.objects.get(collection="students", doc_id="s1").data
+        res = self.client.put("/api/db/students/s1/", data=json.dumps({**data, "learning": {"courses": []}, "platformSync": {"state": "x"}}),
+                              content_type="application/json")
+        self.assertEqual(res.status_code, 200)
+        saved = Doc.objects.get(collection="students", doc_id="s1").data
+        self.assertEqual(saved["learning"]["courses"][0]["lessonsDone"], 3)
+        self.assertNotEqual(saved.get("platformSync"), {"state": "x"})
+
+    def test_digest_tells_mentor_about_reviews_and_idle_learners(self):
+        from backend import scheduler
+        data = Doc.objects.get(collection="students", doc_id="s1").data
+        store.system_write("students", "s1", {**data, "learning": {"lastActivityAt": "2020-01-01T10:00:00+03:00",
+                                                                    "courses": [{"slug": "vkat", "reviewsOpen": 2}]}})
+        students = [(d.doc_id, d.data) for d in Doc.objects.filter(collection="students")]
+
+        text = scheduler._digest("2026-10-18", False, "t1", students, [], {"t0", "t1", "t2"})
+
+        self.assertIn("работ ждут проверки на платформе: 2", text)
+        self.assertIn("не занимаются на платформе неделю: 1", text)
+
+    def test_platform_courses_endpoint_is_admin_only(self):
+        from unittest import mock
+        from backend import platform
+        self.login("mentor")
+        self.assertEqual(self.client.get("/api/platform/courses/").status_code, 403)
+        self.login("admin")
+        with mock.patch.object(platform, "_call", return_value=[{"slug": "vkat", "title": "Вкат", "lessonsTotal": 33}]):
+            res = self.client.get("/api/platform/courses/").json()
+        self.assertEqual(res["courses"][0]["slug"], "vkat")
+
+    def test_permanently_deleted_student_is_forgotten_on_platform(self):
+        from unittest import mock
+        from backend import platform
+        Doc.objects.filter(collection="students", doc_id="s2").delete()
+        Tombstone.objects.create(collection="students", doc_id="s2", rev=999)
+        with mock.patch.object(platform, "_call", return_value={"forgotten": True}) as call:
+            platform.forget_deleted()
+            platform.forget_deleted()
+
+        self.assertEqual([c.args for c in call.call_args_list], [("POST", "/students/s2/forget/")])

@@ -99,6 +99,19 @@ def telegram_student_link(request, access):
 
 @require_GET
 @api
+def platform_courses(request, access):
+    """Курсы платформы для выбора у потока и адрес платформы для ссылок из карточки. Только администратору."""
+    from . import platform
+    if not access.is_admin:
+        raise store.Denied
+    if not platform.enabled():
+        return JsonResponse({"enabled": False, "courses": [], "url": ""})
+    items = platform.courses()
+    return JsonResponse({"enabled": True, "courses": items or [], "url": settings.PLATFORM_URL, "unavailable": items is None})
+
+
+@require_GET
+@api
 def telegram_file(request, access, student_id, proof_id):
     """Файл, который студент прислал боту (начисление зарплаты, отработанные часы). Открывает тот, кто ведёт студента."""
     doc = Doc.objects.filter(collection="students", doc_id=student_id).first()

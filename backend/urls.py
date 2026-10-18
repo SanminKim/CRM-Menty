@@ -25,4 +25,5 @@ urlpatterns = [
     path("api/files/", api.file_upload),
     path("api/files/<str:file_id>/", api.file),
     path("api/telegram/file/<str:student_id>/<str:proof_id>/", api.telegram_file),
+    path("api/platform/courses/", api.platform_courses),
 ]
