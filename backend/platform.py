@@ -139,12 +139,17 @@ def desired_state(student_id, student, cohorts, meeting_docs, stages, now):
     access = STUDY_ACCESS.get(group)
     if access is None:
         return None  # заявка ещё на этапе продаж: курсов у неё нет
+    manual = student.get("platformAccess") if isinstance(student.get("platformAccess"), dict) else {}
+    if manual.get("mode") == "paused" and access != "paused":
+        access = "paused"  # администратор закрыл доступ вручную: прогресс сохраняется, курсы на паузе
     telegram_id = _student_chat(student_id)
     if telegram_id is None:
         return None  # не привязан к боту личной ссылкой — платформа не узнает его при входе
     cohort_id = student.get("cohortId") if isinstance(student.get("cohortId"), str) else None
     cohort = cohorts.get(cohort_id) if cohort_id else None
     courses = [slug for slug in (cohort or {}).get("courses") or [] if isinstance(slug, str)][:20]
+    if isinstance(manual.get("courses"), list):
+        courses = [slug for slug in manual["courses"] if isinstance(slug, str) and slug][:20]  # свои курсы вместо курсов потока
     state = {
         "telegramId": telegram_id,
         "name": reports.mask(student.get("name")) or "Студент",
@@ -279,12 +284,12 @@ def _same(a, b):
     return strip(a) == strip(b)
 
 
-def pull_progress():
-    """Забирает с платформы сводки, изменившиеся с прошлого раза, и пишет их в поле learning карточки."""
+def pull_progress(full=False):
+    """Забирает с платформы сводки, изменившиеся с прошлого раза, и пишет их в поле learning карточки. full — все сводки."""
     if not enabled():
         return 0
     written = 0
-    since = cache.get(SINCE_KEY) or ""
+    since = "" if full else cache.get(SINCE_KEY) or ""
     for _ in range(20):  # не больше 20 страниц за проход
         try:
             page = _call("GET", f"/progress/?since={_quote(since)}&limit=200")
@@ -362,3 +367,20 @@ def open_reviews(student):
     learning = student.get("learning") if isinstance(student, dict) else None
     courses_ = learning.get("courses") if isinstance(learning, dict) else None
     return sum(reports._number(c.get("reviewsOpen")) for c in courses_ or [] if isinstance(c, dict))
+
+
+def overdue_tasks(student):
+    """Сколько заданий на платформе просрочено (сроки потока) — для утренней сводки."""
+    learning = student.get("learning") if isinstance(student, dict) else None
+    courses_ = learning.get("courses") if isinstance(learning, dict) else None
+    return sum(reports._number(c.get("overdue")) for c in courses_ or [] if isinstance(c, dict))
+
+
+def reviews_url(students):
+    """Адрес очереди проверки на платформе — из сводки любого студента (платформа присылает его сама)."""
+    for student in students:
+        learning = student.get("learning") if isinstance(student, dict) else None
+        url = learning.get("reviewsUrl") if isinstance(learning, dict) else None
+        if isinstance(url, str) and url.startswith("https://"):
+            return url
+    return ""

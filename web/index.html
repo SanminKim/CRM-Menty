@@ -1009,7 +1009,7 @@ function loadUi() {
   S.sort = S.sorts[S.view] || null;
   S.showLost = v.showLost === true;
   if (["upcoming", "overdue", "paid"].includes(v.payTab)) S.payTab = v.payTab;
-  if (["funnel", "money"].includes(v.anTab)) S.anTab = v.anTab;
+  if (["funnel", "money", "study"].includes(v.anTab)) S.anTab = v.anTab;
   if (SET_GROUPS.some(g => g[0] === v.setTab)) S.setTab = v.setTab;
   if (CAL_MODES.some(x => x[0] === v.calMode) && !S.cal.mode) S.cal.mode = v.calMode;   // вид из адреса важнее запомненного
   const ids = x => Array.isArray(x) ? x.filter(y => typeof y === "string" && y.length <= 64).slice(0, 200) : [];
@@ -1488,7 +1488,8 @@ function todayView() {
   // На экране один список: плитки сверху показывают, сколько чего, и переключают списки
   // Учатся, но неделю не занимаются на платформе курсов (сводку забирает сервер, см. platformSection)
   const idleLearners = sortBy(list.filter(stuckInLearning), s => (isObj(s.learning) && s.learning.lastActivityAt) || "");
-  const counts = { new: orphans.length, steps: ag.due.length, pays: ag.pays.length, meets: meets.length, nostep: ag.noStep.length, learn: idleLearners.length };
+  const lateLearners = sortBy(list.filter(s => overdueTasks(s) > 0), s => -overdueTasks(s));
+  const counts = { new: orphans.length, steps: ag.due.length, pays: ag.pays.length, meets: meets.length, nostep: ag.noStep.length, learn: idleLearners.length, late: lateLearners.length };
   // Пока человек сам не выбрал список, первыми показываются новые заявки без ответственного
   const want = S.todayTab || (orphans.length ? "new" : "steps");
   const tab = counts[want] || ["steps", "pays"].includes(want) ? want : "steps";
@@ -1499,7 +1500,8 @@ function todayView() {
     ${tile("pays", "Платежи студентов", latePays.length ? `просрочено ${latePays.length} · ${money(sum(latePays, p => nnum(p.amount)))}` : ag.pays.length ? "срок в ближайшие три дня" : "ближайших нет", latePays.length > 0)}
     ${tile("meets", "Встречи", meetsToday.length ? `сегодня ${meetsToday.length}, ближайшая в ${esc(meetsToday[0].time || "течение дня")}` : meets.length ? "на этой неделе" : "на неделе нет")}
     ${tile("nostep", "Без следующего шага", ag.noStep.length ? "о них легко забыть" : "у всех есть шаг")}
-    ${idleLearners.length ? tile("learn", "Застряли в учёбе", "неделю без уроков на платформе", true) : ""}</section>`;
+    ${idleLearners.length ? tile("learn", "Застряли в учёбе", "неделю без уроков на платформе", true) : ""}
+    ${lateLearners.length ? tile("late", "Просрочили задания", "сроки на платформе прошли", true) : ""}</section>`;
   const dueBody = ag.due.length ? `<ul class="rows">${grp("Просрочено", lateSteps, "danger-text")}${grp("Сегодня", nowSteps)}</ul>`
     : `<div class="allclear"><strong>На сегодня шагов нет</strong>${ag.noStep.length ? "Назначьте следующий шаг студентам из списка «Без следующего шага»." : "Все студенты под контролем."}</div>`;
   return headHTML("Сегодня", "", mentorSelect() + addBtn, sub) + demoBanner() + backupBanner() + summary + (S.limited ? "" : monthMoneyLine()) + `
@@ -1525,6 +1527,9 @@ function todayView() {
           <span class="who"><strong>${esc(s.name)}</strong><span>${days(daysSince(s.stageAt))} на этапе</span></span>
           ${badge(s.stage)}<button class="btn small" data-act="step-edit" data-id="${esc(s.id)}">Назначить</button></li>`).join("")}
           ${ag.noStep.length > 12 ? `<li><button class="link" data-act="more-nostep">${S.moreNoStep ? "Свернуть" : `Показать всех: ещё ${ag.noStep.length - 12}`}</button></li>` : ""}</ul>`, "", "У этих людей не назначено дело с датой.") : ""}
+      ${tab === "late" && lateLearners.length ? panel("Просрочили задания", lateLearners.length, `<ul class="rows">${lateLearners.map(s => { const n = nextDeadlineOf(s); return `<li class="click" data-act="open" data-id="${esc(s.id)}">
+          <span class="who"><strong>${esc(s.name)}</strong><span>просрочено ${esc(overdueTasks(s))} ${plural(overdueTasks(s), "задание", "задания", "заданий")}${n ? ` · следующий срок ${fShort(n.dueOn)}` : ""}</span></span>
+          ${badge(s.stage)}</li>`; }).join("")}</ul>`, "", "Сроки сдачи задают потоки на платформе. Сдать после срока можно: работа просто помечается «с опозданием».") : ""}
       ${tab === "learn" && idleLearners.length ? panel("Застряли в учёбе", idleLearners.length, `<ul class="rows">${idleLearners.map(s => { const idle = learnDays(s.learning.lastActivityAt); return `<li class="click" data-act="open" data-id="${esc(s.id)}">
           <span class="who"><strong>${esc(s.name)}</strong><span>${idle === null ? (s.learning.loggedIn ? "уроков ещё не проходил" : "ещё не входил на платформу") : `последний урок ${esc(days(idle))} назад`}</span></span>
           ${badge(s.stage)}</li>`; }).join("")}</ul>`, "", "Студенты на этапах обучения, у которых на платформе курсов неделю нет прогресса. Позвоните или напишите им.") : ""}
@@ -1689,11 +1694,35 @@ function financeView(list) {
     ${cmp("Потоки", "Поток", f.cohorts, [["Ещё ожидается", r => money(r.expected)], ["Трудоустроены", r => r.employed]])}
   </div>`;
 }
+// Учёба на платформе по потокам: из сводок обучения в карточках (поле learning, INTEGRATION.md, раздел 5)
+function studyView(list) {
+  const learners = list.filter(s => SGROUP[s.stage] === "study" || (isObj(s.learning) && learnCourses(s).length));
+  const groups = new Map();
+  for (const s of learners) { const k = s.cohortId || ""; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
+  const pctOf = s => { const c = learnCourses(s), done = sum(c, x => nnum(x.lessonsDone) || 0), total = sum(c, x => nnum(x.lessonsTotal) || 0); return total ? Math.round(done * 100 / total) : null; };
+  // На какой теме человек сейчас: первая непройденная тема первого курса с темами
+  const topicOf = s => { for (const c of learnCourses(s)) for (const m of (Array.isArray(c.modules) ? c.modules : []).filter(isObj)) if (!m.completedAt) return String(m.title || ""); return ""; };
+  const rows = [...groups.entries()].map(([cid, ss]) => {
+    const withData = ss.filter(s => learnCourses(s).length), ps = withData.map(pctOf).filter(x => x !== null);
+    const topics = {}; for (const s of withData) { const t = topicOf(s); if (t) topics[t] = (topics[t] || 0) + 1; }
+    const top = Object.entries(topics).sort((a, b) => b[1] - a[1])[0];
+    return { name: cid ? (cohortName(cid) || "Поток удалён") : "Без потока", n: ss.length, data: withData.length,
+      avg: ps.length ? Math.round(ps.reduce((a, b) => a + b, 0) / ps.length) : null,
+      done: withData.filter(s => learnCourses(s).every(c => c.completedAt)).length, stuck: ss.filter(stuckInLearning).length,
+      late: ss.filter(s => overdueTasks(s) > 0).length, top };
+  }).sort((a, b) => b.n - a.n);
+  const body = rows.length ? `<div class="table-wrap"><table><thead><tr><th>Поток</th><th class="num">Учатся</th><th class="num">На платформе</th><th class="num">Средний прогресс</th><th class="num">Прошли курс</th><th class="num">Застряли</th><th class="num">Просрочили</th><th>Чаще всего сейчас на теме</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td><strong>${esc(r.name)}</strong></td><td class="num">${r.n}</td><td class="num">${r.data}</td><td class="num">${r.avg === null ? "—" : r.avg + "%"}</td><td class="num">${r.done}</td>
+      <td class="num${r.stuck ? " warn-text" : ""}">${r.stuck}</td><td class="num${r.late ? " danger-text" : ""}">${r.late}</td><td>${r.top ? `${esc(r.top[0])} <span class="sub">· ${r.top[1]}</span>` : "—"}</td></tr>`).join("")}</tbody></table></div>`
+    : `<p class="empty">Сейчас никто не учится${list.length ? "" : " — или фильтр ничего не нашёл"}.</p>`;
+  return panel("Учёба на платформе", learners.length || "", body, "", "По сводкам с платформы курсов, раз в 10 минут. «На платформе» — у скольких уже есть данные: остальные ещё не входили или не привязаны к боту. «Застряли» — неделю без уроков.");
+}
 function analyticsView() {
   const keys = ["cohort", "mentor", "partner"], list = filtered(keys);
   const tab = (k, l) => `<button data-act="antab" data-v="${k}" class="${S.anTab === k ? "on" : ""}">${l}</button>`;
-  const head = headHTML("Аналитика") + (S.limited ? "" : `<nav class="tabs">${tab("funnel", "Воронка и этапы")}${tab("money", "Финансы")}</nav>`) + filtersHTML(keys);
+  const head = headHTML("Аналитика") + `<nav class="tabs">${tab("funnel", "Воронка и этапы")}${S.limited ? "" : tab("money", "Финансы")}${tab("study", "Учёба")}</nav>` + filtersHTML(keys);
   if (S.anTab === "money" && !S.limited) return head + financeView(list);
+  if (S.anTab === "study") return head + studyView(list);
   const m = metrics(list);
   return head + `
   <section class="kpis">
@@ -2430,10 +2459,26 @@ const PLATFORM_SYNC = {
   course_missing: "У потока выбран курс, которого нет на платформе или он не опубликован. Проверьте курсы в настройках потока.",
 };
 const learnDays = d => { const t = isoDay(d); return t ? daysSince(t) : null; };
+const learnCourses = s => isObj(s.learning) && Array.isArray(s.learning.courses) ? s.learning.courses.filter(isObj) : [];
+// Просроченные задания на платформе (сроки потока); считаются только у тех, кто сейчас учится
+const overdueTasks = s => SGROUP[s.stage] === "study" && !s.deletedAt ? sum(learnCourses(s), c => nnum(c.overdue) || 0) : 0;
+function nextDeadlineOf(s) {
+  const all = learnCourses(s).map(c => c.nextDeadline).filter(d => isObj(d) && isDay(String(d.dueOn || "")));
+  return all.length ? sortBy(all, d => d.dueOn)[0] : null;
+}
+// Ручной доступ к платформе (platformAccess): меняет только администратор, сервер проверяет (store.Access)
+const manualAccess = s => isObj(s.platformAccess) ? s.platformAccess : null;
+function accessLine(s) {
+  const m = manualAccess(s), c = cohortById(s.cohortId), own = m && Array.isArray(m.courses);
+  const courses = own ? m.courses : platformCohort(c) ? c.courses : [];
+  const names = courses.filter(x => typeof x === "string").map(x => (S.platCourses || []).find(y => y.slug === x)?.title || learnCourses(s).find(y => y.slug === x)?.title || x);
+  if (m && m.mode === "paused") return `<strong class="warn-text">закрыт вручную</strong> — курсы на паузе, прогресс сохранён`;
+  return `${own ? "свои курсы" : "по этапу и потоку"}${names.length ? ": " + names.map(esc).join(", ") : own ? ": курсы не выбраны" : c ? " — у потока не выбраны курсы" : " — студент не в потоке"}`;
+}
 function platformSection(s) {
   const L = isObj(s.learning) ? s.learning : null, sync = isObj(s.platformSync) ? s.platformSync : null;
   const courses = L && Array.isArray(L.courses) ? L.courses.filter(isObj) : [];
-  if (!L && !(sync && PLATFORM_SYNC[sync.state])) return "";
+  if (!L && !(sync && PLATFORM_SYNC[sync.state]) && !manualAccess(s)) return "";
   const linkBtn = sync && sync.state === "not_linked" && !s.tgId && !S.readOnly && SRV ? ` <button class="link" data-act="tg-student" data-id="${esc(s.id)}">Получить ссылку для студента</button>` : "";
   const warn = sync && PLATFORM_SYNC[sync.state] ? `<p class="warn-text" style="margin:0 0 8px">${esc(PLATFORM_SYNC[sync.state])}${linkBtn}</p>` : "";
   const idle = L ? learnDays(L.lastActivityAt) : null;
@@ -2447,14 +2492,23 @@ function platformSection(s) {
       nnum(c.quizzesTotal) ? `тесты ${esc(nnum(c.quizzesPassed) || 0)} из ${esc(nnum(c.quizzesTotal))}` : "",
       nnum(c.reviewsOpen) ? `<span class="warn-text">на проверке ${esc(nnum(c.reviewsOpen))}</span>` : "",
       nnum(c.reviewsDone) ? `принято работ ${esc(nnum(c.reviewsDone))}` : "",
+      nnum(c.overdue) ? `<span class="danger-text">просрочено заданий ${esc(nnum(c.overdue))}</span>` : "",
+      isObj(c.nextDeadline) && isDay(String(c.nextDeadline.dueOn || "")) ? `срок: «${esc(c.nextDeadline.title || "задание")}» до ${fShort(c.nextDeadline.dueOn)}` : "",
       c.status === "paused" ? "доступ на паузе" : c.status === "completed" ? "доступ для повторения" : "",
     ].filter(Boolean).join(" · ");
     return `<li><div class="feed-head"><strong>${esc(c.title || c.slug)}</strong><span class="muted">${esc(p.done)} из ${esc(p.total)}${c.completedAt ? " · пройден " + fShort(isoDay(c.completedAt)) : ""}</span></div>${p.total ? progHTML(p) : ""}${bits ? `<p class="sub" style="margin:4px 0 0">${bits}</p>` : ""}</li>`;
   }).join("");
   const link = L && typeof L.profileUrl === "string" && /^https:\/\//.test(L.profileUrl) && !S.limited
     ? `<a class="btn small ghost" href="${esc(L.profileUrl)}" target="_blank" rel="noopener">Профиль на платформе ↗</a>` : "";
-  return `${hint}<section class="sec" id="d-platform"><header><h3>Платформа курсов</h3><span class="sub">${esc(last)}</span><span class="right"></span>${link}</header>
-    <div class="box">${warn}${rows ? `<ul class="feed">${rows}</ul>` : L ? `<p class="empty">Курсы на платформе ещё не открыты</p>` : ""}</div></section>`;
+  const reviews = sum(courses, c => nnum(c.reviewsOpen) || 0);
+  const reviewLink = reviews && L && typeof L.reviewsUrl === "string" && /^https:\/\//.test(L.reviewsUrl)
+    ? `<a class="btn small ghost" href="${esc(L.reviewsUrl)}" target="_blank" rel="noopener">Открыть проверку ↗</a>` : "";
+  const latePay = (s.payments || []).some(x => isObj(x) && !x.paid && x.due < today());
+  const canEdit = !S.limited && !S.readOnly && SRV;
+  const access = `<p class="sub" style="margin:8px 0 0">Доступ к платформе: ${accessLine(s)}${canEdit ? ` <button class="link" data-act="plat-access" data-id="${esc(s.id)}">Изменить доступ</button>` : ""}</p>`
+    + (latePay && !S.limited && !(manualAccess(s) && manualAccess(s).mode === "paused") ? `<p class="hint" style="margin-top:4px">Есть просроченный платёж. Доступ к курсам сам не закрывается — при необходимости закройте его вручную.</p>` : "");
+  return `${hint}<section class="sec" id="d-platform"><header><h3>Платформа курсов</h3><span class="sub">${esc(last)}</span><span class="right"></span>${reviewLink}${link}</header>
+    <div class="box">${warn}${rows ? `<ul class="feed">${rows}</ul>` : L ? `<p class="empty">Курсы на платформе ещё не открыты</p>` : ""}${access}</div></section>`;
 }
 // Учится, но на платформе неделю тишина (или ещё не начинал): то же правило, что platform.stuck_in_learning на сервере
 const STUDY_IDLE_DAYS = 7;
@@ -3103,6 +3157,31 @@ async function loadPlatformStatus(check = false) {
   S.platBusy = check; if (check) scheduleRender();
   try { S.platStatus = await SRV.platform.status(check); } catch (e) { S.platStatus = { failed: true }; }
   S.platBusy = false; scheduleRender();
+}
+// Ручной доступ к платформе: «по этапу» (как обычно) или «закрыт вручную», курсы — как у потока или свои
+async function platformAccessForm(id) {
+  const s = stu(id); if (!s || S.limited) return;
+  let plat = null; try { plat = await SRV.platform.courses(); } catch (e) { }
+  const list = plat && plat.enabled && Array.isArray(plat.courses) ? plat.courses.filter(x => isObj(x) && typeof x.slug === "string") : [];
+  S.platCourses = list;
+  const m = manualAccess(s) || {}, own = Array.isArray(m.courses), c = cohortById(s.cohortId);
+  const base = own ? m.courses : (platformCohort(c) ? c.courses : []);
+  openModal({
+    title: `Доступ к платформе: ${s.name}`, submit: "Сохранить",
+    values: { mode: m.mode === "paused" ? "paused" : "auto", own, ...Object.fromEntries(list.map(x => [PC + x.slug, base.includes(x.slug)])) },
+    fields: [
+      { k: "mode", label: "Доступ", type: "select", wide: true, options: [["auto", "Открыт, пока студент на этапах обучения (как обычно)"], ["paused", "Закрыт вручную: курсы на паузе, прогресс сохраняется"]] },
+      { k: "own", label: "Выбрать курсы вручную, а не как у потока", type: "checkbox" },
+      ...list.map((x, i) => ({ k: PC + x.slug, label: `${x.title || x.slug}${x.lessonsTotal ? ` · ${x.lessonsTotal} уроков` : ""}`, type: "checkbox",
+        ...(i === 0 ? { help: c ? `У потока «${c.name}»: ${platformCohort(c) ? c.courses.length + " " + plural(c.courses.length, "курс", "курса", "курсов") : "курсы не выбраны"}. Отметки учитываются, только если включён выбор курсов вручную.` : "Студент не в потоке: курсы берутся только из отметок ниже." } : {}) })),
+    ],
+    onSubmit: v => {
+      if (v.own && !list.length) return "Список курсов платформы сейчас не загрузился. Попробуйте позже";
+      const courses = v.own ? list.filter(x => v[PC + x.slug]).map(x => x.slug) : null;
+      const value = v.mode === "paused" || courses ? { mode: v.mode === "paused" ? "paused" : "auto", ...(courses ? { courses } : {}) } : null;
+      return save(() => patchStudent(id, () => ({ platformAccess: value })), value && value.mode === "paused" ? "Доступ закрыт. Платформа узнает об этом в течение минуты" : "Доступ сохранён. Платформа узнает об этом в течение минуты");
+    },
+  });
 }
 function platformPanel() {
   const x = S.platStatus, btn = `<button class="btn small" data-act="plat-check"${S.platBusy ? " disabled" : ""}>${S.platBusy ? "Проверяю…" : "Проверить сейчас"}</button>`;
@@ -4698,6 +4777,7 @@ const ACT = {
   },
   "pay-income": d => { const x = stu(d.id), pay = (x?.payments || []).find(y => y.id === d.pid); if (pay && isPending(pay)) incomeForm(x, pay); },
   "plat-check": () => loadPlatformStatus(true),
+  "plat-access": d => platformAccessForm(d.id),
   "tg-student": async d => {
     let url;
     try { url = (await SRV.telegram.student(d.id)).url; } catch (e) { return toast(e?.message || "Не удалось получить ссылку. Попробуйте ещё раз"); }

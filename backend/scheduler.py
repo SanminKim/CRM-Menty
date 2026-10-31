@@ -57,7 +57,9 @@ def _platform(now):
     full = now.hour == PLATFORM_FULL_HOUR and _once(f"sched:platform-full:{now.date().isoformat()}")
     platform.push_states(now, full=full)
     platform.forget_deleted()
-    if _once(f"sched:platform-pull:{now.strftime('%Y-%m-%dT%H')}:{now.minute // PLATFORM_PULL_MINUTES}"):
+    if full:
+        platform.pull_progress(full=True)  # ночью — все сводки заново: просрочка могла уйти, когда срок удалили
+    elif _once(f"sched:platform-pull:{now.strftime('%Y-%m-%dT%H')}:{now.minute // PLATFORM_PULL_MINUTES}"):
         platform.pull_progress()
 
 
@@ -161,6 +163,7 @@ def _digest(today, is_admin, link_id, students, meeting_list, team):
     learners = [s for s in active if isinstance(s.get("stage"), str) and s["stage"] in stages.study]
     reviews = int(sum(platform.open_reviews(s) for s in learners))
     stuck = [s for s in learners if platform.stuck_in_learning(s, datetime.date.fromisoformat(today))]
+    late_tasks = [s for s in learners if platform.overdue_tasks(s)]
     lines = []
     if due:
         lines.append(f"• шагов по студентам: {len(due)}" + (f" (просрочено {len(late)})" if late else ""))
@@ -175,9 +178,12 @@ def _digest(today, is_admin, link_id, students, meeting_list, team):
     if orphans:
         lines.append(f"• новых заявок без ментора: {len(orphans)}")
     if reviews:
-        lines.append(f"• работ ждут проверки на платформе: {reviews}")
+        link = platform.reviews_url(learners)
+        lines.append(f"• работ ждут проверки на платформе: {reviews}" + (f" — {link}" if link else ""))
     if stuck:
         lines.append(f"• студентов не занимаются на платформе неделю: {len(stuck)}")
+    if late_tasks:
+        lines.append(f"• студентов просрочили задания на платформе: {len(late_tasks)}")
     return "☀️ Доброе утро! Сводка CRM на сегодня:\n" + "\n".join(lines) if lines else ""
 
 
