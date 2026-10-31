@@ -888,8 +888,14 @@ try:
       check("mentor is deleted and the students move to the chosen one", f"team/{gone[0]}" not in st and not any(v.get("mentorId") == gone[0] for k, v in st.items() if k.startswith("students/")))
       check("the mentor's share moves with the students from this month", not had_share or pg.evaluate(f"D().directions.every(d => !termsFor(d, today().slice(0, 7)).some(x => x.id === {json.dumps(gone[0])}))"))
       # тема и раскладка настроек
+      setgo(pg, "platform"); pg.wait_for_selector("#set-platform .panel", timeout=5000); pg.wait_for_timeout(600)
+      check("settings: platform screen says the link is off and why", "Связь выключена" in pg.inner_text("#set-platform") and "ключ" in pg.inner_text("#set-platform"))
+      prog = pg.evaluate("""(() => { D().cohorts.push({ id: "pc-e2e", name: "x", courses: ["vkat"], modules: [{ id: "m1", title: "Ручной" }] });
+        const s = { id: "s-e2e", cohortId: "pc-e2e", learning: { courses: [{ slug: "vkat", modules: [{ id: 1, title: "Введение", lessonsDone: 1, lessonsTotal: 1, completedAt: "2026-10-05T10:00:00+03:00" }, { id: 2, title: "Модуль 1", lessonsDone: 1, lessonsTotal: 2 }] }] } };
+        const p = progressOf(s), html = progSection(s); D().cohorts.pop(); return { p, html }; })()""")
+      check("platform cohort: programme comes from course topics, not manual modules", prog["p"]["done"] == 1 and prog["p"]["total"] == 2 and "с платформы курсов" in prog["html"] and "Ручной" not in prog["html"] and "data-mod" not in prog["html"])
       setgo(pg, "me")
-      check("settings: groups on the left, one group open", pg.locator("#set-nav button").count() == 6 and pg.locator("#set-nav button.on").count() == 1 and pg.locator(".set-body").count() == 1)
+      check("settings: groups on the left, one group open", pg.locator("#set-nav button").count() == 7 and pg.locator("#set-nav button.on").count() == 1 and pg.locator(".set-body").count() == 1)
       pg.locator(".seg >> text=Тёмная").click(); pg.wait_for_timeout(150)
       check("theme: dark is applied and marked", pg.evaluate("document.documentElement.dataset.theme") == "dark" and pg.locator(".seg button.on", has_text="Тёмная").count() == 1)
       pg.reload(); pg.wait_for_selector("#set-me"); check("theme survives reload", pg.evaluate("document.documentElement.dataset.theme") == "dark")
