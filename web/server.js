@@ -147,8 +147,11 @@
       // Адрес файла, который студент прислал боту: открывается в новой вкладке, права проверяет сервер
       fileUrl: (studentId, proofId) => `/api/telegram/file/${encodeURIComponent(studentId)}/${encodeURIComponent(proofId)}/`,
     },
-    // Платформа курсов (backend/platform.py): список курсов для потока, только администратору
-    platform: { courses: () => call("GET", "/api/platform/courses/") },
+    // Платформа курсов (backend/platform.py): список курсов для потока и состояние связи, только администратору
+    platform: {
+      courses: () => call("GET", "/api/platform/courses/"),
+      status: check => call("GET", "/api/platform/status/" + (check ? "?check=1" : "")),   // экран «Платформа курсов»
+    },
     // Договор и файлы к платежам (backend/files.py). После загрузки и удаления запись студента обновляется с сервера
     files: {
       upload: async (studentId, kind, paymentId, file) => {

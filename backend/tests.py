@@ -2483,6 +2483,80 @@ class PlatformLinkTests(BaseCase):
             res = self.client.get("/api/platform/courses/").json()
         self.assertEqual(res["courses"][0]["slug"], "vkat")
 
+    def fake_platform(self, method, path, body=None):
+        if path == "/courses/":
+            return [{"slug": "vkat", "title": "Вкат в 1С", "lessonsTotal": 33}]
+        return {"linked": True, "platformUserId": 7}
+
+    @override_settings(TELEGRAM_BOT_TOKEN="123456:test-token")
+    def test_bot_invites_student_to_platform_once(self):
+        from unittest import mock
+        from backend import platform, telegram
+        with mock.patch.object(platform, "_call", side_effect=self.fake_platform), \
+                mock.patch.object(telegram, "send", return_value={"message_id": 1}) as send:
+            platform.push_states()
+            cache.clear()  # отпечаток сброшен — состояние уйдёт снова, но звать второй раз нельзя
+            platform.push_states()
+
+        self.assertEqual(send.call_count, 1)
+        chat, text = send.call_args.args
+        self.assertEqual(chat, 555001)
+        self.assertIn("«Вкат в 1С»", text)
+        button = send.call_args.kwargs["reply_markup"]["inline_keyboard"][0][0]
+        self.assertEqual(button["url"], "https://platform.test/auth?next=/dashboard")
+        sync = Doc.objects.get(collection="students", doc_id="s1").data["platformSync"]
+        self.assertEqual(sync["state"], "linked")
+        self.assertTrue(sync["invitedAt"])
+
+    @override_settings(TELEGRAM_BOT_TOKEN="123456:test-token")
+    def test_invitation_mark_survives_a_course_problem(self):
+        from unittest import mock
+        from backend import platform, telegram
+        with mock.patch.object(platform, "_call", side_effect=self.fake_platform), \
+                mock.patch.object(telegram, "send", return_value={"message_id": 1}) as send:
+            platform.push_states()
+            cache.clear()
+            with mock.patch.object(platform, "_call", side_effect=platform.PlatformError(404, "course_missing")):
+                platform.push_states()
+            self.assertEqual(Doc.objects.get(collection="students", doc_id="s1").data["platformSync"]["state"], "course_missing")
+            cache.clear()
+            platform.push_states()
+        self.assertEqual(send.call_count, 1)
+
+    @override_settings(TELEGRAM_BOT_TOKEN="123456:test-token")
+    def test_paused_student_is_not_invited(self):
+        from unittest import mock
+        from backend import platform, telegram
+        store.system_write("students", "s1", {**Doc.objects.get(collection="students", doc_id="s1").data, "stage": "lost"})
+        with mock.patch.object(platform, "_call", side_effect=self.fake_platform), mock.patch.object(telegram, "send") as send:
+            platform.push_states()
+        send.assert_not_called()
+
+    def test_status_screen_is_admin_only_and_explains_failures_without_key(self):
+        from unittest import mock
+        from backend import platform
+        self.login("mentor")
+        self.assertEqual(self.client.get("/api/platform/status/").status_code, 403)
+        self.login("admin")
+        with mock.patch.object(platform, "_call", side_effect=platform.PlatformError(401, "bad_signature")):
+            res = self.client.get("/api/platform/status/?check=1").json()
+        self.assertTrue(res["enabled"])
+        self.assertEqual(res["error"]["status"], 401)
+        self.assertEqual(res["error"]["where"], "courses")
+        self.assertEqual(res["students"]["studying"], 1)
+        self.assertNotIn("k" * 40, json.dumps(res))
+        with mock.patch.object(platform, "_call", side_effect=self.fake_platform):
+            platform.push_states()
+            res = self.client.get("/api/platform/status/").json()
+        self.assertTrue(res["push"] > res["error"]["at"])
+        self.assertEqual(res["students"]["linked"], 1)
+
+    @override_settings(PLATFORM_URL="", MENTI_INTEGRATION_KEY="")
+    def test_status_screen_says_link_is_off(self):
+        self.login("admin")
+        res = self.client.get("/api/platform/status/").json()
+        self.assertEqual((res["enabled"], res["urlSet"], res["keySet"]), (False, False, False))
+
     def test_permanently_deleted_student_is_forgotten_on_platform(self):
         from unittest import mock
         from backend import platform

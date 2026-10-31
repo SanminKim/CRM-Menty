@@ -29,6 +29,7 @@ SENT_KEY = "platform:sent:"          # отпечаток последнего �
 FORGOT_KEY = "platform:forgot:"      # удалённым насовсем уже отправлено «забыть»
 SINCE_KEY = "platform:progress-since"
 COURSES_KEY = "platform:courses"
+STATUS_KEY = "platform:status"       # когда обмен последний раз удался и чем закончился последний сбой (экран «Платформа курсов»)
 KEEP = 30 * 86400
 STUDY_ACCESS = {"study": "active", "job": "alumni", "closed": "paused"}
 
@@ -37,6 +38,24 @@ def enabled():
     url = getattr(settings, "PLATFORM_URL", "") or ""
     key = getattr(settings, "MENTI_INTEGRATION_KEY", "") or ""
     return url.startswith("https://") and len(key) >= 32
+
+
+def _note(kind, error=None):
+    """Запоминает итог обмена для экрана «Платформа курсов»: kind — push, pull или courses."""
+    status = dict(cache.get(STATUS_KEY) or {})
+    now = timezone.now().isoformat()
+    if error is None:
+        status[kind] = now
+    else:
+        status["error"] = {"at": now, "where": kind, "status": error.status, "code": str(error.code)[:60]}
+    cache.set(STATUS_KEY, status, KEEP)
+
+
+def status_snapshot():
+    """Что известно о связке: включена ли, последние удачные обмены, последний сбой."""
+    url = getattr(settings, "PLATFORM_URL", "") or ""
+    key = getattr(settings, "MENTI_INTEGRATION_KEY", "") or ""
+    return {"enabled": enabled(), "urlSet": bool(url), "keySet": len(key) >= 32, "url": url, **(cache.get(STATUS_KEY) or {})}
 
 
 class PlatformError(Exception):
@@ -159,7 +178,12 @@ def _set_sync(student_id, value):
     with transaction.atomic():
         store.lock()
         doc = Doc.objects.select_for_update().filter(collection="students", doc_id=student_id).first()
-        if doc is None or doc.data.get("platformSync") == value:
+        if doc is None:
+            return
+        previous = doc.data.get("platformSync") if isinstance(doc.data.get("platformSync"), dict) else {}
+        if previous.get("invitedAt") and not value.get("invitedAt"):
+            value = {**value, "invitedAt": previous["invitedAt"]}  # студента уже звали: отметка переживает смену состояния
+        if previous == value:
             return
         data = dict(doc.data)
         data["platformSync"] = value
@@ -194,13 +218,41 @@ def push_states(now=None, full=False):
                 _set_sync(doc.doc_id, {"state": "course_missing"})
             else:
                 log.warning("Платформа: состояние студента не отправлено (%s)", exc)
+                _note("push", exc)
                 return sent  # платформа недоступна: остальных отправим на следующем проходе
             cache.set(SENT_KEY + doc.doc_id, mark, KEEP)
             continue
         cache.set(SENT_KEY + doc.doc_id, mark, KEEP)
-        _set_sync(doc.doc_id, {"state": "linked", "platformUserId": answer.get("platformUserId") if isinstance(answer, dict) else None})
+        _note("push")
+        synced = {"state": "linked", "platformUserId": answer.get("platformUserId") if isinstance(answer, dict) else None}
+        current = Doc.objects.filter(collection="students", doc_id=doc.doc_id).values_list("data", flat=True).first() or {}
+        invited = (current.get("platformSync") or {}).get("invitedAt") if isinstance(current.get("platformSync"), dict) else None
+        if not invited and state["access"] == "active" and state["courses"] and _invite(state):
+            invited = timezone.now().isoformat()
+        if invited:
+            synced["invitedAt"] = invited
+        _set_sync(doc.doc_id, synced)
         sent += 1
+    _note("push")  # проход без сбоя связи: экран «Платформа курсов» не показывает старую ошибку вечно
     return sent
+
+
+INVITE = ("Вам открыт {what} на платформе Менти.\n\n"
+          "Войдите кнопкой ниже: платформа попросит подтвердить вход в Telegram. "
+          "Входите с этого же аккаунта Telegram — тогда курс будет на месте.")
+
+
+def _invite(state):
+    """Бот CRM один раз зовёт студента на платформу, когда ему впервые открыли курсы. True — сообщение ушло."""
+    if not telegram.enabled():
+        return False  # бот не настроен: позовём при следующей отправке, когда он появится
+    titles = {c.get("slug"): c.get("title") for c in courses() or [] if isinstance(c, dict)}
+    names = [reports._text(titles.get(slug) or "", 120) for slug in state["courses"]]
+    names = [n for n in names if n]
+    what = (f"курс «{names[0]}»" if len(names) == 1 else "курсы " + ", ".join(f"«{n}»" for n in names)) if names else "курс"
+    login = settings.PLATFORM_URL.rstrip("/") + "/auth?next=/dashboard"
+    markup = {"inline_keyboard": [[{"text": "Войти на платформу", "url": login}]]}
+    return bool(telegram.send(state["telegramId"], INVITE.format(what=what), reply_markup=markup))
 
 
 def forget_deleted():
@@ -238,7 +290,9 @@ def pull_progress():
             page = _call("GET", f"/progress/?since={_quote(since)}&limit=200")
         except PlatformError as exc:
             log.warning("Платформа: сводка не получена (%s)", exc)
+            _note("pull", exc)
             return written
+        _note("pull")
         items = page.get("items") if isinstance(page, dict) else None
         for item in items or []:
             crm_id, learning = item.get("crmId"), item.get("learning")
@@ -266,18 +320,20 @@ def _quote(value):
     return quote(str(value), safe="")
 
 
-def courses():
-    """Курсы платформы для выбора у потока: [{slug, title, lessonsTotal}]. Кэшируется на 5 минут."""
+def courses(fresh=False):
+    """Курсы платформы для выбора у потока: [{slug, title, lessonsTotal}]. Кэшируется на 5 минут; fresh — спросить заново."""
     if not enabled():
         return None
-    cached = cache.get(COURSES_KEY)
+    cached = None if fresh else cache.get(COURSES_KEY)
     if cached is not None:
         return cached
     try:
         items = _call("GET", "/courses/")
     except PlatformError as exc:
         log.warning("Платформа: список курсов не получен (%s)", exc)
+        _note("courses", exc)
         return None
+    _note("courses")
     items = [i for i in items or [] if isinstance(i, dict) and isinstance(i.get("slug"), str)]
     cache.set(COURSES_KEY, items, 300)
     return items

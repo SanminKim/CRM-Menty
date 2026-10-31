@@ -1056,10 +1056,26 @@ const stepLate = s => hasStep(s) && s.next.date < today();
 const stuckDays = () => { const n = Math.round(+S.config.stuckDays); return n >= 1 && n <= 365 ? n : 14; };
 const isStuck = s => isActive(s) && s.stage !== FIRST() && daysSince(s.stageAt) >= stuckDays();
 // Прогресс по программе потока: сколько модулей отмечено у студента
-const modulesOf = s => cohortById(s.cohortId)?.modules || [];
+// Поток с курсами платформы: программа — темы курса, отметки приходят с платформы (INTEGRATION.md, раздел 5), руками не ставятся
+const platformCohort = c => !!c && Array.isArray(c.courses) && c.courses.some(x => typeof x === "string");
+function platformModules(s) {
+  const c = cohortById(s.cohortId); if (!platformCohort(c)) return null;
+  const L = isObj(s.learning) && Array.isArray(s.learning.courses) ? s.learning.courses.filter(isObj) : [];
+  const slugs = c.courses.filter(x => typeof x === "string"), many = slugs.length > 1, out = [];
+  for (const slug of slugs) {
+    const course = L.find(x => x.slug === slug); if (!course || !Array.isArray(course.modules)) continue;
+    for (const m of course.modules.filter(isObj)) out.push({
+      id: `p:${slug}:${String(m.id ?? out.length)}`, title: `${many ? String(course.title || slug) + ": " : ""}${String(m.title || "Тема")}`, platform: true,
+      done: typeof m.completedAt === "string" && m.completedAt ? isoDay(m.completedAt) : null, lessons: [nnum(m.lessonsDone) || 0, nnum(m.lessonsTotal) || 0],
+    });
+  }
+  return out;
+}
+const modulesOf = s => platformModules(s) ?? (cohortById(s.cohortId)?.modules || []);
+const modDone = (s, m) => m.platform ? m.done : s.progress && s.progress[m.id];
 function progressOf(s) {
   const mods = modulesOf(s); if (!mods.length) return null;
-  const done = mods.filter(m => s.progress && s.progress[m.id]).length;
+  const done = mods.filter(m => modDone(s, m)).length;
   return { done, total: mods.length, pct: pct(done, mods.length) };
 }
 const progHTML = (p, wide = false) => p ? `<span class="prog${wide ? " wide" : ""}" title="Пройдено модулей: ${esc(p.done)} из ${esc(p.total)}"><span class="prog-bar"><span style="width:${+p.pct || 0}%"></span></span><span>${esc(p.done)}/${esc(p.total)}</span></span>` : "";
@@ -2124,7 +2140,8 @@ function studentsTable(list, mods, emptyText) {
       <td class="selc" data-stop><input type="checkbox" id="sel-${esc(s.id)}" data-sel="${esc(s.id)}"${S.sel.has(s.id) ? " checked" : ""} aria-label="Выбрать: ${esc(s.name)}"></td>
       <td><strong>${esc(s.name)}</strong><div class="sub">${esc(s.telegram || s.phone || s.email || "")}</div></td>
       <td>${badge(s.stage)}</td>
-      ${mods ? mods.map(m => `<td class="mxc"><button class="mx${s.progress && s.progress[m.id] ? " on" : ""}" id="mx-${esc(s.id)}-${esc(m.id)}" data-act="mod-toggle" data-id="${esc(s.id)}" data-mid="${esc(m.id)}" title="${esc(m.title)}" aria-label="${esc(m.title)}: ${esc(s.name)}" aria-pressed="${!!(s.progress && s.progress[m.id])}"></button></td>`).join("")
+      ${mods ? mods.map(m => { if (m.platform) { const x = modulesOf(s).find(y => y.id === m.id), on = !!(x && x.done); return `<td class="mxc"><span class="mx${on ? " on" : ""}" id="mx-${esc(s.id)}-${esc(m.id)}" role="img" title="${esc(m.title)}${x ? ` · уроков ${esc(x.lessons[0])} из ${esc(x.lessons[1])}` : " · нет данных с платформы"}" aria-label="${esc(m.title)}: ${esc(s.name)}, ${on ? "пройдена" : "не пройдена"}"></span></td>`; }
+        return `<td class="mxc"><button class="mx${s.progress && s.progress[m.id] ? " on" : ""}" id="mx-${esc(s.id)}-${esc(m.id)}" data-act="mod-toggle" data-id="${esc(s.id)}" data-mid="${esc(m.id)}" title="${esc(m.title)}" aria-label="${esc(m.title)}: ${esc(s.name)}" aria-pressed="${!!(s.progress && s.progress[m.id])}"></button></td>`; }).join("")
         : `<td class="num nw">${daysCell(s)}</td><td>${stepCell(s)}</td><td>${esc(cohortName(s.cohortId) || "—")}${progressOf(s) && (progressOf(s).done || SGROUP[s.stage] === "study") ? `<div>${progHTML(progressOf(s))}</div>` : ""}</td>`}
       ${mods ? `<td>${stepCell(s)}</td>` : `<td class="clip" title="${esc(partnerById(s.partnerId)?.name || s.utmSource || "")}">${esc(partnerById(s.partnerId)?.name || s.utmSource || "—")}</td>`}
       <td class="clip" title="${esc(teamName(s.mentorId) || "")}">${esc(teamName(s.mentorId) || "—")}</td><td class="num">${paidCell(s)}</td>
@@ -2138,12 +2155,18 @@ function listView() {
 }
 
 // ----- Потоки -----
+// Темы курсов платформы у потока: объединение тем его студентов в порядке курса
+function cohortPlatformMods(list) {
+  const seen = new Map();
+  for (const s of list) for (const m of platformModules(s) || []) if (!seen.has(m.id)) seen.set(m.id, { id: m.id, title: m.title, platform: true });
+  return [...seen.values()];
+}
 function cohortStats(c) {
   const list = D().students.filter(s => s.cohortId === c.id), act = list.filter(s => !isClosed(s.stage));
   const studying = act.filter(s => SGROUP[s.stage] !== "sales"), progs = studying.map(progressOf).filter(Boolean);
   const open = act.flatMap(s => (s.payments || []).filter(p => !p.paid));
   return {
-    list, act, studying, leads: act.length - studying.length, mods: c.modules || [], avg: progs.length ? Math.round(sum(progs, p => p.pct) / progs.length) : null,
+    list, act, studying, leads: act.length - studying.length, mods: platformCohort(c) ? cohortPlatformMods(studying) : c.modules || [], avg: progs.length ? Math.round(sum(progs, p => p.pct) / progs.length) : null,
     // пришедшие деньги считаются и у выбывших, как в выплатах
     paid: sum(list, paidSum), price: sum(act, s => s.price), overdue: sum(open.filter(p => p.due < today()), p => nnum(p.amount)),
     noStep: act.filter(s => isActive(s) && !hasStep(s)).length, employed: act.filter(s => EMPLOYED.includes(s.stage)).length,
@@ -2177,7 +2200,8 @@ function cohortView() {
     <div class="kpi"><span class="kpi-label">Без следующего шага</span><span class="kpi-value">${st.noStep}</span></div>
   </section>
   <div class="filters"><label class="check"><input type="checkbox" id="f-lost" data-act="toggle-lost"${S.showLost ? " checked" : ""}> Показать выбывших</label>
-    ${st.mods.length ? `<span class="hint">Квадраты — модули программы. Нажмите, чтобы отметить модуль пройденным.</span>` : `<span class="hint">Добавьте модули в настройках потока, чтобы отмечать прогресс.</span>`}</div>
+    ${platformCohort(c) ? `<span class="hint">${st.mods.length ? "Квадраты — темы курса на платформе. Тема отмечается сама, когда студент проходит все её уроки." : "Темы курса появятся, когда студенты начнут заниматься на платформе."}</span>`
+      : st.mods.length ? `<span class="hint">Квадраты — модули программы. Нажмите, чтобы отметить модуль пройденным.</span>` : `<span class="hint">Добавьте модули в настройках потока, чтобы отмечать прогресс.</span>`}</div>
   ${studentsTable(list, st.mods, "В потоке пока нет студентов. Поток выбирается в карточке студента.")}`;
 }
 
@@ -2393,12 +2417,15 @@ function appSection(s) {
 }
 function progSection(s) {
   const mods = modulesOf(s), p = progressOf(s); if (!p) return "";
+  if (mods[0] && mods[0].platform) return `<section class="sec" id="d-programme"><header><h3>Программа</h3><span class="sub">${p.done} из ${p.total} тем · с платформы курсов</span><span class="right"></span>${progHTML(p)}</header>
+    <div class="box"><ul class="mods">${mods.map((m, i) => `<li class="${m.done ? "done" : ""}"><span class="t">${i + 1}. ${esc(m.title)}</span><span class="sub">${m.done ? "пройдена " + fShort(m.done) : `уроков ${esc(m.lessons[0])} из ${esc(m.lessons[1])}`}</span></li>`).join("")}</ul>
+    <p class="hint" style="margin-top:6px">Тема отмечается сама, когда студент проходит на платформе все её уроки.</p></div></section>`;
   return `<section class="sec"><header><h3>Программа</h3><span class="sub">${p.done} из ${p.total}</span><span class="right"></span>${progHTML(p)}</header>
     <div class="box"><ul class="mods">${mods.map((m, i) => { const done = s.progress && s.progress[m.id]; return `<li class="${done ? "done" : ""}"><label><input type="checkbox" id="mod-${esc(s.id)}-${esc(m.id)}" data-mod="${esc(m.id)}" data-sid="${esc(s.id)}"${done ? " checked" : ""}><span class="t">${i + 1}. ${esc(m.title)}</span>${done ? `<span class="sub">${fShort(String(done))}</span>` : ""}</label></li>`; }).join("")}</ul></div></section>`;
 }
 // ----- Платформа курсов (INTEGRATION.md): сводка обучения, которую сервер раз в 10 минут забирает с платформы -----
 const PLATFORM_SYNC = {
-  not_linked: "Студент не привязан к боту. Курсы на платформе откроются, когда он перейдёт по личной ссылке бота (кнопка в карточке).",
+  not_linked: "Студент не привязан к боту CRM. Курсы на платформе откроются, когда он перейдёт по личной ссылке и нажмёт «Start».",
   conflict: "Этот Telegram уже привязан на платформе к другой карточке. Проверьте, нет ли двойника.",
   course_missing: "У потока выбран курс, которого нет на платформе или он не опубликован. Проверьте курсы в настройках потока.",
 };
@@ -2407,7 +2434,8 @@ function platformSection(s) {
   const L = isObj(s.learning) ? s.learning : null, sync = isObj(s.platformSync) ? s.platformSync : null;
   const courses = L && Array.isArray(L.courses) ? L.courses.filter(isObj) : [];
   if (!L && !(sync && PLATFORM_SYNC[sync.state])) return "";
-  const warn = sync && PLATFORM_SYNC[sync.state] ? `<p class="warn-text" style="margin:0 0 8px">${esc(PLATFORM_SYNC[sync.state])}</p>` : "";
+  const linkBtn = sync && sync.state === "not_linked" && !s.tgId && !S.readOnly && SRV ? ` <button class="link" data-act="tg-student" data-id="${esc(s.id)}">Получить ссылку для студента</button>` : "";
+  const warn = sync && PLATFORM_SYNC[sync.state] ? `<p class="warn-text" style="margin:0 0 8px">${esc(PLATFORM_SYNC[sync.state])}${linkBtn}</p>` : "";
   const idle = L ? learnDays(L.lastActivityAt) : null;
   const last = !L ? "" : L.lastActivityAt ? `последний урок ${idle === 0 ? "сегодня" : idle === 1 ? "вчера" : esc(days(idle)) + " назад"}` : L.loggedIn ? "уроков ещё не проходил" : "ещё не входил на платформу";
   const finished = courses.length && courses.every(c => c.completedAt);
@@ -3064,6 +3092,45 @@ function accessPanel() {
     (unknown ? `<p class="hint pad warn-text" id="access-unknown">Кто-то пытался войти с логином, которого нет в этом списке: ${unknown}. Если человек жалуется на «неверный логин или пароль», сверьте с ним логин из списка выше.</p>` : "") +
     `<p class="hint pad">Администратор видит всё. Ментор видит только своих студентов и не видит финансы школы и партнёров. Партнёр видит только отчёт по своему трафику.</p>`, `<button class="btn small" data-act="account-new">+ Доступ</button>`);
 }
+// ----- Платформа курсов: состояние связи (backend/api.py, platform_status). Ключ связи сюда не приходит -----
+const PLAT_FAIL = st => st === 0 ? "Платформа не отвечает: нет связи с ней или она выключена."
+  : st === 401 ? "Платформа не приняла подпись запроса: ключ связи в CRM и на платформе разный."
+  : st === 403 ? "Платформа отказала в доступе." : st === 404 ? "Платформа не знает адрес связи: возможно, на ней старая версия или связь на ней выключена."
+  : st === 429 ? "Слишком много запросов: CRM повторит позже." : st >= 500 ? "Ошибка на стороне платформы." : "Неизвестная ошибка обмена.";
+const PLAT_WHERE = { push: "отправка студентов", pull: "забор сводок обучения", courses: "список курсов" };
+async function loadPlatformStatus(check = false) {
+  if (!SRV || !SRV.platform || !SRV.platform.status || S.limited) return;
+  S.platBusy = check; if (check) scheduleRender();
+  try { S.platStatus = await SRV.platform.status(check); } catch (e) { S.platStatus = { failed: true }; }
+  S.platBusy = false; scheduleRender();
+}
+function platformPanel() {
+  const x = S.platStatus, btn = `<button class="btn small" data-act="plat-check"${S.platBusy ? " disabled" : ""}>${S.platBusy ? "Проверяю…" : "Проверить сейчас"}</button>`;
+  if (!x) return panel("Связь с платформой", "", `<p class="empty">Загружаю…</p>`, btn);
+  if (x.failed) return panel("Связь с платформой", "", `<p class="pad warn-text">Не удалось узнать состояние связи. Обновите страницу.</p>`, btn);
+  if (!x.enabled) return panel("Связь с платформой", "", `<div class="pad"><p class="warn-text"><strong>Связь выключена.</strong> На сервере CRM ${!x.urlSet && !x.keySet ? "не заданы адрес платформы и ключ связи" : !x.urlSet ? "не задан адрес платформы (он должен начинаться с https://)" : "не задан ключ связи или он короче 32 символов"}.</p>
+    <p class="hint" style="margin-top:6px">Их сама прописывает выкладка платформы курсов, когда она стоит на этом же сервере (переменные PLATFORM_URL и MENTI_INTEGRATION_KEY). Пока связь выключена, студенты не получают курсы, а в карточках нет прогресса.</p></div>`, btn);
+  const okAt = k => x[k] ? fDT(x[k]) : "ещё не было";
+  const err = isObj(x.error) ? x.error : null, fresh = err && !(x[err.where] && x[err.where] > err.at);
+  const n = isObj(x.students) ? x.students : {}, row = (label, v, warn = false, hint = "") => `<li><span class="who"><strong>${label}</strong>${hint ? `<span>${hint}</span>` : ""}</span><span class="${warn && v ? "warn-text" : ""}">${esc(v || 0)}</span></li>`;
+  return panel("Связь с платформой", "", `<div class="pad">
+      <p>${fresh ? `<strong class="danger-text">Связь не работает.</strong> ${esc(PLAT_FAIL(+err.status))} <span class="sub">(${esc(PLAT_WHERE[err.where] || err.where)}, ${fDT(err.at)})</span>` : `<strong class="ok-text">Связь включена.</strong>`} Адрес платформы: <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(String(x.url).replace(/^https:\/\//, ""))}</a></p>
+      <ul class="rows" style="margin-top:8px">
+        <li><span class="who"><strong>Список курсов</strong><span>нужен для выбора курсов у потока</span></span><span>${okAt("courses")}</span></li>
+        <li><span class="who"><strong>Отправка студентов</strong><span>кому открыть или закрыть курсы — раз в минуту, если что-то изменилось</span></span><span>${okAt("push")}</span></li>
+        <li><span class="who"><strong>Сводки обучения</strong><span>прогресс в карточках — раз в 10 минут</span></span><span>${okAt("pull")}</span></li>
+      </ul>
+      ${err && !fresh ? `<p class="hint" style="margin-top:6px">Последний сбой был ${fDT(err.at)} (${esc(PLAT_WHERE[err.where] || err.where)}): ${esc(PLAT_FAIL(+err.status))} После него обмен прошёл успешно.</p>` : ""}</div>`, btn)
+    + panel("Учащиеся и платформа", n.studying || "", `<ul class="rows">
+      ${row("Получили курсы", n.linked, false, "платформа приняла студента")}
+      ${row("Позвали на платформу", n.invited, false, "бот CRM прислал кнопку входа")}
+      ${row("Уже занимались", n.active, false, "прошли хотя бы один урок")}
+      ${row("Не привязаны к боту", n.not_linked, true, "дайте личную ссылку бота: вкладка «Обучение» в карточке")}
+      ${row("В потоке не выбраны курсы", n.no_courses, true, "откройте поток и отметьте курсы платформы")}
+      ${row("Telegram занят другой карточкой", n.conflict, true, "проверьте, нет ли двойника")}
+      ${row("Курс не найден на платформе", n.course_missing, true, "курс потока удалён или снят с публикации")}
+    </ul>`, "", "Считаются студенты на этапах обучения.");
+}
 function trashPanel() {
   return S.trash.length ? panel("Корзина", S.trash.length, `<ul class="rows">${sortBy(S.trash, x => x.deletedAt).reverse().map(x => `<li><span class="who"><strong>${esc(x.name)}</strong><span>удалён ${fDT(x.deletedAt)} · ${esc(personName(x.deletedBy))}</span></span>
       <span class="acts"><button class="btn small" data-act="trash-restore" data-id="${esc(x.id)}">Вернуть</button>${S.limited ? "" : `<button class="btn small ghost" data-act="trash-purge" data-id="${esc(x.id)}">Удалить навсегда</button>`}</span></li>`).join("")}</ul>
@@ -3075,11 +3142,12 @@ const SET_GROUPS = [
   ["team", "Команда и партнёры", "Кто работает в CRM, что каждый видит и какие у школы партнёры."],
   ["money", "Оплаты и расходы", "Сверху — как платят студенты: оплата с зарплаты и напоминание о платеже. Ниже — деньги школы: кто получает долю с направления и на что школа тратит."],
   ["meet", "Встречи и Telegram", "Уведомления в Telegram, напоминания студентам о встречах и готовые названия встреч."],
+  ["platform", "Платформа курсов", "Связь с платформой курсов: работает ли обмен, кто из учащихся получил курсы и что мешает остальным."],
   ["data", "Данные", "Резервная копия, корзина и пример данных."],
   ["me", "Мой профиль", "Ваш пароль и оформление."],
 ];
 // Ментору — только его профиль и корзина его студентов
-const setGroups = () => S.limited ? [SET_GROUPS.find(g => g[0] === "me"), ["data", "Корзина", "Студенты, которых вы удалили: их можно вернуть."]] : SET_GROUPS;
+const setGroups = () => S.limited ? [SET_GROUPS.find(g => g[0] === "me"), ["data", "Корзина", "Студенты, которых вы удалили: их можно вернуть."]] : SET_GROUPS.filter(g => g[0] !== "platform" || SRV);
 const teamPanel = () => panel("Команда", "", (D().team.length ? `<ul class="rows">${D().team.map(m => `<li><span class="who"><strong>${esc(m.name)}</strong></span>${m.userId && m.userId === S.myId ? `<span class="tag ok">это вы</span>` : ""}${S.myId && m.userId !== S.myId && !S.server ? `<button class="btn small ghost" data-act="team-me" data-id="${esc(m.id)}">Это я</button>` : ""}<button class="btn small ghost" data-act="team-edit" data-id="${esc(m.id)}">Изменить</button></li>`).join("")}</ul>` : `<p class="empty">Добавьте себя и менторов</p>`) + `<p class="hint pad">${S.server ? "Чтобы ментор мог входить в CRM, добавьте его сюда, а затем выдайте доступ в разделе «Доступ»." : "Нажмите «Это я» у своего имени: в фильтрах появится «Мои студенты», а ваши заметки будут подписаны."}</p>`, `<button class="btn small" data-act="team-new">+ Ментор</button>`);
 const sharePanel = () => S.server ? accessPanel() : panel("Доступ", "", `<ul class="rows">
       <li><span><strong>Менторам:</strong> откройте «Поделиться» и пригласите их по email с правами редактора. Они смогут вносить изменения.</span></li>
@@ -3267,6 +3335,7 @@ function settingsView() {
     money: () => `<h2 class="set-sub" id="set-sub-students">Оплаты студентов</h2>` + salaryPanel() + payRemindPanel()
       + `<h2 class="set-sub" id="set-sub-school">Доли и операционные расходы школы</h2>` + directionsPanel() + listPanel("expenseHints", "Статьи расходов", EXPENSE_HINTS, "Варианты в поле «На что», когда записываете расход школы в разделе «Выплаты»."),
     meet: () => (S.server ? tgPanel() + meetRemindPanel() : "") + listPanel("meetHints", "Готовые названия встреч", MEET_HINTS, "Подсказки в поле «Название» новой встречи."),
+    platform: () => platformPanel(),
     data: () => backupPanel() + trashPanel() + demoPanel(),
     me: () => (S.server ? accountPanel() : "") + themePanel(),
   }[k]();
@@ -4100,7 +4169,7 @@ function cohortModal(c, { board = false } = {}, plat = null) {
   const platCourses = plat && Array.isArray(plat.courses) ? plat.courses.filter(x => isObj(x) && typeof x.slug === "string") : [];
   const chosen = Array.isArray(c?.courses) ? c.courses.filter(x => typeof x === "string") : [];
   const courseFields = platCourses.map((x, i) => ({ k: PC + x.slug, label: `${x.title || x.slug}${x.lessonsTotal ? ` · ${x.lessonsTotal} уроков` : ""}`, type: "checkbox",
-    ...(i === 0 ? { help: "Ученики потока на этапах обучения сами получат эти курсы на платформе (если привязаны к боту)" } : {}) }));
+    ...(i === 0 ? { help: "Ученики потока на этапах обучения сами получат эти курсы на платформе (если привязаны к боту). Программа потока тогда берётся из тем курса, модули ниже можно не заполнять." } : {}) }));
   const courseValues = Object.fromEntries(platCourses.map(x => [PC + x.slug, chosen.includes(x.slug)]));
   openModal({
     title: c ? "Поток" : "Новый поток", wide: true, values: { ...(c ? { ...c, directionId: c.directionId || "", modules: (c.modules || []).map(m => m.title).join("\n") } : { active: true, directionId: D().directions.length === 1 ? D().directions[0].id : "" }), ...courseValues },
@@ -4108,7 +4177,7 @@ function cohortModal(c, { board = false } = {}, plat = null) {
       ...(S.limited ? [] : [{ k: "directionId", label: "Направление", type: "select", options: [["", "—"], ...D().directions.map(d => [d.id, d.name])], help: "От направления зависит, между кем делится выручка потока" }]),
       { k: "start", label: "Старт", type: "date" }, { k: "end", label: "Окончание обучения", type: "date" }, { k: "active", label: "Идёт набор или обучение", type: "checkbox" },
       { k: "link", label: "Постоянная ссылка на занятия", type: "url", wide: true, ph: "https://telemost.yandex.ru/…", help: "Бот пришлёт её студентам потока, если у самого занятия ссылки нет" }, ...courseFields,
-      { k: "modules", label: "Программа: модули, по одному в строке", type: "textarea", rows: 7, wide: true, ph: "Введение в 1С\nОписание бизнес-процессов\nНаписание ТЗ", help: "По модулям отмечается прогресс студентов. Чтобы отметки сохранились, переименовывайте по одному модулю за сохранение." }],
+      { k: "modules", label: "Программа: модули, по одному в строке", type: "textarea", rows: 7, wide: true, ph: "Введение в 1С\nОписание бизнес-процессов\nНаписание ТЗ", help: "По модулям отмечается прогресс студентов. Чтобы отметки сохранились, переименовывайте по одному модулю за сохранение." + (SRV && !S.limited && !plat ? " Курсов платформы в этой форме нет: связь с платформой сейчас не работает. Что мешает — в Настройках, раздел «Платформа курсов»." : "") }],
     onDelete: c ? () => [...D().students, ...S.trash].some(s => s.cohortId === c.id) ? (showErr("В потоке есть студенты. Сначала перенесите их в другой поток: на странице потока выберите всех и нажмите «Поток».", { label: "Открыть студентов потока", go: () => ACT["cohort-open"]({ id: c.id }) }), false) : save(() => delDoc("cohorts", c.id), "Поток удалён") : null,
     onSubmit: v => {
       if (v.link && !/^https?:\/\//i.test(v.link)) return "Ссылка должна начинаться с http:// или https://";
@@ -4502,7 +4571,7 @@ function go(view) {
   S.navMore = false; S.view = view; S.openId = null; S.openDay = null; S.todayTab = null; S.sel.clear(); S.rows = 0; S.colMax = {};
   S.sort = S.sorts[view] || null;   // сортировка у каждого раздела своя и запоминается
   if (VIEWS.includes(view)) lsSet("crm-menti-view", view);
-  if (view === "settings") loadAccounts();   // свежие отметки о неудачных входах
+  if (view === "settings") { loadAccounts(); if (S.setTab === "platform") loadPlatformStatus(); }   // свежие отметки о неудачных входах
   render(); window.scrollTo(0, 0);
 }
 // «Назад» и «Вперёд» в браузере, ссылка из уведомления, адрес, исправленный руками
@@ -4539,7 +4608,7 @@ const ACT = {
   "lane-fold": d => { const f = new Set(S.foldedLanes || []); f.has(d.id) ? f.delete(d.id) : f.add(d.id); S.foldedLanes = [...f]; render(); },
   "col-more": d => { S.colMax[d.st] = (S.colMax[d.st] || COL_STEP) + COL_STEP; render(); },
   "meet-remind": () => meetRemindForm(),
-  settab: d => { if (setGroups().some(g => g[0] === d.v)) { S.setTab = d.v; render(); window.scrollTo(0, 0); } },
+  settab: d => { if (setGroups().some(g => g[0] === d.v)) { S.setTab = d.v; render(); window.scrollTo(0, 0); if (d.v === "platform") loadPlatformStatus(); } },
   "stage-new": () => stageForm(null),
   "stage-edit": d => { const x = stageById(d.id); if (x) stageForm(x); },
   "stage-move": d => moveStageRow(d.id, +d.n),
@@ -4628,6 +4697,7 @@ const ACT = {
     return save(() => SRV.files.remove(d.fid), "Файл убран");
   },
   "pay-income": d => { const x = stu(d.id), pay = (x?.payments || []).find(y => y.id === d.pid); if (pay && isPending(pay)) incomeForm(x, pay); },
+  "plat-check": () => loadPlatformStatus(true),
   "tg-student": async d => {
     let url;
     try { url = (await SRV.telegram.student(d.id)).url; } catch (e) { return toast(e?.message || "Не удалось получить ссылку. Попробуйте ещё раз"); }

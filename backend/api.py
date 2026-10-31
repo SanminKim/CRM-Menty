@@ -112,6 +112,41 @@ def platform_courses(request, access):
 
 @require_GET
 @api
+def platform_status(request, access):
+    """Экран «Платформа курсов»: работает ли связка и что мешает студентам получить курсы. Только администратору.
+
+    Ключ связи не отдаётся — только то, задан ли он. ?check=1 — спросить платформу прямо сейчас.
+    """
+    from . import platform
+    if not access.is_admin:
+        raise store.Denied
+    if request.GET.get("check") == "1" and platform.enabled():
+        platform.courses(fresh=True)
+    stages = reports.current_stages()
+    counts = {"studying": 0, "linked": 0, "not_linked": 0, "conflict": 0, "course_missing": 0, "no_courses": 0, "invited": 0, "active": 0}
+    cohorts = {d.doc_id: d.data for d in Doc.objects.filter(collection="cohorts") if isinstance(d.data, dict)}
+    for doc in Doc.objects.filter(collection="students"):
+        data = doc.data if isinstance(doc.data, dict) else {}
+        if data.get("deletedAt") or stages.group.get(data.get("stage")) != "study":
+            continue
+        counts["studying"] += 1
+        sync = data.get("platformSync") if isinstance(data.get("platformSync"), dict) else {}
+        state = sync.get("state")
+        if state in counts:
+            counts[state] += 1
+        if sync.get("invitedAt"):
+            counts["invited"] += 1
+        learning = data.get("learning") if isinstance(data.get("learning"), dict) else {}
+        if learning.get("lastActivityAt"):
+            counts["active"] += 1
+        cohort = cohorts.get(data.get("cohortId")) if isinstance(data.get("cohortId"), str) else None
+        if not (cohort or {}).get("courses"):
+            counts["no_courses"] += 1
+    return JsonResponse({**platform.status_snapshot(), "students": counts})
+
+
+@require_GET
+@api
 def telegram_file(request, access, student_id, proof_id):
     """Файл, который студент прислал боту (начисление зарплаты, отработанные часы). Открывает тот, кто ведёт студента."""
     doc = Doc.objects.filter(collection="students", doc_id=student_id).first()
