@@ -2557,6 +2557,49 @@ class PlatformLinkTests(BaseCase):
         res = self.client.get("/api/platform/status/").json()
         self.assertEqual((res["enabled"], res["urlSet"], res["keySet"]), (False, False, False))
 
+    def test_admin_can_close_platform_access_and_pick_courses_mentor_cannot(self):
+        data = Doc.objects.get(collection="students", doc_id="s1").data
+        self.login("mentor")
+        res = self.client.put("/api/db/students/s1/", data=json.dumps({**data, "platformAccess": {"mode": "paused"}}), content_type="application/json")
+        self.assertEqual(res.status_code, 403)
+        self.login("admin")
+        res = self.client.put("/api/db/students/s1/", data=json.dumps({**data, "platformAccess": {"mode": "paused"}}), content_type="application/json")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self.state()["access"], "paused")
+
+        fresh = Doc.objects.get(collection="students", doc_id="s1").data
+        store.system_write("students", "s1", {**fresh, "platformAccess": {"mode": "auto", "courses": ["demo"]}})
+        state = self.state()
+        self.assertEqual((state["access"], state["courses"]), ("active", ["demo"]))
+
+        self.login("mentor")
+        fresh = Doc.objects.get(collection="students", doc_id="s1").data
+        res = self.client.put("/api/db/students/s1/", data=json.dumps({**fresh, "platformAccess": None}), content_type="application/json")
+        self.assertEqual(res.status_code, 403)
+
+    def test_digest_tells_mentor_about_overdue_tasks_with_review_link(self):
+        from backend import scheduler
+        data = Doc.objects.get(collection="students", doc_id="s1").data
+        store.system_write("students", "s1", {**data, "learning": {
+            "lastActivityAt": "2026-10-18T10:00:00+03:00", "reviewsUrl": "https://platform.test/backoffice/reviews",
+            "courses": [{"slug": "vkat", "reviewsOpen": 1, "overdue": 2}]}})
+        students = [(d.doc_id, d.data) for d in Doc.objects.filter(collection="students")]
+
+        text = scheduler._digest("2026-10-18", False, "t1", students, [], {"t0", "t1", "t2"})
+
+        self.assertIn("работ ждут проверки на платформе: 1 — https://platform.test/backoffice/reviews", text)
+        self.assertIn("просрочили задания на платформе: 1", text)
+
+    def test_nightly_pull_asks_for_all_summaries(self):
+        from unittest import mock
+        from backend import platform
+        cache.set(platform.SINCE_KEY, "2026-10-30T10:00:00+03:00")
+        with mock.patch.object(platform, "_call", return_value={"items": [], "next": None}) as call:
+            platform.pull_progress()
+            platform.pull_progress(full=True)
+        self.assertIn("since=2026-10-30", call.call_args_list[0].args[1])
+        self.assertIn("since=&", call.call_args_list[1].args[1])
+
     def test_permanently_deleted_student_is_forgotten_on_platform(self):
         from unittest import mock
         from backend import platform

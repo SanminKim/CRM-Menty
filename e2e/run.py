@@ -894,6 +894,13 @@ try:
         const s = { id: "s-e2e", cohortId: "pc-e2e", learning: { courses: [{ slug: "vkat", modules: [{ id: 1, title: "Введение", lessonsDone: 1, lessonsTotal: 1, completedAt: "2026-10-05T10:00:00+03:00" }, { id: 2, title: "Модуль 1", lessonsDone: 1, lessonsTotal: 2 }] }] } };
         const p = progressOf(s), html = progSection(s); D().cohorts.pop(); return { p, html }; })()""")
       check("platform cohort: programme comes from course topics, not manual modules", prog["p"]["done"] == 1 and prog["p"]["total"] == 2 and "с платформы курсов" in prog["html"] and "Ручной" not in prog["html"] and "data-mod" not in prog["html"])
+      w2 = pg.evaluate("""(() => { const st = STAGE_LIST.find(x => x.group === "study").id;
+        const s = { id: "s-w2", name: "Тест", stage: st, payments: [{ id: "p1", amount: 1, due: "2020-01-01", paid: null }], platformSync: { state: "linked" },
+          learning: { lastActivityAt: new Date().toISOString(), reviewsUrl: "https://platform.test/backoffice/reviews",
+            courses: [{ slug: "vkat", title: "Вкат", lessonsDone: 3, lessonsTotal: 10, reviewsOpen: 1, overdue: 2, nextDeadline: { title: "Домашка", dueOn: "2030-01-05" }, modules: [{ id: 1, title: "Тема А", lessonsDone: 1, lessonsTotal: 4 }] }] } };
+        return { card: platformSection(s), late: overdueTasks(s), study: studyView([s]) }; })()""")
+      check("card: overdue tasks, next deadline, review link and manual access", "просрочено заданий 2" in w2["card"] and "Домашка" in w2["card"] and "Открыть проверку" in w2["card"] and "Изменить доступ" in w2["card"] and "сам не закрывается" in w2["card"])
+      check("analytics: study tab counts progress, overdue and the current topic", w2["late"] == 2 and "30%" in w2["study"] and "Тема А" in w2["study"])
       setgo(pg, "me")
       check("settings: groups on the left, one group open", pg.locator("#set-nav button").count() == 7 and pg.locator("#set-nav button.on").count() == 1 and pg.locator(".set-body").count() == 1)
       pg.locator(".seg >> text=Тёмная").click(); pg.wait_for_timeout(150)

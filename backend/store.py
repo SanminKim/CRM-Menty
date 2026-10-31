@@ -198,12 +198,15 @@ class Access:
             raise Denied
 
     def _check_partner_fields(self, old, new):
-        """От источника и доли партнёра зависят выплаты, поэтому ментор их не меняет."""
+        """От источника и доли партнёра зависят выплаты, поэтому ментор их не меняет; ручной доступ к платформе — тоже."""
         if old is not None:
-            for key in ("partnerId", "partnerShare", "demo"):
+            # platformAccess — ручной доступ к платформе курсов: открывает и закрывает только администратор
+            for key in ("partnerId", "partnerShare", "demo", "platformAccess"):
                 if (old.get(key) or None) != (new.get(key) or None):
                     raise Denied
             return
+        if new.get("platformAccess"):
+            raise Denied
         partner_id = new.get("partnerId")
         share = 0
         if partner_id:
